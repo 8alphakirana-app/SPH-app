@@ -230,6 +230,52 @@ router.get('/:id/download/pdf', requireLogin, async (req, res) => {
     }
 });
 
+// PUT /api/submissions/:id - edit pengajuan pending
+router.put('/:id', requireLogin, (req, res) => {
+    const row = db.prepare('SELECT * FROM submissions WHERE id = ?').get(req.params.id);
+    if (!row) return res.status(404).json({ error: 'Tidak ditemukan' });
+    if (row.status !== 'pending') return res.status(400).json({ error: 'Hanya pengajuan berstatus pending yang dapat diedit' });
+    if (req.session.user.role !== 'admin' && row.created_by !== req.session.user.id) {
+        return res.status(403).json({ error: 'Akses ditolak' });
+    }
+    const { client_title, client_name, client_address, client_city, items, ppn_included, ongkir_included, notes, lampiran } = req.body;
+    if (!client_name || !client_address || !items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ error: 'Data tidak lengkap' });
+    }
+    for (const item of items) {
+        if (!item.nama_produk || !item.qty || !item.harga_satuan) {
+            return res.status(400).json({ error: 'Data produk tidak lengkap (nama, qty, harga wajib diisi)' });
+        }
+    }
+    db.prepare(`
+        UPDATE submissions SET client_title=?, client_name=?, client_address=?, client_city=?,
+            items=?, ppn_included=?, ongkir_included=?, notes=?, lampiran=? WHERE id=?
+    `).run(
+        client_title || 'Kepala Dinas',
+        client_name, client_address,
+        client_city || 'di Tempat',
+        JSON.stringify(items),
+        ppn_included ? 1 : 0,
+        ongkir_included ? 1 : 0,
+        notes || '',
+        lampiran || '',
+        req.params.id
+    );
+    res.json({ success: true });
+});
+
+// DELETE /api/submissions/:id - hapus pengajuan pending
+router.delete('/:id', requireLogin, (req, res) => {
+    const row = db.prepare('SELECT * FROM submissions WHERE id = ?').get(req.params.id);
+    if (!row) return res.status(404).json({ error: 'Tidak ditemukan' });
+    if (row.status !== 'pending') return res.status(400).json({ error: 'Hanya pengajuan berstatus pending yang dapat dihapus' });
+    if (req.session.user.role !== 'admin' && row.created_by !== req.session.user.id) {
+        return res.status(403).json({ error: 'Akses ditolak' });
+    }
+    db.prepare('DELETE FROM submissions WHERE id = ?').run(req.params.id);
+    res.json({ success: true });
+});
+
 // GET /api/submissions/meta/settings
 router.get('/meta/settings', requireAdmin, (req, res) => {
     const rows = db.prepare('SELECT key, value FROM settings').all();

@@ -2,9 +2,11 @@
    SPH App - Frontend JavaScript
 ============================================================ */
 
-let currentUser    = null;
-let rejectTargetId = null;
-let productRowCount = 0;
+let currentUser      = null;
+let rejectTargetId   = null;
+let productRowCount  = 0;
+let editTargetId     = null;
+let editProductRowCount = 0;
 
 // ===================== INIT =====================
 document.addEventListener('DOMContentLoaded', async () => {
@@ -195,6 +197,10 @@ function renderSubmissionTable(submissions, showActions = false, isAdmin = false
                                                                                                                                                                                   <button onclick="approveSubmission(${s.id})" class="btn btn-success btn-sm">✅ Setuju</button>
                                                                                                                                                                                               <button onclick="openRejectModal(${s.id})" class="btn btn-danger btn-sm">❌ Tolak</button>
                                                                                                                                                                                                         ` : ''}
+                                                                                                                                                                                                                          ${s.status === 'pending' && showActions && (currentUser.role === 'admin' || s.created_by === currentUser.id) ? `
+                                                                                                                                                                                                                                  <button onclick="openEditModal(${s.id})" class="btn btn-secondary btn-sm">✏️ Edit</button>
+                                                                                                                                                                                                                                  <button onclick="deleteSubmission(${s.id})" class="btn btn-danger btn-sm">🗑️ Hapus</button>
+                                                                                                                                                                                                                                ` : ''}
                                                                                                                                                                                                                 </div>
                                                                                                                                                                                                                       </td>
                                                                                                                                                                                                                           </tr>`;
@@ -320,6 +326,10 @@ async function viewDetail(id) {
             if (currentUser.role === 'admin' && s.status === 'pending') {
                      footerHTML += `<button onclick="approveSubmission(${s.id})" class="btn btn-success">✅ Setujui</button>`;
                      footerHTML += `<button onclick="openRejectModal(${s.id})" class="btn btn-danger">❌ Tolak</button>`;
+            }
+            if (s.status === 'pending' && (currentUser.role === 'admin' || s.created_by === currentUser.id)) {
+                     footerHTML += `<button onclick="closeModal('modal-detail');setTimeout(()=>openEditModal(${s.id}),200)" class="btn btn-secondary">✏️ Edit</button>`;
+                     footerHTML += `<button onclick="deleteSubmission(${s.id})" class="btn btn-danger">🗑️ Hapus</button>`;
             }
             footerHTML += `<button onclick="closeModal('modal-detail')" class="btn btn-outline">Tutup</button>`;
             document.getElementById('modal-detail-footer').innerHTML = footerHTML;
@@ -687,6 +697,159 @@ async function uploadImage(type, input) {
             msgEl.className   = 'alert alert-error';
      }
      input.value = '';
+}
+
+// ===================== EDIT SUBMISSION =====================
+async function openEditModal(id) {
+     try {
+            const res = await api(`/api/submissions/${id}`);
+            const s   = await res.json();
+            if (!res.ok) { showToast(s.error || 'Gagal memuat data', 'error'); return; }
+            editTargetId = id;
+            editProductRowCount = 0;
+            document.getElementById('edit-client-title').value   = s.client_title   || '';
+            document.getElementById('edit-client-name').value    = s.client_name    || '';
+            document.getElementById('edit-client-address').value = s.client_address || '';
+            document.getElementById('edit-client-city').value    = s.client_city    || 'di Tempat';
+            const ppnVal    = s.ppn_included    ? '1' : '0';
+            const ongkirVal = s.ongkir_included ? '1' : '0';
+            document.querySelector(`input[name="edit-ppn"][value="${ppnVal}"]`).checked    = true;
+            document.querySelector(`input[name="edit-ongkir"][value="${ongkirVal}"]`).checked = true;
+            document.getElementById('edit-lampiran').value = s.lampiran || '';
+            document.getElementById('edit-notes').value    = s.notes    || '';
+            document.getElementById('edit-product-tbody').innerHTML = '';
+            document.getElementById('edit-grand-total').textContent = 'Rp 0';
+            document.getElementById('edit-error').style.display = 'none';
+            const items = Array.isArray(s.items) ? s.items : [];
+            if (items.length === 0) { addEditProductRow(); } else { items.forEach(item => addEditProductRow(item)); }
+            showModal('modal-edit');
+     } catch (e) {
+            showToast('Gagal memuat data pengajuan', 'error');
+     }
+}
+
+function addEditProductRow(data = {}) {
+     editProductRowCount++;
+     const idx   = editProductRowCount;
+     const tbody = document.getElementById('edit-product-tbody');
+     const tr    = document.createElement('tr');
+     tr.id = `edit-row-${idx}`;
+     tr.innerHTML = `
+         <td class="text-center" style="color:var(--text-light)">${idx}</td>
+             <td><input type="text"   class="table-input"        placeholder="Nama produk"  data-field="nama_produk"  oninput="updateEditTotal()" value="${escHtml(data.nama_produk || '')}"></td>
+                 <td><input type="text"   class="table-input"        placeholder="Pabrikan"     data-field="pabrikan"     value="${escHtml(data.pabrikan || '')}"></td>
+                     <td><input type="text"   class="table-input"        placeholder="Spesifikasi"  data-field="spesifikasi"  value="${escHtml(data.spesifikasi || '')}"></td>
+                         <td><input type="number" class="table-input small"  placeholder="0" min="0"   data-field="qty"          oninput="updateEditTotal()" value="${escHtml(String(data.qty || ''))}"></td>
+                             <td><input type="text"   class="table-input"        placeholder="unit"         data-field="satuan"       style="width:70px" value="${escHtml(data.satuan || '')}"></td>
+                                 <td><input type="number" class="table-input medium" placeholder="0" min="0"   data-field="harga_satuan" oninput="updateEditTotal()" value="${escHtml(String(data.harga_satuan || ''))}"></td>
+                                     <td class="text-right fw-bold row-total">Rp 0</td>
+                                         <td><input type="url" class="table-input" placeholder="https://..." data-field="link" style="width:180px" value="${escHtml(data.link || '')}"></td>
+                                             <td><button type="button" onclick="removeEditRow(${idx})" class="btn-remove-row" title="Hapus baris">×</button></td>`;
+     tbody.appendChild(tr);
+     updateEditTotal();
+}
+
+function removeEditRow(idx) {
+     const row = document.getElementById(`edit-row-${idx}`);
+     if (row) {
+            row.remove();
+            Array.from(document.querySelectorAll('#edit-product-tbody tr')).forEach((tr, i) => {
+                     tr.cells[0].textContent = i + 1;
+            });
+            updateEditTotal();
+     }
+}
+
+function updateEditTotal() {
+     let grand = 0;
+     document.querySelectorAll('#edit-product-tbody tr').forEach(tr => {
+            const qty   = parseFloat(tr.querySelector('[data-field="qty"]')?.value)          || 0;
+            const harga = parseFloat(tr.querySelector('[data-field="harga_satuan"]')?.value) || 0;
+            const total = qty * harga;
+            grand += total;
+            tr.querySelector('.row-total').textContent = 'Rp ' + formatRupiah(total);
+     });
+     document.getElementById('edit-grand-total').textContent = 'Rp ' + formatRupiah(grand);
+}
+
+async function saveEdit() {
+     const errEl = document.getElementById('edit-error');
+     errEl.style.display = 'none';
+     const items = [];
+     let valid = true;
+     document.querySelectorAll('#edit-product-tbody tr').forEach(tr => {
+            const item = {
+                     nama_produk:  tr.querySelector('[data-field="nama_produk"]')?.value?.trim()  || '',
+                     pabrikan:     tr.querySelector('[data-field="pabrikan"]')?.value?.trim()     || '',
+                     spesifikasi:  tr.querySelector('[data-field="spesifikasi"]')?.value?.trim()  || '',
+                     qty:          tr.querySelector('[data-field="qty"]')?.value                  || '0',
+                     satuan:       tr.querySelector('[data-field="satuan"]')?.value?.trim()       || '',
+                     harga_satuan: tr.querySelector('[data-field="harga_satuan"]')?.value         || '0',
+                     link:         tr.querySelector('[data-field="link"]')?.value?.trim()         || '',
+            };
+            if (!item.nama_produk) { valid = false; return; }
+            items.push(item);
+     });
+     if (!valid || items.length === 0) {
+            errEl.textContent = 'Harap isi nama produk untuk semua baris, atau hapus baris yang kosong.';
+            errEl.style.display = 'block';
+            return;
+     }
+     const payload = {
+            client_title:    document.getElementById('edit-client-title').value.trim(),
+            client_name:     document.getElementById('edit-client-name').value.trim(),
+            client_address:  document.getElementById('edit-client-address').value.trim(),
+            client_city:     document.getElementById('edit-client-city').value.trim() || 'di Tempat',
+            items,
+            ppn_included:    document.querySelector('input[name="edit-ppn"]:checked')?.value    === '1',
+            ongkir_included: document.querySelector('input[name="edit-ongkir"]:checked')?.value === '1',
+            notes:           document.getElementById('edit-notes').value.trim(),
+            lampiran:        document.getElementById('edit-lampiran').value.trim(),
+     };
+     if (!payload.client_name || !payload.client_address) {
+            errEl.textContent = 'Nama instansi dan alamat wajib diisi.';
+            errEl.style.display = 'block';
+            return;
+     }
+     try {
+            const btn = document.getElementById('btn-save-edit');
+            btn.disabled    = true;
+            btn.textContent = '⏳ Menyimpan...';
+            const res  = await api(`/api/submissions/${editTargetId}`, 'PUT', payload);
+            const data = await res.json();
+            btn.disabled    = false;
+            btn.textContent = '💾 Simpan Perubahan';
+            if (res.ok) {
+                     showToast('✅ Pengajuan berhasil diperbarui!', 'success');
+                     closeModal('modal-edit');
+                     const activePage = document.querySelector('.menu-item.active')?.getAttribute('data-page');
+                     if (activePage) showPage(activePage); else loadDashboard();
+            } else {
+                     errEl.textContent = data.error || 'Gagal menyimpan perubahan';
+                     errEl.style.display = 'block';
+            }
+     } catch (err) {
+            errEl.textContent = 'Koneksi ke server gagal';
+            errEl.style.display = 'block';
+     }
+}
+
+async function deleteSubmission(id) {
+     if (!confirm('Hapus pengajuan ini? Tindakan ini tidak dapat dibatalkan.')) return;
+     try {
+            const res  = await api(`/api/submissions/${id}`, 'DELETE');
+            const data = await res.json();
+            if (res.ok) {
+                     showToast('Pengajuan berhasil dihapus', 'success');
+                     closeModal('modal-detail');
+                     const activePage = document.querySelector('.menu-item.active')?.getAttribute('data-page');
+                     if (activePage) showPage(activePage); else loadDashboard();
+            } else {
+                     showToast(data.error || 'Gagal menghapus', 'error');
+            }
+     } catch {
+            showToast('Koneksi gagal', 'error');
+     }
 }
 
 // ===================== HELPERS =====================
