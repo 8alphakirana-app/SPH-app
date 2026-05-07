@@ -55,14 +55,35 @@ async function logout() {
      showLogin();
 }
 
+const ROLE_LABELS = {
+     admin: '👑 Admin', staff: '👤 Staff', gm: '⭐ GM',
+     manager_keuangan: '💼 Mgr. Keuangan', direktur_ops: '🏭 Dir. Ops', direktur_utama: '🎯 Dir. Utama'
+};
+const APPROVER_ROLES = ['gm','manager_keuangan','direktur_ops','direktur_utama'];
+const KK_LEVEL_LABELS = { 1:'GM', 2:'Manager Keuangan', 3:'Direktur Operasional', 4:'Direktur Utama' };
+
 function setUser(user) {
      currentUser = user;
-     document.getElementById('user-name').textContent  = user.full_name;
-     document.getElementById('user-role').textContent  = user.role === 'admin' ? '👑 Admin' : '👤 Staff';
+     document.getElementById('user-name').textContent   = user.full_name;
+     document.getElementById('user-role').textContent   = ROLE_LABELS[user.role] || user.role;
      document.getElementById('user-avatar').textContent = user.full_name.charAt(0).toUpperCase();
      document.getElementById('top-bar-user').textContent = user.full_name;
+
      if (user.role === 'admin') {
             document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
+     }
+
+     // KK menu visibility
+     document.querySelectorAll('.kk-menu').forEach(el => el.style.display = '');
+     if (user.role === 'staff' || user.role === 'admin') {
+            document.querySelectorAll('.kk-create').forEach(el => el.style.display = '');
+            document.querySelectorAll('.kk-list-mine').forEach(el => el.style.display = '');
+     }
+     if (APPROVER_ROLES.includes(user.role)) {
+            document.querySelectorAll('.kk-approval').forEach(el => el.style.display = '');
+     }
+     if (user.role === 'admin' || user.role === 'direktur_utama') {
+            document.querySelectorAll('.kk-all').forEach(el => el.style.display = '');
      }
 }
 
@@ -91,6 +112,8 @@ function showPage(page) {
             'admin-submissions': 'Semua Pengajuan',
             'admin-users':       'Kelola Pengguna',
             'admin-settings':    'Pengaturan',
+            'kk-form':           'Buat Kertas Kerja',
+            'kk-list':           'Kertas Kerja',
      };
      document.getElementById('top-bar-title').textContent = titles[page] || page;
      if (page === 'dashboard')         loadDashboard();
@@ -99,6 +122,8 @@ function showPage(page) {
      else if (page === 'admin-submissions') loadAdminSubmissions();
      else if (page === 'admin-users')       loadUsers();
      else if (page === 'admin-settings')    loadSettings();
+     else if (page === 'kk-form')           initKKForm();
+     else if (page === 'kk-list')           loadKKList();
      if (window.innerWidth <= 768) {
             document.getElementById('sidebar').classList.remove('open');
      }
@@ -972,6 +997,304 @@ async function deleteSubmission(id) {
      } catch {
             showToast('Koneksi gagal', 'error');
      }
+}
+
+// ===================== KERTAS KERJA =====================
+let kkActionTargetId = null;
+let kkActionType     = null;
+
+function initKKForm() {
+     document.getElementById('form-kk').reset();
+     document.getElementById('kk-bdo').value = '0';
+     document.getElementById('kk-form-error').style.display = 'none';
+     document.getElementById('kk-calc-preview').style.display = 'none';
+}
+
+function calcKKValues(nkt, np, bdo) {
+     const dppK = nkt / 1.11;
+     const ppnK = dppK * 0.11;
+     const pphK = dppK * 0.015;
+     const penerimaan = nkt - (ppnK + pphK);
+     const dppB = np / 1.11;
+     const ppnB = dppB * 0.11;
+     const pphB = dppB * 0.015;
+     const surplus = penerimaan - (dppB + ppnB + pphB + bdo);
+     const laba = dppK - dppB - bdo;
+     const margin = dppK > 0 ? (laba / dppK) * 100 : 0;
+     return { dppK, ppnK, pphK, penerimaan, dppB, ppnB, pphB, surplus, laba, margin };
+}
+
+function updateKKCalc() {
+     const nkt = parseFloat(document.getElementById('kk-nilai-kontrak').value) || 0;
+     const np  = parseFloat(document.getElementById('kk-nilai-pembyr').value)  || 0;
+     const bdo = parseFloat(document.getElementById('kk-bdo').value)           || 0;
+     const preview = document.getElementById('kk-calc-preview');
+     if (nkt === 0 && np === 0) { preview.style.display = 'none'; return; }
+     preview.style.display = '';
+     const c = calcKKValues(nkt, np, bdo);
+     const fmt = n => 'Rp ' + formatRupiah(Math.round(n));
+     document.getElementById('cv-dpp-kontrak').textContent = fmt(c.dppK);
+     document.getElementById('cv-ppn-kontrak').textContent = fmt(c.ppnK);
+     document.getElementById('cv-pph-kontrak').textContent = fmt(c.pphK);
+     document.getElementById('cv-penerimaan').textContent  = fmt(c.penerimaan);
+     document.getElementById('cv-dpp-beli').textContent    = fmt(c.dppB);
+     document.getElementById('cv-ppn-beli').textContent    = fmt(c.ppnB);
+     document.getElementById('cv-pph-beli').textContent    = fmt(c.pphB);
+     document.getElementById('cv-surplus').textContent     = fmt(c.surplus);
+     document.getElementById('cv-laba').textContent        = fmt(c.laba);
+     document.getElementById('cv-margin').textContent      = c.margin.toFixed(2) + '%';
+     const labaEl = document.getElementById('cv-laba');
+     labaEl.style.color = c.laba >= 0 ? 'var(--green)' : 'var(--red)';
+}
+
+async function submitKKForm(e) {
+     e.preventDefault();
+     const errEl = document.getElementById('kk-form-error');
+     errEl.style.display = 'none';
+     const payload = {
+            nama_pekerjaan:        document.getElementById('kk-nama-pekerjaan').value.trim(),
+            nomor_surat:           document.getElementById('kk-nomor-surat').value.trim(),
+            perihal:               document.getElementById('kk-perihal').value.trim(),
+            satker:                document.getElementById('kk-satker').value.trim(),
+            prinsipal:             document.getElementById('kk-prinsipal').value.trim(),
+            nama_barang:           document.getElementById('kk-nama-barang').value.trim(),
+            pelanggan:             document.getElementById('kk-pelanggan').value.trim(),
+            nilai_kontrak_total:   parseFloat(document.getElementById('kk-nilai-kontrak').value) || 0,
+            nilai_pembyr:          parseFloat(document.getElementById('kk-nilai-pembyr').value)  || 0,
+            b_distribusi_ongkir:   parseFloat(document.getElementById('kk-bdo').value)           || 0,
+            term_payment_supplier: document.getElementById('kk-tp-supplier').value.trim(),
+            term_payment_pelanggan:document.getElementById('kk-tp-pelanggan').value.trim(),
+            sumber_anggaran:       document.getElementById('kk-sumber-anggaran').value.trim(),
+            notes:                 document.getElementById('kk-notes').value.trim(),
+     };
+     try {
+            const btn = e.target.querySelector('button[type="submit"]');
+            btn.disabled = true; btn.textContent = '⏳ Mengirim...';
+            const res  = await api('/api/kk', 'POST', payload);
+            const data = await res.json();
+            btn.disabled = false; btn.textContent = '📤 Kirim Kertas Kerja';
+            if (res.ok) {
+                     showToast('✅ Kertas Kerja berhasil dikirim!', 'success');
+                     setTimeout(() => showPage('kk-list'), 1200);
+            } else {
+                     errEl.textContent = data.error || 'Gagal mengirim';
+                     errEl.style.display = 'block';
+            }
+     } catch {
+            errEl.textContent = 'Koneksi gagal';
+            errEl.style.display = 'block';
+     }
+}
+
+async function loadKKList() {
+     const container = document.getElementById('kk-list-container');
+     container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
+     const filterStatus = document.getElementById('kk-filter-status')?.value || '';
+     try {
+            const res  = await api('/api/kk');
+            let rows   = await res.json();
+            if (filterStatus) rows = rows.filter(r => r.status === filterStatus);
+            if (rows.length === 0) {
+                     container.innerHTML = emptyState('Belum ada Kertas Kerja');
+                     return;
+            }
+            const isApprover = APPROVER_ROLES.includes(currentUser.role);
+            const isAdmin    = currentUser.role === 'admin' || currentUser.role === 'direktur_utama';
+            const tableRows  = rows.map(r => {
+                     const lvl = r.kk_approval_level;
+                     const approvalBadge = r.status === 'pending'
+                            ? `<span class="badge badge-pending">⏳ Level ${lvl}: ${KK_LEVEL_LABELS[lvl]||'?'}</span>`
+                            : r.status === 'approved'
+                                   ? '<span class="badge badge-approved">✅ Disetujui</span>'
+                                   : '<span class="badge badge-rejected">❌ Ditolak</span>';
+                     const canAct = r.status === 'pending' && isApprover &&
+                            ({ gm:1, manager_keuangan:2, direktur_ops:3, direktur_utama:4 }[currentUser.role]) === lvl;
+                     return `<tr>
+                            <td><div class="fw-bold">${escHtml(r.nama_pekerjaan)}</div>
+                                <div style="font-size:11px;color:var(--text-light)">${escHtml(r.pelanggan)}</div></td>
+                            ${isAdmin ? `<td style="font-size:12px">${escHtml(r.creator_name||'-')}</td>` : ''}
+                            <td class="text-right">Rp ${formatRupiah(r.nilai_kontrak_total)}</td>
+                            <td>${approvalBadge}</td>
+                            <td style="font-size:12px;color:var(--text-light)">${formatDate(r.created_at)}</td>
+                            <td>
+                                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                                    <button onclick="viewKKDetail(${r.id})" class="btn btn-secondary btn-sm">🔍 Detail</button>
+                                    ${canAct ? `
+                                        <button onclick="openKKAction(${r.id},'approve')" class="btn btn-success btn-sm">✅ Setuju</button>
+                                        <button onclick="openKKAction(${r.id},'reject')"  class="btn btn-danger btn-sm">❌ Tolak</button>` : ''}
+                                    ${r.status === 'approved' ? `<button onclick="downloadKKExcel(${r.id})" class="btn btn-success btn-sm">📊 Excel</button>` : ''}
+                                    ${r.status === 'pending' && (currentUser.role==='admin' || r.created_by===currentUser.id) ? `
+                                        <button onclick="deleteKK(${r.id})" class="btn btn-danger btn-sm">🗑️</button>` : ''}
+                                </div>
+                            </td>
+                     </tr>`;
+            }).join('');
+            container.innerHTML = `<div class="table-responsive"><table class="table">
+                     <thead><tr>
+                            <th>Nama Pekerjaan</th>
+                            ${isAdmin ? '<th>Diajukan Oleh</th>' : ''}
+                            <th class="text-right">Nilai Kontrak</th>
+                            <th>Status Approval</th>
+                            <th>Tanggal</th>
+                            <th>Aksi</th>
+                     </tr></thead>
+                     <tbody>${tableRows}</tbody>
+            </table></div>`;
+     } catch { container.innerHTML = '<div class="alert alert-error">Gagal memuat data</div>'; }
+}
+
+async function viewKKDetail(id) {
+     try {
+            const res = await api(`/api/kk/${id}`);
+            const kk  = await res.json();
+            if (!res.ok) { showToast(kk.error || 'Gagal memuat', 'error'); return; }
+            const c = kk.calc || calcKKValues(kk.nilai_kontrak_total||0, kk.nilai_pembyr||0, kk.b_distribusi_ongkir||0);
+            const fmt = n => 'Rp ' + formatRupiah(Math.round(n));
+            const approvals = kk.approvals || [];
+
+            const approvalSteps = [1,2,3,4].map(lvl => {
+                     const a = approvals.find(x => x.level === lvl);
+                     const icon = !a || a.status === 'pending' ? '⬜' : a.status === 'approved' ? '✅' : '❌';
+                     const color = !a || a.status === 'pending' ? 'var(--text-light)' : a.status === 'approved' ? 'var(--green)' : 'var(--red)';
+                     return `<div class="kk-step">
+                            <div class="kk-step-icon" style="color:${color}">${icon}</div>
+                            <div class="kk-step-label">
+                                   <strong>${KK_LEVEL_LABELS[lvl]}</strong>
+                                   ${a?.approver_name ? `<br><small>${escHtml(a.approver_name)}</small>` : ''}
+                                   ${a?.note ? `<br><small style="color:var(--text-light)">${escHtml(a.note)}</small>` : ''}
+                                   ${a?.acted_at ? `<br><small style="color:var(--text-light)">${formatDate(a.acted_at)}</small>` : ''}
+                            </div>
+                     </div>`;
+            }).join('<div class="kk-step-arrow">→</div>');
+
+            document.getElementById('kk-detail-title').textContent = `KK — ${kk.nama_pekerjaan}`;
+            document.getElementById('kk-detail-body').innerHTML = `
+                     <div class="detail-grid" style="grid-template-columns:repeat(3,1fr)">
+                            <div class="detail-item"><label>Status</label><div class="value"><span class="badge badge-${kk.status}">${statusLabel(kk.status)}</span></div></div>
+                            <div class="detail-item"><label>Pelanggan</label><div class="value">${escHtml(kk.pelanggan)}</div></div>
+                            <div class="detail-item"><label>Diajukan Oleh</label><div class="value">${escHtml(kk.creator_name||'-')}</div></div>
+                            <div class="detail-item"><label>Satker</label><div class="value">${escHtml(kk.satker||'-')}</div></div>
+                            <div class="detail-item"><label>Prinsipal</label><div class="value">${escHtml(kk.prinsipal||'-')}</div></div>
+                            <div class="detail-item"><label>Nama Barang</label><div class="value">${escHtml(kk.nama_barang||'-')}</div></div>
+                            <div class="detail-item"><label>Nomor Surat</label><div class="value">${escHtml(kk.nomor_surat||'-')}</div></div>
+                            <div class="detail-item"><label>Perihal</label><div class="value">${escHtml(kk.perihal||'-')}</div></div>
+                            <div class="detail-item"><label>Sumber Anggaran</label><div class="value">${escHtml(kk.sumber_anggaran||'-')}</div></div>
+                     </div>
+                     <div class="detail-section-title">💰 Perhitungan Keuangan</div>
+                     <div class="kk-finance-grid">
+                            <div class="kk-finance-block">
+                                   <div class="kk-finance-title">Nilai Kontrak</div>
+                                   <div class="kk-finance-row"><span>Total</span><span class="fw-bold">Rp ${formatRupiah(kk.nilai_kontrak_total)}</span></div>
+                                   <div class="kk-finance-row"><span>DPP</span><span>${fmt(c.dppKontrak)}</span></div>
+                                   <div class="kk-finance-row"><span>PPN 11%</span><span>${fmt(c.ppnKontrak)}</span></div>
+                                   <div class="kk-finance-row"><span>PPh 1,5%</span><span>${fmt(c.pphKontrak)}</span></div>
+                                   <div class="kk-finance-row kk-finance-total"><span>Penerimaan Uang</span><span>${fmt(c.penerimaanUang)}</span></div>
+                            </div>
+                            <div class="kk-finance-block">
+                                   <div class="kk-finance-title">Pembelian</div>
+                                   <div class="kk-finance-row"><span>Nilai Pembyr</span><span class="fw-bold">Rp ${formatRupiah(kk.nilai_pembyr)}</span></div>
+                                   <div class="kk-finance-row"><span>DPP Beli</span><span>${fmt(c.dppBeli)}</span></div>
+                                   <div class="kk-finance-row"><span>PPN 11%</span><span>${fmt(c.ppnBeli)}</span></div>
+                                   <div class="kk-finance-row"><span>PPh 1,5%</span><span>${fmt(c.pphBeli)}</span></div>
+                                   <div class="kk-finance-row"><span>B. Distribusi &amp; Ongkir</span><span>Rp ${formatRupiah(kk.b_distribusi_ongkir)}</span></div>
+                            </div>
+                            <div class="kk-finance-block">
+                                   <div class="kk-finance-title">Hasil</div>
+                                   <div class="kk-finance-row"><span>Surplus / Defisit</span><span style="color:${c.surplusDefisit>=0?'var(--green)':'var(--red)'}">${fmt(c.surplusDefisit)}</span></div>
+                                   <div class="kk-finance-row kk-finance-total"><span>Laba</span><span style="color:${c.laba>=0?'var(--green)':'var(--red)'}">${fmt(c.laba)}</span></div>
+                                   <div class="kk-finance-row kk-finance-total"><span>Net Margin</span><span>${c.netMargin.toFixed(2)}%</span></div>
+                            </div>
+                     </div>
+                     <div class="detail-section-title">📋 Term of Payment</div>
+                     <div class="detail-grid" style="grid-template-columns:1fr 1fr">
+                            <div class="detail-item"><label>Supplier</label><div class="value">${escHtml(kk.term_payment_supplier||'-')}</div></div>
+                            <div class="detail-item"><label>Pelanggan</label><div class="value">${escHtml(kk.term_payment_pelanggan||'-')}</div></div>
+                     </div>
+                     <div class="detail-section-title">🔄 Progress Approval</div>
+                     <div class="kk-approval-steps">${approvalSteps}</div>
+                     ${kk.status==='rejected'?`<div class="alert alert-error" style="margin-top:12px">❌ Alasan Penolakan: ${escHtml(kk.reject_reason||'-')}</div>`:''}
+            `;
+
+            const lvl    = kk.kk_approval_level;
+            const myRole = currentUser.role;
+            const myLvl  = { gm:1, manager_keuangan:2, direktur_ops:3, direktur_utama:4 }[myRole];
+            const canAct = kk.status === 'pending' && myLvl === lvl;
+            let footer = '';
+            if (canAct) {
+                     footer += `<button onclick="closeModal('modal-kk-detail');setTimeout(()=>openKKAction(${id},'approve'),200)" class="btn btn-success">✅ Setujui</button>`;
+                     footer += `<button onclick="closeModal('modal-kk-detail');setTimeout(()=>openKKAction(${id},'reject'),200)" class="btn btn-danger">❌ Tolak</button>`;
+            }
+            if (kk.status === 'approved') footer += `<button onclick="downloadKKExcel(${id})" class="btn btn-success">📊 Unduh Excel</button>`;
+            if (kk.status === 'pending' && (currentUser.role==='admin' || kk.created_by===currentUser.id)) {
+                     footer += `<button onclick="deleteKK(${id})" class="btn btn-danger">🗑️ Hapus</button>`;
+            }
+            footer += `<button onclick="closeModal('modal-kk-detail')" class="btn btn-outline">Tutup</button>`;
+            document.getElementById('kk-detail-footer').innerHTML = footer;
+            showModal('modal-kk-detail');
+     } catch { showToast('Gagal memuat detail KK', 'error'); }
+}
+
+function openKKAction(id, type) {
+     kkActionTargetId = id;
+     kkActionType     = type;
+     document.getElementById('kk-action-note').value = '';
+     document.getElementById('kk-action-error').style.display = 'none';
+     document.getElementById('kk-action-title').textContent = type === 'approve' ? '✅ Setujui Kertas Kerja' : '❌ Tolak Kertas Kerja';
+     const footer = type === 'approve'
+            ? `<button onclick="submitKKAction()" class="btn btn-success">✅ Konfirmasi Setuju</button>`
+            : `<button onclick="submitKKAction()" class="btn btn-danger">❌ Konfirmasi Tolak</button>`;
+     document.getElementById('kk-action-footer').innerHTML = footer + `<button onclick="closeModal('modal-kk-action')" class="btn btn-outline">Batal</button>`;
+     showModal('modal-kk-action');
+}
+
+async function submitKKAction() {
+     const note  = document.getElementById('kk-action-note').value.trim();
+     const errEl = document.getElementById('kk-action-error');
+     errEl.style.display = 'none';
+     if (kkActionType === 'reject' && !note) {
+            errEl.textContent = 'Harap isi alasan penolakan';
+            errEl.style.display = 'block'; return;
+     }
+     try {
+            const endpoint = `/api/kk/${kkActionTargetId}/${kkActionType}`;
+            const res  = await api(endpoint, 'POST', { note });
+            const data = await res.json();
+            if (res.ok) {
+                     showToast(kkActionType==='approve' ? '✅ Disetujui!' : '❌ Ditolak', 'success');
+                     closeModal('modal-kk-action');
+                     loadKKList();
+            } else {
+                     errEl.textContent = data.error || 'Gagal';
+                     errEl.style.display = 'block';
+            }
+     } catch {
+            errEl.textContent = 'Koneksi gagal';
+            errEl.style.display = 'block';
+     }
+}
+
+async function downloadKKExcel(id) {
+     showToast('⏳ Menyiapkan Excel...', '');
+     try {
+            const res = await fetch(`/api/kk/${id}/export-excel`);
+            if (!res.ok) { const d = await res.json(); showToast(d.error||'Gagal', 'error'); return; }
+            const blob = await res.blob();
+            const url  = URL.createObjectURL(blob);
+            const filename = res.headers.get('content-disposition')?.match(/filename="([^"]+)"/)?.[1] || `KK_${id}.xlsx`;
+            const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+            URL.revokeObjectURL(url);
+            showToast('✅ Excel berhasil diunduh!', 'success');
+     } catch { showToast('Gagal mengunduh Excel', 'error'); }
+}
+
+async function deleteKK(id) {
+     if (!confirm('Hapus Kertas Kerja ini?')) return;
+     try {
+            const res  = await api(`/api/kk/${id}`, 'DELETE');
+            const data = await res.json();
+            if (res.ok) { showToast('KK berhasil dihapus', 'success'); closeModal('modal-kk-detail'); loadKKList(); }
+            else showToast(data.error || 'Gagal menghapus', 'error');
+     } catch { showToast('Koneksi gagal', 'error'); }
 }
 
 // ===================== GANTI / RESET PASSWORD =====================

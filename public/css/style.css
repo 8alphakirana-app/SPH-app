@@ -427,6 +427,105 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
   line-height: 1.5;
 }
 
+/* ==================== MODAL XL ==================== */
+.modal-xl { max-width: 960px; }
+
+/* ==================== KERTAS KERJA ==================== */
+.kk-calc-preview {
+  margin-top: 16px;
+  border: 1px solid var(--gray-border);
+  border-radius: var(--radius);
+  background: #f8fafc;
+  padding: 16px;
+}
+.kk-calc-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.kk-calc-section { }
+.kk-calc-title {
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: var(--blue);
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 2px solid var(--blue);
+}
+.kk-calc-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  padding: 3px 0;
+  color: var(--text);
+}
+.kk-calc-total {
+  font-weight: 700;
+  border-top: 1px solid var(--gray-border);
+  margin-top: 4px;
+  padding-top: 6px;
+}
+
+/* Finance grid in detail modal */
+.kk-finance-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.kk-finance-block {
+  background: #f8fafc;
+  border: 1px solid var(--gray-border);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+.kk-finance-title {
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: var(--blue-dark);
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 2px solid var(--blue);
+}
+.kk-finance-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  padding: 3px 0;
+}
+.kk-finance-total {
+  font-weight: 700;
+  border-top: 1px solid var(--gray-border);
+  margin-top: 4px;
+  padding-top: 5px;
+}
+
+/* Approval steps */
+.kk-approval-steps {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: var(--radius);
+  border: 1px solid var(--gray-border);
+  flex-wrap: wrap;
+}
+.kk-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex: 1;
+  min-width: 140px;
+}
+.kk-step-icon { font-size: 20px; flex-shrink: 0; }
+.kk-step-label { font-size: 12px; line-height: 1.5; }
+.kk-step-arrow { color: var(--text-light); font-size: 18px; flex-shrink: 0; }
+
 /* Responsive */
 @media (max-width: 768px) {
   .sidebar { transform: translateX(-100%); }
@@ -437,4 +536,7 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
   .stats-grid-6 { grid-template-columns: repeat(2, 1fr); }
   .form-row { grid-template-columns: 1fr; }
   .modal-dialog { margin: 0 10px; }
+  .kk-calc-grid { grid-template-columns: 1fr; }
+  .kk-finance-grid { grid-template-columns: 1fr; }
+  .kk-approval-steps { flex-direction: column; }
 }

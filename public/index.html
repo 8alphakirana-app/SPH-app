@@ -45,6 +45,11 @@
         <li class="admin-only" style="display:none"><a href="#" onclick="showPage('admin-submissions')" class="menu-item" data-page="admin-submissions"><span class="icon">🗂️</span> Semua Pengajuan</a></li>
         <li class="admin-only" style="display:none"><a href="#" onclick="showPage('admin-users')" class="menu-item" data-page="admin-users"><span class="icon">👥</span> Kelola Pengguna</a></li>
         <li class="admin-only" style="display:none"><a href="#" onclick="showPage('admin-settings')" class="menu-item" data-page="admin-settings"><span class="icon">⚙️</span> Pengaturan</a></li>
+        <li class="menu-divider kk-menu" style="display:none"></li>
+        <li class="kk-menu kk-create" style="display:none"><a href="#" onclick="showPage('kk-form')" class="menu-item" data-page="kk-form"><span class="icon">📝</span> Buat KK</a></li>
+        <li class="kk-menu kk-list-mine" style="display:none"><a href="#" onclick="showPage('kk-list')" class="menu-item" data-page="kk-list"><span class="icon">📋</span> KK Saya</a></li>
+        <li class="kk-menu kk-approval" style="display:none"><a href="#" onclick="showPage('kk-list')" class="menu-item" data-page="kk-list"><span class="icon">✅</span> Approval KK</a></li>
+        <li class="kk-menu kk-all" style="display:none"><a href="#" onclick="showPage('kk-list')" class="menu-item" data-page="kk-list"><span class="icon">🗂️</span> Semua KK</a></li>
       </ul>
       <div class="sidebar-footer">
         <div class="user-info">
@@ -143,8 +148,124 @@
             <div class="form-actions"><div id="settings-msg" class="alert" style="display:none"></div><button type="submit" class="btn btn-primary">💾 Simpan Pengaturan</button></div>
           </form>
         </div>
+        <!-- ═══════════ KK FORM ═══════════ -->
+        <div id="content-kk-form" class="content-page" style="display:none">
+          <h1 class="page-title">Buat Kertas Kerja (KK) Baru</h1>
+          <form id="form-kk" onsubmit="submitKKForm(event)">
+            <div class="card">
+              <div class="card-header"><h3>📋 Informasi Pekerjaan</h3></div>
+              <div class="card-body">
+                <div class="form-row">
+                  <div class="form-group"><label>Nama Pekerjaan <span class="required">*</span></label><input type="text" id="kk-nama-pekerjaan" required></div>
+                  <div class="form-group"><label>Nomor Surat</label><input type="text" id="kk-nomor-surat"></div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group"><label>Perihal</label><input type="text" id="kk-perihal"></div>
+                  <div class="form-group"><label>Satker</label><input type="text" id="kk-satker"></div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group"><label>Prinsipal</label><input type="text" id="kk-prinsipal"></div>
+                  <div class="form-group"><label>Nama Barang</label><input type="text" id="kk-nama-barang"></div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group"><label>Pelanggan <span class="required">*</span></label><input type="text" id="kk-pelanggan" required></div>
+                  <div class="form-group"><label>Sumber Anggaran</label><input type="text" id="kk-sumber-anggaran"></div>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><h3>💰 Nilai &amp; Perhitungan</h3></div>
+              <div class="card-body">
+                <div class="form-row">
+                  <div class="form-group"><label>Nilai Kontrak Total (Rp) <span class="required">*</span></label><input type="number" id="kk-nilai-kontrak" min="0" oninput="updateKKCalc()" required></div>
+                  <div class="form-group"><label>Nilai Pembayaran / Nilai Pembyr (Rp) <span class="required">*</span></label><input type="number" id="kk-nilai-pembyr" min="0" oninput="updateKKCalc()" required></div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group"><label>B. Distribusi &amp; Ongkir (Rp)</label><input type="number" id="kk-bdo" min="0" value="0" oninput="updateKKCalc()"></div>
+                  <div class="form-group"></div>
+                </div>
+                <div class="kk-calc-preview" id="kk-calc-preview" style="display:none">
+                  <div class="kk-calc-grid">
+                    <div class="kk-calc-section">
+                      <div class="kk-calc-title">Nilai Kontrak</div>
+                      <div class="kk-calc-row"><span>DPP</span><span id="cv-dpp-kontrak">Rp 0</span></div>
+                      <div class="kk-calc-row"><span>PPN 11%</span><span id="cv-ppn-kontrak">Rp 0</span></div>
+                      <div class="kk-calc-row"><span>PPh 1,5%</span><span id="cv-pph-kontrak">Rp 0</span></div>
+                      <div class="kk-calc-row kk-calc-total"><span>Penerimaan Uang</span><span id="cv-penerimaan">Rp 0</span></div>
+                    </div>
+                    <div class="kk-calc-section">
+                      <div class="kk-calc-title">Pembelian</div>
+                      <div class="kk-calc-row"><span>DPP Beli</span><span id="cv-dpp-beli">Rp 0</span></div>
+                      <div class="kk-calc-row"><span>PPN 11%</span><span id="cv-ppn-beli">Rp 0</span></div>
+                      <div class="kk-calc-row"><span>PPh 1,5%</span><span id="cv-pph-beli">Rp 0</span></div>
+                    </div>
+                    <div class="kk-calc-section">
+                      <div class="kk-calc-title">Hasil</div>
+                      <div class="kk-calc-row"><span>Surplus / Defisit</span><span id="cv-surplus">Rp 0</span></div>
+                      <div class="kk-calc-row kk-calc-total"><span>Laba</span><span id="cv-laba">Rp 0</span></div>
+                      <div class="kk-calc-row kk-calc-total"><span>Net Margin</span><span id="cv-margin">0%</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><h3>📑 Term of Payment &amp; Catatan</h3></div>
+              <div class="card-body">
+                <div class="form-row">
+                  <div class="form-group"><label>Term of Payment Supplier</label><input type="text" id="kk-tp-supplier" placeholder="Cth: Cash"></div>
+                  <div class="form-group"><label>Term of Payment Pelanggan</label><input type="text" id="kk-tp-pelanggan" placeholder="Cth: 30 hari"></div>
+                </div>
+                <div class="form-group"><label>Catatan</label><textarea id="kk-notes" rows="2"></textarea></div>
+              </div>
+            </div>
+            <div class="form-actions">
+              <div id="kk-form-error" class="alert alert-error" style="display:none"></div>
+              <button type="submit" class="btn btn-primary">📤 Kirim Kertas Kerja</button>
+              <button type="button" onclick="showPage('kk-list')" class="btn btn-outline">Batal</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- ═══════════ KK LIST ═══════════ -->
+        <div id="content-kk-list" class="content-page" style="display:none">
+          <div class="page-header">
+            <h1 class="page-title" id="kk-list-title">Kertas Kerja</h1>
+            <div class="filter-bar">
+              <select id="kk-filter-status" onchange="loadKKList()">
+                <option value="">Semua Status</option>
+                <option value="pending">Menunggu</option>
+                <option value="approved">Disetujui</option>
+                <option value="rejected">Ditolak</option>
+              </select>
+              <button onclick="showPage('kk-form')" class="btn btn-primary btn-sm kk-create" style="display:none">+ Buat KK</button>
+            </div>
+          </div>
+          <div class="card"><div id="kk-list-container"><div class="loading">⏳ Memuat...</div></div></div>
+        </div>
       </div>
     </main>
+  </div>
+</div>
+<!-- ═══════════ KK DETAIL MODAL ═══════════ -->
+<div id="modal-kk-detail" class="modal" style="display:none">
+  <div class="modal-backdrop" onclick="closeModal('modal-kk-detail')"></div>
+  <div class="modal-dialog modal-xl">
+    <div class="modal-header"><h3 id="kk-detail-title">Detail Kertas Kerja</h3><button onclick="closeModal('modal-kk-detail')" class="btn-close">✕</button></div>
+    <div class="modal-body" id="kk-detail-body"></div>
+    <div class="modal-footer" id="kk-detail-footer"></div>
+  </div>
+</div>
+<!-- ═══════════ KK APPROVE/REJECT MODAL ═══════════ -->
+<div id="modal-kk-action" class="modal" style="display:none">
+  <div class="modal-backdrop" onclick="closeModal('modal-kk-action')"></div>
+  <div class="modal-dialog">
+    <div class="modal-header"><h3 id="kk-action-title">Konfirmasi</h3><button onclick="closeModal('modal-kk-action')" class="btn-close">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Catatan / Komentar</label><textarea id="kk-action-note" rows="3" placeholder="Opsional..."></textarea></div>
+      <div id="kk-action-error" class="alert alert-error" style="display:none"></div>
+    </div>
+    <div class="modal-footer" id="kk-action-footer"></div>
   </div>
 </div>
 <div id="modal-detail" class="modal" style="display:none"><div class="modal-backdrop" onclick="closeModal('modal-detail')"></div><div class="modal-dialog modal-lg"><div class="modal-header"><h3 id="modal-detail-title">Detail Pengajuan</h3><button onclick="closeModal('modal-detail')" class="btn-close">✕</button></div><div class="modal-body" id="modal-detail-body"></div><div class="modal-footer" id="modal-detail-footer"></div></div></div>

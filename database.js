@@ -55,7 +55,68 @@ db.exec(`
   );
 `);
 
-// Cek apakah sudah ada data awal
+// ── KK MIGRATION: update users role constraint ──────────────────────────────
+const userTableDef = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get();
+if (userTableDef && !userTableDef.sql.includes('manager_keuangan')) {
+  db.pragma('foreign_keys = OFF');
+  db.exec(`
+    CREATE TABLE users_v2 (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      full_name TEXT NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('admin','staff','gm','manager_keuangan','direktur_ops','direktur_utama')),
+      created_at TEXT DEFAULT (datetime('now', 'localtime'))
+    );
+    INSERT INTO users_v2 SELECT * FROM users;
+    DROP TABLE users;
+    ALTER TABLE users_v2 RENAME TO users;
+  `);
+  db.pragma('foreign_keys = ON');
+  console.log('✅ Users table upgraded: new approver roles added');
+}
+
+// ── Add new columns to submissions if not exists ─────────────────────────────
+[
+  "ALTER TABLE submissions ADD COLUMN submission_type TEXT DEFAULT 'sph'",
+  "ALTER TABLE submissions ADD COLUMN kk_approval_level INTEGER DEFAULT 0"
+].forEach(sql => { try { db.exec(sql); } catch {} });
+
+// ── New tables for Kertas Kerja ───────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS kertas_kerja (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    submission_id INTEGER NOT NULL,
+    nama_pekerjaan TEXT DEFAULT '',
+    nomor_surat TEXT DEFAULT '',
+    perihal TEXT DEFAULT '',
+    satker TEXT DEFAULT '',
+    prinsipal TEXT DEFAULT '',
+    nama_barang TEXT DEFAULT '',
+    pelanggan TEXT DEFAULT '',
+    nilai_kontrak_total REAL DEFAULT 0,
+    nilai_pembyr REAL DEFAULT 0,
+    b_distribusi_ongkir REAL DEFAULT 0,
+    term_payment_supplier TEXT DEFAULT '',
+    term_payment_pelanggan TEXT DEFAULT '',
+    sumber_anggaran TEXT DEFAULT '',
+    FOREIGN KEY (submission_id) REFERENCES submissions(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS kk_approvals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    submission_id INTEGER NOT NULL,
+    level INTEGER NOT NULL,
+    approver_user_id INTEGER,
+    status TEXT DEFAULT 'pending',
+    note TEXT DEFAULT '',
+    acted_at TEXT,
+    FOREIGN KEY (submission_id) REFERENCES submissions(id),
+    FOREIGN KEY (approver_user_id) REFERENCES users(id)
+  );
+`);
+
+// ── Cek apakah sudah ada data awal ───────────────────────────────────────────
 const adminExists = db.prepare('SELECT id FROM users WHERE role = ?').get('admin');
 if (!adminExists) {
   // Buat user admin dan staff default
@@ -80,5 +141,18 @@ if (!companyExists) {
   insertSetting.run('signer_title', 'General Manager');
   insertSetting.run('nomor_prefix', 'PMH-LAK');
 }
+
+// ── Default approver users untuk KK ──────────────────────────────────────────
+[
+  { username: 'syaiful', password: 'pass123', full_name: 'M. Syaiful Hidayat',   role: 'gm' },
+  { username: 'aziz',    password: 'pass123', full_name: 'Nur Aziz Pratama',      role: 'manager_keuangan' },
+  { username: 'arief',   password: 'pass123', full_name: 'Arief Adityo Gumilang', role: 'direktur_ops' },
+  { username: 'jimmy',   password: 'pass123', full_name: 'Jimmy F. Zega',          role: 'direktur_utama' },
+].forEach(u => {
+  if (!db.prepare('SELECT id FROM users WHERE username = ?').get(u.username)) {
+    db.prepare('INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)').run(u.username, u.password, u.full_name, u.role);
+    console.log(`✅ Approver default dibuat: ${u.username} (${u.role})`);
+  }
+});
 
 module.exports = db;

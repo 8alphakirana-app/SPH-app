@@ -30,6 +30,7 @@ app.use(session({
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/submissions', require('./routes/submissions'));
+app.use('/api/kk', require('./routes/kk'));
 
 // SPA fallback - semua route ke index.html
 app.get('*', (req, res) => {
