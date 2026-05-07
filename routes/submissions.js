@@ -74,6 +74,138 @@ router.get('/', requireLogin, (req, res) => {
     res.json(rows);
 });
 
+// GET /api/submissions/dashboard-stats?month=YYYY-MM  (admin only)
+router.get('/dashboard-stats', requireAdmin, (req, res) => {
+    const month = req.query.month || null;
+    try {
+        let perUser;
+        if (month) {
+            perUser = db.prepare(`
+                SELECT u.id, u.full_name, u.username,
+                    COUNT(s.id) as total,
+                    SUM(CASE WHEN s.status = 'approved' THEN 1 ELSE 0 END) as disetujui,
+                    SUM(CASE WHEN s.status = 'rejected' THEN 1 ELSE 0 END) as ditolak,
+                    SUM(CASE WHEN s.status = 'pending' THEN 1 ELSE 0 END) as menunggu,
+                    COUNT(DISTINCT CASE WHEN s.id IS NOT NULL THEN s.client_name END) as jumlah_pelanggan
+                FROM users u
+                LEFT JOIN submissions s ON s.created_by = u.id
+                    AND strftime('%Y-%m', s.created_at) = ?
+                GROUP BY u.id ORDER BY total DESC, u.full_name ASC
+            `).all(month);
+        } else {
+            perUser = db.prepare(`
+                SELECT u.id, u.full_name, u.username,
+                    COUNT(s.id) as total,
+                    SUM(CASE WHEN s.status = 'approved' THEN 1 ELSE 0 END) as disetujui,
+                    SUM(CASE WHEN s.status = 'rejected' THEN 1 ELSE 0 END) as ditolak,
+                    SUM(CASE WHEN s.status = 'pending' THEN 1 ELSE 0 END) as menunggu,
+                    COUNT(DISTINCT s.client_name) as jumlah_pelanggan
+                FROM users u
+                LEFT JOIN submissions s ON s.created_by = u.id
+                GROUP BY u.id ORDER BY total DESC, u.full_name ASC
+            `).all();
+        }
+
+        const perUserWithProducts = perUser.map(user => {
+            const subs = month
+                ? db.prepare('SELECT items FROM submissions WHERE created_by = ? AND strftime("%Y-%m", created_at) = ?').all(user.id, month)
+                : db.prepare('SELECT items FROM submissions WHERE created_by = ?').all(user.id);
+            let jumlah_produk = 0;
+            for (const s of subs) { try { jumlah_produk += JSON.parse(s.items).length; } catch {} }
+            return { ...user, jumlah_produk };
+        });
+
+        const allSubs = month
+            ? db.prepare('SELECT items, status, client_name FROM submissions WHERE strftime("%Y-%m", created_at) = ?').all(month)
+            : db.prepare('SELECT items, status, client_name FROM submissions').all();
+
+        let totalProduk = 0;
+        const pelangganSet = new Set();
+        let disetujui = 0, ditolak = 0, menunggu = 0;
+        for (const s of allSubs) {
+            if (s.status === 'approved') disetujui++;
+            else if (s.status === 'rejected') ditolak++;
+            else menunggu++;
+            if (s.client_name) pelangganSet.add(s.client_name);
+            try { totalProduk += JSON.parse(s.items).length; } catch {}
+        }
+
+        const available_months = db.prepare(`
+            SELECT DISTINCT strftime('%Y-%m', created_at) as month
+            FROM submissions ORDER BY month DESC
+        `).all().map(r => r.month);
+
+        res.json({
+            summary: { total: allSubs.length, disetujui, ditolak, menunggu, jumlah_produk: totalProduk, jumlah_pelanggan: pelangganSet.size },
+            per_user: perUserWithProducts,
+            available_months
+        });
+    } catch (err) {
+        console.error('Dashboard stats error:', err);
+        res.status(500).json({ error: 'Gagal memuat statistik' });
+    }
+});
+
+// GET /api/submissions/bulk-pdf-zip?month=YYYY-MM  (admin only)
+router.get('/bulk-pdf-zip', requireAdmin, async (req, res) => {
+    const month = req.query.month;
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+        return res.status(400).json({ error: 'Parameter month diperlukan (format: YYYY-MM)' });
+    }
+    const rows = db.prepare(`
+        SELECT s.*, u.full_name as creator_name
+        FROM submissions s LEFT JOIN users u ON s.created_by = u.id
+        WHERE s.status = 'approved' AND strftime('%Y-%m', s.created_at) = ?
+        ORDER BY s.created_at ASC
+    `).all(month);
+    if (rows.length === 0) {
+        return res.status(404).json({ error: 'Tidak ada SPH yang disetujui untuk bulan ' + month });
+    }
+    const settings = {};
+    db.prepare('SELECT key, value FROM settings').all().forEach(s => { settings[s.key] = s.value; });
+    const archiver = require('archiver');
+    const puppeteer = require('puppeteer');
+    const [yr, mo] = month.split('-');
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="SPH_${yr}_${mo}.zip"`);
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    archive.on('error', err => console.error('Archiver error:', err));
+    archive.pipe(res);
+    let browser = null;
+    try {
+        browser = await puppeteer.launch({
+            headless: 'new',
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+        });
+        const headerHtml = generateHeaderHTML(settings);
+        const footerHtml = generateFooterHTML(settings);
+        const hasFooter = !!(settings.company_headoffice || settings.company_warehouse);
+        for (const row of rows) {
+            const submission = { ...row, items: JSON.parse(row.items) };
+            const html = await generateHTML(submission, settings);
+            const page = await browser.newPage();
+            await page.setContent(html, { waitUntil: 'networkidle0' });
+            const pdfBuffer = await page.pdf({
+                format: 'A4', printBackground: true, displayHeaderFooter: true,
+                headerTemplate: headerHtml,
+                footerTemplate: hasFooter ? footerHtml : '<span></span>',
+                margin: { top: '38mm', bottom: hasFooter ? '28mm' : '15mm', left: '20mm', right: '20mm' }
+            });
+            await page.close();
+            const safeNomor = row.nomor ? row.nomor.replace(/\//g, '-') : `ID${row.id}`;
+            const safeName = row.client_name.replace(/[^a-zA-Z0-9]/g, '_');
+            archive.append(Buffer.from(pdfBuffer), { name: `SPH_${safeNomor}_${safeName}.pdf` });
+        }
+        await browser.close(); browser = null;
+        await archive.finalize();
+    } catch (err) {
+        if (browser) { try { await browser.close(); } catch {} }
+        console.error('Bulk PDF ZIP error:', err);
+        if (!res.headersSent) res.status(500).json({ error: 'Gagal membuat ZIP: ' + err.message });
+    }
+});
+
 // GET /api/submissions/:id - detail
 router.get('/:id', requireLogin, (req, res) => {
     const row = db.prepare(`

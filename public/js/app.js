@@ -112,25 +112,146 @@ function toggleSidebar() {
 // ===================== DASHBOARD =====================
 async function loadDashboard() {
      try {
-            const res         = await api('/api/submissions');
-            const submissions = await res.json();
-            const total    = submissions.length;
-            const pending  = submissions.filter(s => s.status === 'pending').length;
-            const approved = submissions.filter(s => s.status === 'approved').length;
-            const rejected = submissions.filter(s => s.status === 'rejected').length;
-            document.getElementById('stat-total').textContent    = total;
-            document.getElementById('stat-pending').textContent  = pending;
-            document.getElementById('stat-approved').textContent = approved;
-            document.getElementById('stat-rejected').textContent = rejected;
-            const recent    = submissions.slice(0, 5);
-            const container = document.getElementById('recent-submissions');
-            if (recent.length === 0) {
-                     container.innerHTML = emptyState('Belum ada pengajuan');
+            if (currentUser.role === 'admin') {
+                     await loadDashboardAdmin();
             } else {
-                     container.innerHTML = renderSubmissionTable(recent, false);
+                     await loadDashboardStaff();
             }
      } catch (e) {
             console.error(e);
+     }
+}
+
+async function loadDashboardAdmin() {
+     const month = document.getElementById('dash-filter-month')?.value || '';
+     const url   = '/api/submissions/dashboard-stats' + (month ? '?month=' + month : '');
+     const res   = await api(url);
+     const data  = await res.json();
+     const { summary, per_user, available_months } = data;
+
+     populateDashMonthFilter(available_months, month);
+
+     document.getElementById('stat-total').textContent    = summary.total;
+     document.getElementById('stat-pending').textContent  = summary.menunggu;
+     document.getElementById('stat-approved').textContent = summary.disetujui;
+     document.getElementById('stat-rejected').textContent = summary.ditolak;
+     document.getElementById('stat-products').textContent = summary.jumlah_produk;
+     document.getElementById('stat-clients').textContent  = summary.jumlah_pelanggan;
+
+     const zipBtn = document.getElementById('btn-download-zip');
+     if (zipBtn) zipBtn.style.display = (month && summary.disetujui > 0) ? '' : 'none';
+
+     const card      = document.getElementById('card-per-user');
+     const container = document.getElementById('per-user-stats');
+     card.style.display = '';
+     const activeUsers = per_user.filter(u => u.total > 0);
+     if (activeUsers.length === 0) {
+            container.innerHTML = emptyState('Belum ada data pengajuan');
+     } else {
+            const rows = activeUsers.map(u => `<tr>
+                  <td><div style="font-weight:600">${escHtml(u.full_name)}</div><div style="font-size:11px;color:var(--text-light)">${escHtml(u.username)}</div></td>
+                  <td class="text-center fw-bold">${u.total}</td>
+                  <td class="text-center"><span class="badge badge-approved">${u.disetujui}</span></td>
+                  <td class="text-center"><span class="badge badge-rejected">${u.ditolak}</span></td>
+                  <td class="text-center"><span class="badge badge-pending">${u.menunggu}</span></td>
+                  <td class="text-center">${u.jumlah_produk}</td>
+                  <td class="text-center">${u.jumlah_pelanggan}</td>
+            </tr>`).join('');
+            container.innerHTML = `<div class="table-responsive"><table class="table">
+                  <thead><tr>
+                        <th>Akun</th>
+                        <th class="text-center">Total</th>
+                        <th class="text-center">Disetujui</th>
+                        <th class="text-center">Ditolak</th>
+                        <th class="text-center">Menunggu</th>
+                        <th class="text-center">Produk</th>
+                        <th class="text-center">Pelanggan</th>
+                  </tr></thead>
+                  <tbody>${rows}</tbody>
+            </table></div>`;
+     }
+
+     const subsRes     = await api('/api/submissions');
+     const allSubs     = await subsRes.json();
+     const filtered    = month ? allSubs.filter(s => s.created_at && s.created_at.startsWith(month)) : allSubs;
+     const recent      = filtered.slice(0, 5);
+     const recentEl    = document.getElementById('recent-submissions');
+     recentEl.innerHTML = recent.length === 0 ? emptyState('Belum ada pengajuan') : renderSubmissionTable(recent, false);
+}
+
+async function loadDashboardStaff() {
+     const res         = await api('/api/submissions');
+     const submissions = await res.json();
+
+     const monthsSet = new Set();
+     submissions.forEach(s => { if (s.created_at) monthsSet.add(s.created_at.substring(0, 7)); });
+     const availableMonths = Array.from(monthsSet).sort().reverse();
+     populateDashMonthFilter(availableMonths, document.getElementById('dash-filter-month')?.value || '');
+
+     const month    = document.getElementById('dash-filter-month')?.value || '';
+     const filtered = month ? submissions.filter(s => s.created_at && s.created_at.startsWith(month)) : submissions;
+
+     const total    = filtered.length;
+     const pending  = filtered.filter(s => s.status === 'pending').length;
+     const approved = filtered.filter(s => s.status === 'approved').length;
+     const rejected = filtered.filter(s => s.status === 'rejected').length;
+     let produk = 0;
+     const pelSet = new Set();
+     filtered.forEach(s => {
+            const items = Array.isArray(s.items) ? s.items : [];
+            produk += items.length;
+            if (s.client_name) pelSet.add(s.client_name);
+     });
+
+     document.getElementById('stat-total').textContent    = total;
+     document.getElementById('stat-pending').textContent  = pending;
+     document.getElementById('stat-approved').textContent = approved;
+     document.getElementById('stat-rejected').textContent = rejected;
+     document.getElementById('stat-products').textContent = produk;
+     document.getElementById('stat-clients').textContent  = pelSet.size;
+
+     const card = document.getElementById('card-per-user');
+     if (card) card.style.display = 'none';
+     const zipBtn = document.getElementById('btn-download-zip');
+     if (zipBtn) zipBtn.style.display = 'none';
+
+     const recent   = filtered.slice(0, 5);
+     const recentEl = document.getElementById('recent-submissions');
+     recentEl.innerHTML = recent.length === 0 ? emptyState('Belum ada pengajuan') : renderSubmissionTable(recent, false);
+}
+
+function populateDashMonthFilter(availableMonths, selectedMonth) {
+     const sel = document.getElementById('dash-filter-month');
+     if (!sel) return;
+     const opts = ['<option value="">Semua Bulan</option>'];
+     (availableMonths || []).forEach(m => {
+            const [yr, mo] = m.split('-');
+            const label = new Date(parseInt(yr), parseInt(mo) - 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+            opts.push(`<option value="${m}"${m === selectedMonth ? ' selected' : ''}>${label}</option>`);
+     });
+     sel.innerHTML = opts.join('');
+}
+
+async function downloadZip() {
+     const month = document.getElementById('dash-filter-month')?.value;
+     if (!month) { showToast('Pilih bulan terlebih dahulu', 'error'); return; }
+     showToast('⏳ Menyiapkan ZIP... Harap tunggu', '');
+     try {
+            const res = await fetch(`/api/submissions/bulk-pdf-zip?month=${month}`);
+            if (!res.ok) {
+                     const data = await res.json();
+                     showToast(data.error || 'Gagal membuat ZIP', 'error');
+                     return;
+            }
+            const blob = await res.blob();
+            const url  = URL.createObjectURL(blob);
+            const [yr, mo] = month.split('-');
+            const a = document.createElement('a');
+            a.href = url; a.download = `SPH_${yr}_${mo}.zip`; a.click();
+            URL.revokeObjectURL(url);
+            showToast('✅ ZIP berhasil diunduh!', 'success');
+     } catch {
+            showToast('Gagal mengunduh ZIP', 'error');
      }
 }
 

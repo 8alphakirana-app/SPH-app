@@ -65,13 +65,22 @@
       </header>
       <div class="content-area">
         <div id="content-dashboard" class="content-page">
-          <h1 class="page-title">Dashboard</h1>
-          <div class="stats-grid" id="stats-grid">
+          <div class="page-header">
+            <h1 class="page-title">Dashboard</h1>
+            <div class="filter-bar">
+              <select id="dash-filter-month" onchange="loadDashboard()"><option value="">Semua Bulan</option></select>
+              <button id="btn-download-zip" onclick="downloadZip()" class="btn btn-pdf btn-sm" style="display:none" title="Unduh semua PDF bulan ini dalam satu file ZIP">📦 Unduh ZIP PDF</button>
+            </div>
+          </div>
+          <div class="stats-grid stats-grid-6" id="stats-grid">
             <div class="stat-card"><div class="stat-icon">📋</div><div class="stat-info"><div class="stat-number" id="stat-total">0</div><div class="stat-label">Total Pengajuan</div></div></div>
             <div class="stat-card stat-pending"><div class="stat-icon">⏳</div><div class="stat-info"><div class="stat-number" id="stat-pending">0</div><div class="stat-label">Menunggu Persetujuan</div></div></div>
             <div class="stat-card stat-approved"><div class="stat-icon">✅</div><div class="stat-info"><div class="stat-number" id="stat-approved">0</div><div class="stat-label">Disetujui</div></div></div>
             <div class="stat-card stat-rejected"><div class="stat-icon">❌</div><div class="stat-info"><div class="stat-number" id="stat-rejected">0</div><div class="stat-label">Ditolak</div></div></div>
+            <div class="stat-card stat-products"><div class="stat-icon">📦</div><div class="stat-info"><div class="stat-number" id="stat-products">0</div><div class="stat-label">Jumlah Produk</div></div></div>
+            <div class="stat-card stat-clients"><div class="stat-icon">🏢</div><div class="stat-info"><div class="stat-number" id="stat-clients">0</div><div class="stat-label">Jumlah Pelanggan</div></div></div>
           </div>
+          <div class="card" id="card-per-user" style="display:none"><div class="card-header"><h3>📊 Rekap Per Akun</h3></div><div id="per-user-stats"></div></div>
           <div class="card"><div class="card-header"><h3>Pengajuan Terbaru</h3></div><div id="recent-submissions"></div></div>
         </div>
         <div id="content-new-submission" class="content-page" style="display:none">

@@ -268,6 +268,9 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
   gap: 16px;
   margin-bottom: 20px;
 }
+.stats-grid-6 {
+  grid-template-columns: repeat(3, 1fr);
+}
 .stat-card {
   background: white;
   border-radius: var(--radius);
@@ -278,9 +281,11 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
   box-shadow: var(--shadow);
   border-left: 4px solid var(--blue);
 }
-.stat-pending { border-left-color: var(--yellow); }
+.stat-pending  { border-left-color: var(--yellow); }
 .stat-approved { border-left-color: var(--green); }
 .stat-rejected { border-left-color: var(--red); }
+.stat-products { border-left-color: #7c3aed; }
+.stat-clients  { border-left-color: #0891b2; }
 .stat-icon { font-size: 28px; }
 .stat-number { font-size: 28px; font-weight: 700; color: var(--text); line-height: 1; }
 .stat-label { font-size: 12px; color: var(--text-light); margin-top: 4px; }
@@ -429,6 +434,7 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
   .main-content { margin-left: 0; }
   .btn-menu-toggle { display: block; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .stats-grid-6 { grid-template-columns: repeat(2, 1fr); }
   .form-row { grid-template-columns: 1fr; }
   .modal-dialog { margin: 0 10px; }
 }
