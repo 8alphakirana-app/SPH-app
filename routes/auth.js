@@ -24,6 +24,18 @@ router.post('/logout', (req, res) => {
   res.json({ success: true });
 });
 
+// Ganti password sendiri
+router.post('/change-password', (req, res) => {
+  if (!req.session.user) return res.status(401).json({ error: 'Belum login' });
+  const { current_password, new_password } = req.body;
+  if (!current_password || !new_password) return res.status(400).json({ error: 'Semua field wajib diisi' });
+  if (new_password.length < 6) return res.status(400).json({ error: 'Password baru minimal 6 karakter' });
+  const user = db.prepare('SELECT id FROM users WHERE id = ? AND password = ?').get(req.session.user.id, current_password);
+  if (!user) return res.status(400).json({ error: 'Password lama tidak sesuai' });
+  db.prepare('UPDATE users SET password = ? WHERE id = ?').run(new_password, req.session.user.id);
+  res.json({ success: true });
+});
+
 // Cek status login
 router.get('/me', (req, res) => {
   if (!req.session.user) {

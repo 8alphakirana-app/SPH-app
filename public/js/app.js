@@ -662,22 +662,23 @@ async function loadUsers() {
             const rows  = users.map(u => `
                   <tr>
                           <td>${escHtml(u.username)}</td>
-                                  <td>${escHtml(u.full_name)}</td>
-                                          <td><span class="badge ${u.role === 'admin' ? 'badge-approved' : 'badge-pending'}">${u.role === 'admin' ? '👑 Admin' : '👤 Staff'}</span></td>
-                                                  <td style="font-size:12px;color:var(--text-light)">${formatDate(u.created_at)}</td>
-                                                          <td>
-                                                                    ${u.id !== currentUser.id
-                                                                                  ? `<button onclick="deleteUser(${u.id}, '${escHtml(u.full_name)}')" class="btn btn-danger btn-sm">🗑️ Hapus</button>`
-                                                                                  : '<span style="color:var(--text-light);font-size:12px">Akun Anda</span>'}
-                                                                                          </td>
-                                                                                                </tr>
-                                                                                                    `).join('');
+                          <td>${escHtml(u.full_name)}</td>
+                          <td><span class="badge ${u.role === 'admin' ? 'badge-approved' : 'badge-pending'}">${u.role === 'admin' ? '👑 Admin' : '👤 Staff'}</span></td>
+                          <td style="font-size:12px;color:var(--text-light)">${formatDate(u.created_at)}</td>
+                          <td>
+                                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                                        <button onclick="openResetPasswordModal(${u.id}, '${escHtml(u.full_name)}')" class="btn btn-secondary btn-sm">🔑 Reset</button>
+                                        ${u.id !== currentUser.id
+                                              ? `<button onclick="deleteUser(${u.id}, '${escHtml(u.full_name)}')" class="btn btn-danger btn-sm">🗑️ Hapus</button>`
+                                              : ''}
+                                </div>
+                          </td>
+                  </tr>`).join('');
             container.innerHTML = `<div class="table-responsive">
                   <table class="table">
                           <thead><tr><th>Username</th><th>Nama</th><th>Role</th><th>Dibuat</th><th>Aksi</th></tr></thead>
-                                  <tbody>${rows}</tbody>
-                                        </table>
-                                            </div>`;
+                          <tbody>${rows}</tbody>
+                  </table></div>`;
      } catch {
             container.innerHTML = '<div class="alert alert-error">Gagal memuat data</div>';
      }
@@ -970,6 +971,93 @@ async function deleteSubmission(id) {
             }
      } catch {
             showToast('Koneksi gagal', 'error');
+     }
+}
+
+// ===================== GANTI / RESET PASSWORD =====================
+function openChangePasswordModal() {
+     document.getElementById('cp-old').value     = '';
+     document.getElementById('cp-new').value     = '';
+     document.getElementById('cp-confirm').value = '';
+     document.getElementById('cp-error').style.display = 'none';
+     showModal('modal-change-password');
+}
+
+async function submitChangePassword() {
+     const oldPwd  = document.getElementById('cp-old').value.trim();
+     const newPwd  = document.getElementById('cp-new').value.trim();
+     const confirm = document.getElementById('cp-confirm').value.trim();
+     const errEl   = document.getElementById('cp-error');
+     errEl.style.display = 'none';
+     if (!oldPwd || !newPwd || !confirm) {
+            errEl.textContent = 'Semua field wajib diisi';
+            errEl.style.display = 'block'; return;
+     }
+     if (newPwd.length < 6) {
+            errEl.textContent = 'Password baru minimal 6 karakter';
+            errEl.style.display = 'block'; return;
+     }
+     if (newPwd !== confirm) {
+            errEl.textContent = 'Konfirmasi password tidak cocok';
+            errEl.style.display = 'block'; return;
+     }
+     try {
+            const res  = await api('/api/auth/change-password', 'POST', { current_password: oldPwd, new_password: newPwd });
+            const data = await res.json();
+            if (res.ok) {
+                     showToast('✅ Password berhasil diubah', 'success');
+                     closeModal('modal-change-password');
+            } else {
+                     errEl.textContent = data.error || 'Gagal mengubah password';
+                     errEl.style.display = 'block';
+            }
+     } catch {
+            errEl.textContent = 'Koneksi ke server gagal';
+            errEl.style.display = 'block';
+     }
+}
+
+let resetPasswordTargetId = null;
+
+function openResetPasswordModal(id, name) {
+     resetPasswordTargetId = id;
+     document.getElementById('rp-new').value     = '';
+     document.getElementById('rp-confirm').value = '';
+     document.getElementById('rp-error').style.display = 'none';
+     document.getElementById('reset-pwd-desc').textContent = `Reset password untuk akun: ${name}`;
+     showModal('modal-reset-password');
+}
+
+async function submitResetPassword() {
+     const newPwd  = document.getElementById('rp-new').value.trim();
+     const confirm = document.getElementById('rp-confirm').value.trim();
+     const errEl   = document.getElementById('rp-error');
+     errEl.style.display = 'none';
+     if (!newPwd || !confirm) {
+            errEl.textContent = 'Semua field wajib diisi';
+            errEl.style.display = 'block'; return;
+     }
+     if (newPwd.length < 6) {
+            errEl.textContent = 'Password minimal 6 karakter';
+            errEl.style.display = 'block'; return;
+     }
+     if (newPwd !== confirm) {
+            errEl.textContent = 'Konfirmasi password tidak cocok';
+            errEl.style.display = 'block'; return;
+     }
+     try {
+            const res  = await api(`/api/submissions/meta/users/${resetPasswordTargetId}/password`, 'PUT', { new_password: newPwd });
+            const data = await res.json();
+            if (res.ok) {
+                     showToast('✅ Password berhasil direset', 'success');
+                     closeModal('modal-reset-password');
+            } else {
+                     errEl.textContent = data.error || 'Gagal mereset password';
+                     errEl.style.display = 'block';
+            }
+     } catch {
+            errEl.textContent = 'Koneksi ke server gagal';
+            errEl.style.display = 'block';
      }
 }
 

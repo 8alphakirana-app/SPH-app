@@ -464,6 +464,18 @@ router.post('/meta/users', requireAdmin, (req, res) => {
     }
 });
 
+// PUT /api/submissions/meta/users/:id/password  (admin reset password user)
+router.put('/meta/users/:id/password', requireAdmin, (req, res) => {
+    const { new_password } = req.body;
+    if (!new_password || new_password.length < 6) {
+        return res.status(400).json({ error: 'Password minimal 6 karakter' });
+    }
+    const user = db.prepare('SELECT id FROM users WHERE id = ?').get(req.params.id);
+    if (!user) return res.status(404).json({ error: 'Pengguna tidak ditemukan' });
+    db.prepare('UPDATE users SET password = ? WHERE id = ?').run(new_password, req.params.id);
+    res.json({ success: true });
+});
+
 // DELETE /api/submissions/meta/users/:id
 router.delete('/meta/users/:id', requireAdmin, (req, res) => {
     if (req.params.id == req.session.user.id) {
