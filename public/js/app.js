@@ -1846,7 +1846,7 @@ async function loadAdminSPPD() {
               const res = await api('/api/sppd');
               let rows = await res.json();
               if (filter) rows = rows.filter(r => r.status === filter);
-              container.innerHTML = renderSPPDTable(rows, { showCreator: true });
+              container.innerHTML = renderSPPDTable(rows, { showCreator: true, showApproveBtn: true });
        } catch { container.innerHTML = emptyState('Gagal memuat data'); }
 }
 
