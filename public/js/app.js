@@ -1656,6 +1656,9 @@ function renderSPPDTable(rows, { showCreator = false, showApproveBtn = false } =
               const approveBtn = showApproveBtn && r.status === 'pending'
                      ? `<button onclick="openSPPDAction(${r.id},'approve')" class="btn btn-sm btn-success">✅ Approve</button> `
                      : '';
+              const pdfBtn = ['approved','completed'].includes(r.status)
+                     ? `<a href="/api/sppd/${r.id}/download/pdf" target="_blank" class="btn btn-sm btn-pdf" title="Unduh PDF">🖨️</a> `
+                     : '';
               return `<tr>
               <td><span style="font-family:monospace;font-size:12px">${escHtml(r.nomor)}</span></td>
               <td>${escHtml(r.nama_pegawai)}</td>
@@ -1665,7 +1668,7 @@ function renderSPPDTable(rows, { showCreator = false, showApproveBtn = false } =
               <td>${sppdStatusBadge(r)}</td>
               <td>${renderSPPDProgressBadge(r)}</td>
               <td style="white-space:nowrap">
-                ${approveBtn}
+                ${approveBtn}${pdfBtn}
                 <button onclick="viewSPPDDetail(${r.id})" class="btn btn-sm btn-outline">🔍 Detail</button>
               </td>
             </tr>`;
@@ -1816,6 +1819,9 @@ async function viewSPPDDetail(id) {
               if (canApprove) {
                      footer.push(`<button onclick="openSPPDAction(${id},'approve')" class="btn btn-success">✅ Setujui</button>`);
                      footer.push(`<button onclick="openSPPDAction(${id},'reject')" class="btn btn-danger">❌ Tolak</button>`);
+              }
+              if (['approved', 'completed'].includes(sppd.status)) {
+                     footer.push(`<a href="/api/sppd/${id}/download/pdf" target="_blank" class="btn btn-pdf">🖨️ Cetak PDF</a>`);
               }
               if (canSubmitLaporan) footer.push(`<button onclick="openLaporanForm(${id})" class="btn btn-primary">📋 Buat Laporan</button>`);
               if (canSubmitPencairan) footer.push(`<button onclick="openPencairanForm(${id},${sppd.uang_muka})" class="btn btn-primary">💰 Ajukan Pencairan</button>`);

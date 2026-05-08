@@ -115,6 +115,228 @@ router.post('/', (req, res) => {
   res.json({ success: true, id: sppdId, nomor });
 });
 
+// ── PDF helpers ───────────────────────────────────────────────────────────────
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmtRp(v) {
+  return new Intl.NumberFormat('id-ID').format(v || 0);
+}
+
+function toBase64(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return null;
+  return `data:image/png;base64,${fs.readFileSync(filePath).toString('base64')}`;
+}
+
+function getTTDBase64(userId) {
+  const candidates = [
+    path.join(__dirname, '..', 'public', 'img',     `ttd_u${userId}.png`),
+    path.join(__dirname, '..', 'public', 'uploads', `ttd_u${userId}.png`),
+  ];
+  for (const p of candidates) { const b = toBase64(p); if (b) return b; }
+  return null;
+}
+
+function getTanggalIndo(dateStr) {
+  const bulan = ['Januari','Februari','Maret','April','Mei','Juni',
+                 'Juli','Agustus','September','Oktober','November','Desember'];
+  const d = dateStr ? new Date(dateStr) : new Date();
+  return `${d.getDate()} ${bulan[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function hitungHari(tgl1, tgl2) {
+  if (!tgl1 || !tgl2) return '-';
+  const d = Math.round((new Date(tgl2) - new Date(tgl1)) / 86400000) + 1;
+  return `${d} hari`;
+}
+
+function generateSPPDHtml(sppd, itinerary, approvals, settings) {
+  const companyName    = settings.company_name    || 'PT. Lapan Alpha Kirana';
+  const companyAddress = settings.company_address || 'Jakarta';
+  const kkKota         = settings.kk_kota         || 'Jakarta';
+  const signerName     = settings.signer_name     || '';
+  const signerTitle    = settings.signer_title    || 'General Manager';
+
+  // Find the highest approved level and its approver
+  const sortedApprovals = [...approvals].sort((a, b) => b.level - a.level);
+  const topApproval = sortedApprovals.find(a => a.status === 'approved') || null;
+  const topTTD      = topApproval ? getTTDBase64(topApproval.approver_user_id) : null;
+  const creatorTTD  = getTTDBase64(sppd.created_by);
+
+  const itinRows = itinerary.map((r, i) => `
+    <tr style="background:${i%2===0?'#fff':'#f5f8fc'}">
+      <td style="text-align:center">${esc(r.tanggal)}</td>
+      <td>${esc(r.dari)}</td>
+      <td>${esc(r.ke)}</td>
+      <td>${esc(r.transport)}</td>
+      <td>${esc(r.keterangan)}</td>
+    </tr>`).join('');
+
+  const approvalRows = approvals.map(a => {
+    const icon = a.status === 'approved' ? '✅' : a.status === 'rejected' ? '❌' : '⏳';
+    const LEVEL_LABEL = { 1:'Area Manager', 2:'GM', 3:'GM 2' };
+    return `<tr>
+      <td style="text-align:center">${LEVEL_LABEL[a.level]||a.level}</td>
+      <td>${esc(a.full_name||'-')}</td>
+      <td style="text-align:center">${icon} ${a.status}</td>
+      <td>${esc(a.note||'-')}</td>
+      <td style="text-align:center">${esc(a.acted_at||'-')}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="5" style="text-align:center;color:#aaa">-</td></tr>';
+
+  const tanggalCetak = getTanggalIndo(sppd.created_at);
+  const lamaPerjln   = hitungHari(sppd.tanggal_berangkat, sppd.tanggal_kembali);
+
+  return `<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; font-size: 10pt; color: #111; background: #fff; }
+  h2.doc-title { text-align: center; font-size: 13pt; text-transform: uppercase; letter-spacing: 1px;
+                 font-weight: bold; margin-bottom: 2px; }
+  p.doc-subtitle { text-align: center; font-size: 9pt; margin-bottom: 18px; }
+  .data-table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+  .data-table td { padding: 4px 6px; vertical-align: top; font-size: 10pt; }
+  .data-table td.lbl { width: 175px; font-weight: 600; }
+  .data-table td.sep { width: 14px; }
+  .data-table td.val { border-bottom: 1px dotted #bbb; }
+  .section-title { font-weight: bold; font-size: 10pt; text-transform: uppercase;
+                   border-bottom: 1.5px solid #1F4E79; margin-bottom: 8px; padding-bottom: 3px; color: #1F4E79; }
+  .itin-table { width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 9pt; }
+  .itin-table th { background: #1F4E79; color: #fff; padding: 5px 6px; text-align: center;
+                   border: 1px solid #1F4E79; font-size: 8.5pt; }
+  .itin-table td { border: 1px solid #ccc; padding: 4px 6px; vertical-align: middle; }
+  .appr-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 9pt; }
+  .appr-table th { background: #4a7fa5; color: #fff; padding: 4px 6px; text-align: center;
+                   border: 1px solid #4a7fa5; font-size: 8.5pt; }
+  .appr-table td { border: 1px solid #ccc; padding: 4px 6px; vertical-align: middle; }
+  .sig-row { display: flex; justify-content: space-between; margin-top: 12px; }
+  .sig-box { width: 45%; text-align: center; }
+  .sig-box p.sig-title { font-size: 9.5pt; margin-bottom: 4px; }
+  .sig-box .ttd-img { height: 28mm; display: flex; align-items: center; justify-content: center; margin: 4px 0; }
+  .sig-box .ttd-img img { max-height: 28mm; max-width: 55mm; object-fit: contain; }
+  .sig-box .sig-name { font-weight: bold; border-top: 1px solid #333; padding-top: 3px; font-size: 10pt; }
+  .sig-box .sig-role { font-size: 8.5pt; color: #555; }
+</style>
+</head>
+<body>
+
+<h2 class="doc-title">Surat Perintah Perjalanan Dinas</h2>
+<p class="doc-subtitle">Nomor: <strong>${esc(sppd.nomor)}</strong></p>
+
+<p class="section-title">Data Perjalanan</p>
+<table class="data-table">
+  <tr><td class="lbl">Nama Pegawai</td><td class="sep">:</td><td class="val">${esc(sppd.nama_pegawai)}</td></tr>
+  <tr><td class="lbl">Jabatan</td><td class="sep">:</td><td class="val">${esc(sppd.jabatan||'-')}</td></tr>
+  <tr><td class="lbl">Area Kerja / Berangkat dari</td><td class="sep">:</td><td class="val">${esc(sppd.area_kerja||'-')}</td></tr>
+  <tr><td class="lbl">Tujuan</td><td class="sep">:</td><td class="val">${esc(sppd.tujuan)}</td></tr>
+  <tr><td class="lbl">Keperluan</td><td class="sep">:</td><td class="val">${esc(sppd.keperluan)}</td></tr>
+  <tr><td class="lbl">Tanggal Berangkat</td><td class="sep">:</td><td class="val">${esc(sppd.tanggal_berangkat)}</td></tr>
+  <tr><td class="lbl">Tanggal Kembali</td><td class="sep">:</td><td class="val">${esc(sppd.tanggal_kembali)}</td></tr>
+  <tr><td class="lbl">Lama Perjalanan</td><td class="sep">:</td><td class="val">${lamaPerjln}</td></tr>
+  <tr><td class="lbl">Kendaraan / Transportasi</td><td class="sep">:</td><td class="val">${esc(sppd.transport||'-')}</td></tr>
+  <tr><td class="lbl">Uang Muka</td><td class="sep">:</td><td class="val">Rp ${fmtRp(sppd.uang_muka)}</td></tr>
+</table>
+
+${itinerary.length ? `
+<p class="section-title">Rencana Itinerary</p>
+<table class="itin-table">
+  <thead><tr><th>Tanggal</th><th>Dari</th><th>Ke</th><th>Transportasi</th><th>Keterangan</th></tr></thead>
+  <tbody>${itinRows}</tbody>
+</table>` : ''}
+
+<p class="section-title">Riwayat Persetujuan</p>
+<table class="appr-table">
+  <thead><tr><th>Level</th><th>Approver</th><th>Status</th><th>Catatan</th><th>Waktu</th></tr></thead>
+  <tbody>${approvalRows}</tbody>
+</table>
+
+<div class="sig-row">
+  <div class="sig-box">
+    <p class="sig-title">Yang Memerintahkan,</p>
+    <div class="ttd-img">
+      ${topTTD ? `<img src="${topTTD}" alt="TTD">` : '<span style="color:#ccc;font-size:9pt">[tanda tangan]</span>'}
+    </div>
+    <div class="sig-name">${esc(topApproval ? topApproval.full_name : signerName)}</div>
+    <div class="sig-role">${esc(topApproval ? ({ 1:'Area Manager', 2:'General Manager', 3:'GM 2' }[topApproval.level]||'') : signerTitle)}</div>
+  </div>
+  <div class="sig-box">
+    <p class="sig-title">${esc(kkKota)}, ${tanggalCetak}</p>
+    <p class="sig-title" style="margin-top:2px">Yang Melaksanakan,</p>
+    <div class="ttd-img">
+      ${creatorTTD ? `<img src="${creatorTTD}" alt="TTD">` : '<span style="color:#ccc;font-size:9pt">[tanda tangan]</span>'}
+    </div>
+    <div class="sig-name">${esc(sppd.creator_name||sppd.nama_pegawai)}</div>
+    <div class="sig-role">${esc(sppd.jabatan||'Pegawai')}</div>
+  </div>
+</div>
+
+</body>
+</html>`;
+}
+
+// ── Download SPPD as PDF ──────────────────────────────────────────────────────
+router.get('/:id/download/pdf', async (req, res) => {
+  const user = req.session.user;
+  const sppd = db.prepare(`
+    SELECT s.*, u.full_name AS creator_name
+    FROM sppd s JOIN users u ON s.created_by = u.id WHERE s.id = ?
+  `).get(req.params.id);
+  if (!sppd) return res.status(404).json({ error: 'SPPD tidak ditemukan' });
+  if (!canSeeAll(user.role) && sppd.created_by !== user.id) return res.status(403).json({ error: 'Forbidden' });
+  if (!['approved', 'completed'].includes(sppd.status))
+    return res.status(400).json({ error: 'SPPD belum disetujui' });
+
+  try {
+    const settings = {};
+    db.prepare('SELECT key, value FROM settings').all().forEach(s => { settings[s.key] = s.value; });
+    const itinerary = db.prepare('SELECT * FROM sppd_itinerary WHERE sppd_id = ? ORDER BY id').all(sppd.id);
+    const approvals = db.prepare(`
+      SELECT sa.*, u.full_name, u.role, u.id AS approver_user_id
+      FROM sppd_approvals sa JOIN users u ON sa.approver_user_id = u.id
+      WHERE sa.sppd_id = ? ORDER BY sa.level
+    `).all(sppd.id);
+
+    const html = generateSPPDHtml(sppd, itinerary, approvals, settings);
+    const { generateHeaderHTML, generateFooterHTML } = require('../htmlGenerator');
+
+    const puppeteer = require('puppeteer');
+    const browser = await puppeteer.launch({
+      headless: 'new',
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    });
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+
+    const headerHtml = generateHeaderHTML(settings);
+    const footerHtml = generateFooterHTML(settings);
+    const hasFooter  = !!(settings.company_headoffice || settings.company_warehouse);
+
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate: headerHtml,
+      footerTemplate: hasFooter ? footerHtml : '<span></span>',
+      margin: { top: '38mm', bottom: hasFooter ? '28mm' : '15mm', left: '20mm', right: '20mm' },
+    });
+    await browser.close();
+
+    const filename = `SPPD_${sppd.nomor.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error('Error generating SPPD PDF:', err);
+    res.status(500).json({ error: 'Gagal membuat PDF: ' + err.message });
+  }
+});
+
 // ── Get SPPD detail ───────────────────────────────────────────────────────────
 router.get('/:id', (req, res) => {
   const user = req.session.user;
