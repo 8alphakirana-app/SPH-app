@@ -55,7 +55,7 @@ db.exec(`
   );
 `);
 
-// ── KK MIGRATION: update users role constraint ──────────────────────────────
+// ── MIGRATION v2: add approver roles ─────────────────────────────────────────
 const userTableDef = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get();
 if (userTableDef && !userTableDef.sql.includes('manager_keuangan')) {
   db.pragma('foreign_keys = OFF');
@@ -73,8 +73,41 @@ if (userTableDef && !userTableDef.sql.includes('manager_keuangan')) {
     ALTER TABLE users_v2 RENAME TO users;
   `);
   db.pragma('foreign_keys = ON');
-  console.log('✅ Users table upgraded: new approver roles added');
+  console.log('✅ Users table upgraded: approver roles added');
 }
+
+// ── MIGRATION v3: add kantor_pusat role ───────────────────────────────────────
+const userTableDef2 = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get();
+if (userTableDef2 && !userTableDef2.sql.includes('kantor_pusat')) {
+  db.pragma('foreign_keys = OFF');
+  db.exec(`
+    CREATE TABLE users_v3 (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      full_name TEXT NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('admin','staff','gm','manager_keuangan','direktur_ops','direktur_utama','kantor_pusat')),
+      created_at TEXT DEFAULT (datetime('now', 'localtime'))
+    );
+    INSERT INTO users_v3 SELECT * FROM users;
+    DROP TABLE users;
+    ALTER TABLE users_v3 RENAME TO users;
+  `);
+  db.pragma('foreign_keys = ON');
+  console.log('✅ Users table upgraded: kantor_pusat role added');
+}
+
+// ── MIGRATION: update default passwords to kirana ─────────────────────────────
+[
+  { username: 'admin',   old: 'admin123' },
+  { username: 'staff1',  old: 'staff123' },
+  { username: 'syaiful', old: 'pass123'  },
+  { username: 'aziz',    old: 'pass123'  },
+  { username: 'arief',   old: 'pass123'  },
+  { username: 'jimmy',   old: 'pass123'  },
+].forEach(({ username, old }) => {
+  db.prepare('UPDATE users SET password=? WHERE username=? AND password=?').run('kirana', username, old);
+});
 
 // ── Add new columns to submissions if not exists ─────────────────────────────
 [
@@ -124,10 +157,10 @@ if (!adminExists) {
     INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)
   `);
 
-  insertUser.run('admin', 'admin123', 'Administrator', 'admin');
-  insertUser.run('staff1', 'staff123', 'Staff Penjualan 1', 'staff');
+  insertUser.run('admin', 'kirana', 'Administrator', 'admin');
+  insertUser.run('staff1', 'kirana', 'Staff Penjualan 1', 'staff');
 
-  console.log('✅ User default dibuat: admin/admin123 dan staff1/staff123');
+  console.log('✅ User default dibuat: admin/kirana dan staff1/kirana');
 }
 
 // Cek pengaturan perusahaan
@@ -144,10 +177,10 @@ if (!companyExists) {
 
 // ── Default approver users untuk KK ──────────────────────────────────────────
 [
-  { username: 'syaiful', password: 'pass123', full_name: 'M. Syaiful Hidayat',   role: 'gm' },
-  { username: 'aziz',    password: 'pass123', full_name: 'Nur Aziz Pratama',      role: 'manager_keuangan' },
-  { username: 'arief',   password: 'pass123', full_name: 'Arief Adityo Gumilang', role: 'direktur_ops' },
-  { username: 'jimmy',   password: 'pass123', full_name: 'Jimmy F. Zega',          role: 'direktur_utama' },
+  { username: 'syaiful', password: 'kirana', full_name: 'M. Syaiful Hidayat',   role: 'gm' },
+  { username: 'aziz',    password: 'kirana', full_name: 'Nur Aziz Pratama',      role: 'manager_keuangan' },
+  { username: 'arief',   password: 'kirana', full_name: 'Arief Adityo Gumilang', role: 'direktur_ops' },
+  { username: 'jimmy',   password: 'kirana', full_name: 'Jimmy F. Zega',          role: 'direktur_utama' },
 ].forEach(u => {
   if (!db.prepare('SELECT id FROM users WHERE username = ?').get(u.username)) {
     db.prepare('INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)').run(u.username, u.password, u.full_name, u.role);

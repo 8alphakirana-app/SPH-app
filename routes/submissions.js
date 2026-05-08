@@ -31,6 +31,19 @@ function requireAdmin(req, res, next) {
     next();
 }
 
+// Middleware: admin atau kantor_pusat
+function requireAdminOrKP(req, res, next) {
+    const role = req.session.user?.role;
+    if (role !== 'admin' && role !== 'kantor_pusat') {
+          return res.status(403).json({ error: 'Akses ditolak' });
+    }
+    next();
+}
+
+function isAdminOrKP(user) {
+    return user.role === 'admin' || user.role === 'kantor_pusat';
+}
+
 // Generate nomor urut otomatis
 function generateNomor() {
     const now = new Date();
@@ -52,7 +65,7 @@ function generateNomor() {
 // GET /api/submissions - list pengajuan
 router.get('/', requireLogin, (req, res) => {
     let rows;
-    if (req.session.user.role === 'admin') {
+    if (isAdminOrKP(req.session.user)) {
           rows = db.prepare(`
                 SELECT s.*, u.full_name as creator_name, a.full_name as approver_name
                       FROM submissions s
@@ -74,8 +87,8 @@ router.get('/', requireLogin, (req, res) => {
     res.json(rows);
 });
 
-// GET /api/submissions/dashboard-stats?month=YYYY-MM  (admin only)
-router.get('/dashboard-stats', requireAdmin, (req, res) => {
+// GET /api/submissions/dashboard-stats?month=YYYY-MM
+router.get('/dashboard-stats', requireAdminOrKP, (req, res) => {
     const month = req.query.month || null;
     try {
         let perUser;
@@ -146,8 +159,8 @@ router.get('/dashboard-stats', requireAdmin, (req, res) => {
     }
 });
 
-// GET /api/submissions/bulk-pdf-zip?month=YYYY-MM  (admin only)
-router.get('/bulk-pdf-zip', requireAdmin, async (req, res) => {
+// GET /api/submissions/bulk-pdf-zip?month=YYYY-MM
+router.get('/bulk-pdf-zip', requireAdminOrKP, async (req, res) => {
     const month = req.query.month;
     if (!month || !/^\d{4}-\d{2}$/.test(month)) {
         return res.status(400).json({ error: 'Parameter month diperlukan (format: YYYY-MM)' });
@@ -216,7 +229,7 @@ router.get('/:id', requireLogin, (req, res) => {
                         WHERE s.id = ?
                           `).get(req.params.id);
     if (!row) return res.status(404).json({ error: 'Tidak ditemukan' });
-    if (req.session.user.role !== 'admin' && row.created_by !== req.session.user.id) {
+    if (!isAdminOrKP(req.session.user) && row.created_by !== req.session.user.id) {
           return res.status(403).json({ error: 'Akses ditolak' });
     }
     res.json({ ...row, items: JSON.parse(row.items) });
@@ -251,8 +264,8 @@ router.post('/', requireLogin, (req, res) => {
     res.json({ success: true, id: result.lastInsertRowid });
 });
 
-// POST /api/submissions/:id/approve - admin approve
-router.post('/:id/approve', requireAdmin, (req, res) => {
+// POST /api/submissions/:id/approve - admin / kantor_pusat approve
+router.post('/:id/approve', requireAdminOrKP, (req, res) => {
     const row = db.prepare('SELECT * FROM submissions WHERE id = ?').get(req.params.id);
     if (!row) return res.status(404).json({ error: 'Tidak ditemukan' });
     if (row.status !== 'pending') return res.status(400).json({ error: 'Pengajuan sudah diproses' });
@@ -264,8 +277,8 @@ router.post('/:id/approve', requireAdmin, (req, res) => {
     res.json({ success: true, nomor });
 });
 
-// POST /api/submissions/:id/reject - admin reject
-router.post('/:id/reject', requireAdmin, (req, res) => {
+// POST /api/submissions/:id/reject - admin / kantor_pusat reject
+router.post('/:id/reject', requireAdminOrKP, (req, res) => {
     const { reason } = req.body;
     const row = db.prepare('SELECT * FROM submissions WHERE id = ?').get(req.params.id);
     if (!row) return res.status(404).json({ error: 'Tidak ditemukan' });
@@ -284,7 +297,7 @@ router.get('/:id/download', requireLogin, async (req, res) => {
                 WHERE s.id = ?
                   `).get(req.params.id);
     if (!row) return res.status(404).json({ error: 'Tidak ditemukan' });
-    if (req.session.user.role !== 'admin' && row.created_by !== req.session.user.id) {
+    if (!isAdminOrKP(req.session.user) && row.created_by !== req.session.user.id) {
           return res.status(403).json({ error: 'Akses ditolak' });
     }
     if (row.status !== 'approved') {
@@ -313,7 +326,7 @@ router.get('/:id/download/pdf', requireLogin, async (req, res) => {
                 WHERE s.id = ?
                   `).get(req.params.id);
     if (!row) return res.status(404).json({ error: 'Tidak ditemukan' });
-    if (req.session.user.role !== 'admin' && row.created_by !== req.session.user.id)
+    if (!isAdminOrKP(req.session.user) && row.created_by !== req.session.user.id)
           return res.status(403).json({ error: 'Akses ditolak' });
     if (row.status !== 'approved')
           return res.status(403).json({ error: 'Dokumen belum disetujui admin' });
@@ -367,7 +380,7 @@ router.put('/:id', requireLogin, (req, res) => {
     const row = db.prepare('SELECT * FROM submissions WHERE id = ?').get(req.params.id);
     if (!row) return res.status(404).json({ error: 'Tidak ditemukan' });
     if (row.status !== 'pending') return res.status(400).json({ error: 'Hanya pengajuan berstatus pending yang dapat diedit' });
-    if (req.session.user.role !== 'admin' && row.created_by !== req.session.user.id) {
+    if (!isAdminOrKP(req.session.user) && row.created_by !== req.session.user.id) {
         return res.status(403).json({ error: 'Akses ditolak' });
     }
     const { client_title, client_name, client_address, client_city, items, ppn_included, ongkir_included, notes, lampiran } = req.body;
@@ -401,7 +414,7 @@ router.delete('/:id', requireLogin, (req, res) => {
     const row = db.prepare('SELECT * FROM submissions WHERE id = ?').get(req.params.id);
     if (!row) return res.status(404).json({ error: 'Tidak ditemukan' });
     if (row.status !== 'pending') return res.status(400).json({ error: 'Hanya pengajuan berstatus pending yang dapat dihapus' });
-    if (req.session.user.role !== 'admin' && row.created_by !== req.session.user.id) {
+    if (!isAdminOrKP(req.session.user) && row.created_by !== req.session.user.id) {
         return res.status(403).json({ error: 'Akses ditolak' });
     }
     db.prepare('DELETE FROM submissions WHERE id = ?').run(req.params.id);

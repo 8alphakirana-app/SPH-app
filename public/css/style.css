@@ -526,6 +526,18 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
 .kk-step-label { font-size: 12px; line-height: 1.5; }
 .kk-step-arrow { color: var(--text-light); font-size: 18px; flex-shrink: 0; }
 
+/* KK approval progress chain in table */
+.kk-progress-steps { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; font-size: 11px; }
+.kk-ps { display: inline-flex; align-items: center; gap: 2px; padding: 2px 5px; border-radius: 3px; font-weight: 500; white-space: nowrap; }
+.kk-ps-approved { color: #15803d; background: #dcfce7; }
+.kk-ps-rejected { color: #b91c1c; background: #fee2e2; }
+.kk-ps-current  { color: #92400e; background: #fef3c7; }
+.kk-ps-waiting  { color: var(--text-light); }
+.kk-ps-sep      { color: var(--text-light); font-size: 10px; }
+
+/* Badge info (untuk kantor_pusat) */
+.badge-info { background: #eff6ff; color: #1d4ed8; }
+
 /* Approver TTD rows */
 .approver-ttd-row {
   display: flex;

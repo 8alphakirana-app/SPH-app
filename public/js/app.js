@@ -56,8 +56,9 @@ async function logout() {
 }
 
 const ROLE_LABELS = {
-       admin: '👑 Admin', staff: '👤 Staff', gm: '⭐ GM',
-       manager_keuangan: '💼 Mgr. Keuangan', direktur_ops: '🏭 Dir. Ops', direktur_utama: '🎯 Dir. Utama'
+       admin: '👑 Admin', staff: '👤 Staff', kantor_pusat: '🏢 Kantor Pusat',
+       gm: '⭐ GM', manager_keuangan: '💼 Mgr. Keuangan',
+       direktur_ops: '🏭 Dir. Ops', direktur_utama: '🎯 Dir. Utama'
 };
 const APPROVER_ROLES = ['gm', 'manager_keuangan', 'direktur_ops', 'direktur_utama'];
 const KK_LEVEL_LABELS = { 1: 'GM', 2: 'Manager Keuangan', 3: 'Direktur Operasional', 4: 'Direktur Utama' };
@@ -69,8 +70,14 @@ function setUser(user) {
        document.getElementById('user-avatar').textContent = user.full_name.charAt(0).toUpperCase();
        document.getElementById('top-bar-user').textContent = user.full_name;
 
+       // Admin-only: Kelola Pengguna, Pengaturan
        if (user.role === 'admin') {
               document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
+       }
+
+       // Admin + Kantor Pusat: Semua Pengajuan
+       if (user.role === 'admin' || user.role === 'kantor_pusat') {
+              document.querySelectorAll('.admin-or-kp').forEach(el => el.style.display = '');
        }
 
        // KK menu visibility
@@ -82,7 +89,7 @@ function setUser(user) {
        if (APPROVER_ROLES.includes(user.role)) {
               document.querySelectorAll('.kk-approver').forEach(el => el.style.display = '');
        }
-       if (user.role === 'admin' || user.role === 'direktur_utama') {
+       if (user.role === 'admin' || user.role === 'direktur_utama' || user.role === 'kantor_pusat') {
               document.querySelectorAll('.kk-all').forEach(el => el.style.display = '');
        }
 }
@@ -141,7 +148,7 @@ function toggleSidebar() {
 // ===================== DASHBOARD =====================
 async function loadDashboard() {
        try {
-              if (currentUser.role === 'admin') {
+              if (currentUser.role === 'admin' || currentUser.role === 'kantor_pusat') {
                      await loadDashboardAdmin();
               } else {
                      await loadDashboardStaff();
@@ -340,7 +347,7 @@ function renderSubmissionTable(submissions, showActions = false, isAdmin = false
                                                                                               <button onclick="viewDetail(${s.id})" class="btn btn-secondary btn-sm">🔍 Detail</button>
                                                                                                         ${s.status === 'approved' ? `
                                                                                                                     <div class="download-group">
-                                                                                                                                  ${currentUser.role === 'admin' ? `<button onclick="downloadDoc(${s.id},'docx')" class="btn btn-success btn-sm" title="Unduh Word">⬇️ Word</button>` : ''}
+                                                                                                                                  ${(currentUser.role === 'admin' || currentUser.role === 'kantor_pusat') ? `<button onclick="downloadDoc(${s.id},'docx')" class="btn btn-success btn-sm" title="Unduh Word">⬇️ Word</button>` : ''}
                                                                                                                                                 <button onclick="downloadDoc(${s.id},'pdf')" class="btn btn-pdf btn-sm" title="Unduh PDF">📄 PDF</button>
                                                                                                                                                             </div>` : ''}
                                                                                                                                                                       ${isAdmin && s.status === 'pending' ? `
@@ -466,14 +473,15 @@ async function viewDetail(id) {
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       ${s.notes ? `<li>${escHtml(s.notes)}</li>` : ''}
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             </ul>
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 `;
+              const _canApprove = currentUser.role === 'admin' || currentUser.role === 'kantor_pusat';
               let footerHTML = '';
               if (s.status === 'approved') {
-                     if (currentUser.role === 'admin') {
+                     if (_canApprove) {
                             footerHTML += `<button onclick="downloadDoc(${s.id},'docx')" class="btn btn-success">⬇️ Unduh Word</button>`;
                      }
                      footerHTML += `<button onclick="downloadDoc(${s.id},'pdf')" class="btn btn-pdf">📄 Unduh PDF</button>`;
               }
-              if (currentUser.role === 'admin' && s.status === 'pending') {
+              if (_canApprove && s.status === 'pending') {
                      footerHTML += `<button onclick="approveSubmission(${s.id})" class="btn btn-success">✅ Setujui</button>`;
                      footerHTML += `<button onclick="openRejectModal(${s.id})" class="btn btn-danger">❌ Tolak</button>`;
               }
@@ -692,7 +700,7 @@ async function loadUsers() {
                   <tr>
                           <td>${escHtml(u.username)}</td>
                           <td>${escHtml(u.full_name)}</td>
-                          <td><span class="badge ${u.role === 'admin' ? 'badge-approved' : 'badge-pending'}">${u.role === 'admin' ? '👑 Admin' : '👤 Staff'}</span></td>
+                          <td><span class="badge ${u.role === 'admin' ? 'badge-approved' : u.role === 'kantor_pusat' ? 'badge-info' : 'badge-pending'}">${ROLE_LABELS[u.role] || u.role}</span></td>
                           <td style="font-size:12px;color:var(--text-light)">${formatDate(u.created_at)}</td>
                           <td>
                                 <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -1154,6 +1162,28 @@ async function submitKKForm(e) {
        }
 }
 
+function renderKKProgressBadge(r) {
+       const lvl    = r.kk_approval_level;
+       const status = r.status;
+       const short  = ['GM', 'MK', 'DO', 'DU'];
+       const steps  = [1, 2, 3, 4].map(i => {
+              let icon, cls;
+              if (status === 'approved') {
+                     icon = '✅'; cls = 'approved';
+              } else if (status === 'rejected') {
+                     if (i < lvl)      { icon = '✅'; cls = 'approved'; }
+                     else if (i === lvl) { icon = '❌'; cls = 'rejected'; }
+                     else               { icon = '○';  cls = 'waiting';  }
+              } else {
+                     if (i < lvl)      { icon = '✅'; cls = 'approved'; }
+                     else if (i === lvl) { icon = '⏳'; cls = 'current';  }
+                     else               { icon = '○';  cls = 'waiting';  }
+              }
+              return `<span class="kk-ps kk-ps-${cls}" title="${KK_LEVEL_LABELS[i]}">${icon} ${short[i - 1]}</span>`;
+       }).join('<span class="kk-ps-sep">›</span>');
+       return `<div class="kk-progress-steps">${steps}</div>`;
+}
+
 function refreshKKList() {
        const page = document.querySelector('.menu-item.active')?.getAttribute('data-page');
        if (page === 'my-kk') loadMyKK();
@@ -1165,12 +1195,8 @@ function renderKKTable(rows, { showCreator = false, showApproveBtn = false } = {
        if (rows.length === 0) return emptyState('Belum ada Kertas Kerja');
        const myLvl = { gm: 1, manager_keuangan: 2, direktur_ops: 3, direktur_utama: 4 }[currentUser.role];
        const tableRows = rows.map(r => {
-              const lvl = r.kk_approval_level;
-              const approvalBadge = r.status === 'pending'
-                     ? `<span class="badge badge-pending">⏳ Level ${lvl}: ${KK_LEVEL_LABELS[lvl] || '?'}</span>`
-                     : r.status === 'approved'
-                            ? '<span class="badge badge-approved">✅ Disetujui</span>'
-                            : '<span class="badge badge-rejected">❌ Ditolak</span>';
+              const lvl    = r.kk_approval_level;
+              const approvalBadge = renderKKProgressBadge(r);
               const canAct = showApproveBtn && r.status === 'pending' && myLvl === lvl;
               return `<tr>
                    <td><div class="fw-bold">${escHtml(r.nama_pekerjaan)}</div>

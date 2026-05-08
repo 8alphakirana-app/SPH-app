@@ -94,7 +94,7 @@ router.get('/', requireLogin, (req, res) => {
     WHERE s.submission_type = 'kk'
   `;
 
-  if (user.role === 'admin' || user.role === 'direktur_utama') {
+  if (user.role === 'admin' || user.role === 'direktur_utama' || user.role === 'kantor_pusat') {
     rows = db.prepare(base + ' ORDER BY s.created_at DESC').all();
   } else if (ROLE_LEVELS[user.role]) {
     const myLevel = ROLE_LEVELS[user.role];
@@ -122,7 +122,8 @@ router.get('/:id', requireLogin, (req, res) => {
   `).get(req.params.id);
 
   if (!row) return res.status(404).json({ error: 'KK tidak ditemukan' });
-  if (user.role === 'staff' && row.created_by !== user.id) return res.status(403).json({ error: 'Akses ditolak' });
+  const canSeeAll = ['admin','direktur_utama','kantor_pusat'].includes(user.role);
+  if (!canSeeAll && !ROLE_LEVELS[user.role] && row.created_by !== user.id) return res.status(403).json({ error: 'Akses ditolak' });
 
   const approvals = db.prepare(`
     SELECT a.*, u.full_name as approver_name
