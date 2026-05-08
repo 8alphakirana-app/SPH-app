@@ -94,7 +94,7 @@ function setUser(user) {
               document.querySelectorAll('.kk-create').forEach(el => el.style.display = '');
               document.querySelectorAll('.kk-mine').forEach(el => el.style.display = '');
        }
-       if (APPROVER_ROLES.includes(user.role)) {
+       if (APPROVER_ROLES.includes(user.role) || user.role === 'admin') {
               document.querySelectorAll('.kk-approver').forEach(el => el.style.display = '');
        }
        if (user.role === 'admin' || user.role === 'direktur_utama' || user.role === 'kantor_pusat') {
