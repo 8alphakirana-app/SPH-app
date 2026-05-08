@@ -337,6 +337,212 @@ router.get('/:id/download/pdf', async (req, res) => {
   }
 });
 
+// ── Laporan PDF HTML generator ────────────────────────────────────────────────
+function generateLaporanHtml(sppd, laporan, kunjungan, biaya, approvals, settings) {
+  const companyName = settings.company_name || 'PT. Lapan Alpha Kirana';
+  const kkKota      = settings.kk_kota      || 'Jakarta';
+
+  // Highest approved laporan approver
+  const sortedAppr  = [...approvals].sort((a, b) => b.level - a.level);
+  const topAppr     = sortedAppr.find(a => a.status === 'approved') || null;
+  const topTTD      = topAppr ? getTTDBase64(topAppr.approver_user_id) : null;
+  const creatorTTD  = getTTDBase64(sppd.created_by);
+
+  const LAPORAN_LABEL = { 1:'Supervisor', 2:'Area Manager', 3:'GM', 4:'GM 2' };
+
+  const kunjRows = kunjungan.map((k, i) => `
+    <tr style="background:${i%2===0?'#fff':'#f5f8fc'}">
+      <td style="text-align:center">${i+1}</td>
+      <td>${esc(k.tanggal)}</td>
+      <td>${esc(k.nama_instansi)}</td>
+      <td>${esc(k.nama_kontak)}</td>
+      <td>${esc(k.hasil)}</td>
+    </tr>`).join('') || `<tr><td colspan="5" style="text-align:center;color:#aaa;padding:8px">Tidak ada data kunjungan</td></tr>`;
+
+  const biayaRows = biaya.map((b, i) => `
+    <tr style="background:${i%2===0?'#fff':'#f5f8fc'}">
+      <td style="text-align:center">${i+1}</td>
+      <td>${esc(b.keterangan)}</td>
+      <td style="text-align:right">Rp ${fmtRp(b.jumlah)}</td>
+    </tr>`).join('') || `<tr><td colspan="3" style="text-align:center;color:#aaa;padding:8px">Tidak ada data biaya</td></tr>`;
+
+  const totalBiaya = biaya.reduce((s, b) => s + (b.jumlah || 0), 0);
+
+  const apprRows = approvals.map(a => {
+    const icon = a.status === 'approved' ? '✅' : a.status === 'rejected' ? '❌' : '⏳';
+    return `<tr>
+      <td style="text-align:center">${LAPORAN_LABEL[a.level]||a.level}</td>
+      <td>${esc(a.full_name||'-')}</td>
+      <td style="text-align:center">${icon} ${a.status}</td>
+      <td>${esc(a.note||'-')}</td>
+      <td style="text-align:center">${esc(a.acted_at||'-')}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="5" style="text-align:center;color:#aaa">-</td></tr>`;
+
+  const tanggalLaporan = getTanggalIndo(laporan.tanggal_laporan || laporan.created_at);
+
+  return `<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; font-size: 10pt; color: #111; background: #fff; }
+  h2.doc-title { text-align: center; font-size: 13pt; text-transform: uppercase;
+                 font-weight: bold; letter-spacing: 1px; margin-bottom: 2px; }
+  p.doc-subtitle { text-align: center; font-size: 9pt; margin-bottom: 18px; }
+  .meta-table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+  .meta-table td { padding: 3px 6px; vertical-align: top; font-size: 10pt; }
+  .meta-table td.lbl { width: 175px; font-weight: 600; }
+  .meta-table td.sep { width: 14px; }
+  .meta-table td.val { border-bottom: 1px dotted #ccc; }
+  .section-title { font-weight: bold; font-size: 10pt; text-transform: uppercase;
+                   border-bottom: 1.5px solid #1F4E79; margin: 18px 0 8px; padding-bottom: 3px; color: #1F4E79; }
+  .isi-box { background: #f8fafc; border: 1px solid #dde; border-radius: 4px;
+             padding: 10px 12px; white-space: pre-wrap; font-size: 10pt;
+             line-height: 1.6; margin-bottom: 4px; }
+  .data-table { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 9pt; }
+  .data-table th { background: #1F4E79; color: #fff; padding: 5px 6px; text-align: center;
+                   border: 1px solid #1F4E79; font-size: 8.5pt; }
+  .data-table td { border: 1px solid #ccc; padding: 4px 6px; vertical-align: middle; }
+  .data-table tfoot td { font-weight: bold; background: #eef3fa; border: 1px solid #ccc; padding: 5px 6px; }
+  .appr-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 9pt; }
+  .appr-table th { background: #4a7fa5; color: #fff; padding: 4px 6px; text-align: center;
+                   border: 1px solid #4a7fa5; font-size: 8.5pt; }
+  .appr-table td { border: 1px solid #ccc; padding: 4px 6px; vertical-align: middle; }
+  .sig-row { display: flex; justify-content: space-between; margin-top: 8px; }
+  .sig-box { width: 45%; text-align: center; }
+  .sig-box p.sig-title { font-size: 9.5pt; margin-bottom: 4px; }
+  .sig-box .ttd-img { height: 28mm; display: flex; align-items: center; justify-content: center; margin: 4px 0; }
+  .sig-box .ttd-img img { max-height: 28mm; max-width: 55mm; object-fit: contain; }
+  .sig-box .sig-name { font-weight: bold; border-top: 1px solid #333; padding-top: 3px; font-size: 10pt; }
+  .sig-box .sig-role  { font-size: 8.5pt; color: #555; }
+</style>
+</head>
+<body>
+
+<h2 class="doc-title">Laporan Perjalanan Dinas</h2>
+<p class="doc-subtitle">Berdasarkan SPPD Nomor: <strong>${esc(sppd.nomor)}</strong></p>
+
+<p class="section-title" style="margin-top:0">Data Pegawai &amp; Perjalanan</p>
+<table class="meta-table">
+  <tr><td class="lbl">Nama Pegawai</td><td class="sep">:</td><td class="val">${esc(sppd.nama_pegawai)}</td></tr>
+  <tr><td class="lbl">Jabatan</td><td class="sep">:</td><td class="val">${esc(sppd.jabatan||'-')}</td></tr>
+  <tr><td class="lbl">Area Kerja</td><td class="sep">:</td><td class="val">${esc(sppd.area_kerja||'-')}</td></tr>
+  <tr><td class="lbl">Tujuan</td><td class="sep">:</td><td class="val">${esc(sppd.tujuan)}</td></tr>
+  <tr><td class="lbl">Tanggal Berangkat</td><td class="sep">:</td><td class="val">${esc(sppd.tanggal_berangkat)}</td></tr>
+  <tr><td class="lbl">Tanggal Kembali</td><td class="sep">:</td><td class="val">${esc(sppd.tanggal_kembali)}</td></tr>
+  <tr><td class="lbl">Tanggal Laporan</td><td class="sep">:</td><td class="val">${tanggalLaporan}</td></tr>
+</table>
+
+<p class="section-title">Uraian Kegiatan</p>
+<div class="isi-box">${esc(laporan.isi_laporan||'-')}</div>
+
+<p class="section-title">Daftar Kunjungan</p>
+<table class="data-table">
+  <thead><tr><th width="36">No</th><th width="90">Tanggal</th><th>Nama Instansi</th><th>Nama Kontak</th><th>Hasil Kunjungan</th></tr></thead>
+  <tbody>${kunjRows}</tbody>
+</table>
+
+<p class="section-title">Rincian Biaya</p>
+<table class="data-table">
+  <thead><tr><th width="36">No</th><th>Keterangan</th><th width="140">Jumlah (Rp)</th></tr></thead>
+  <tbody>${biayaRows}</tbody>
+  <tfoot><tr><td colspan="2" style="text-align:right">Total Biaya</td><td style="text-align:right">Rp ${fmtRp(totalBiaya)}</td></tr></tfoot>
+</table>
+
+<p class="section-title">Riwayat Persetujuan Laporan</p>
+<table class="appr-table" style="margin-bottom:18px">
+  <thead><tr><th>Level</th><th>Approver</th><th>Status</th><th>Catatan</th><th>Waktu</th></tr></thead>
+  <tbody>${apprRows}</tbody>
+</table>
+
+<div class="sig-row">
+  <div class="sig-box">
+    <p class="sig-title">Mengetahui,</p>
+    <div class="ttd-img">
+      ${topTTD ? `<img src="${topTTD}" alt="TTD">` : '<span style="color:#ccc;font-size:9pt">[tanda tangan]</span>'}
+    </div>
+    <div class="sig-name">${esc(topAppr ? topAppr.full_name : '')}</div>
+    <div class="sig-role">${esc(topAppr ? (LAPORAN_LABEL[topAppr.level]||'') : '')}</div>
+  </div>
+  <div class="sig-box">
+    <p class="sig-title">${esc(kkKota)}, ${tanggalLaporan}</p>
+    <p class="sig-title" style="margin-top:2px">Yang Melaporkan,</p>
+    <div class="ttd-img">
+      ${creatorTTD ? `<img src="${creatorTTD}" alt="TTD">` : '<span style="color:#ccc;font-size:9pt">[tanda tangan]</span>'}
+    </div>
+    <div class="sig-name">${esc(sppd.creator_name||sppd.nama_pegawai)}</div>
+    <div class="sig-role">${esc(sppd.jabatan||'Pegawai')}</div>
+  </div>
+</div>
+
+</body>
+</html>`;
+}
+
+// ── Download Laporan as PDF ───────────────────────────────────────────────────
+router.get('/:id/laporan/download/pdf', async (req, res) => {
+  const user = req.session.user;
+  const sppd = db.prepare(`
+    SELECT s.*, u.full_name AS creator_name
+    FROM sppd s JOIN users u ON s.created_by = u.id WHERE s.id = ?
+  `).get(req.params.id);
+  if (!sppd) return res.status(404).json({ error: 'SPPD tidak ditemukan' });
+  if (!canSeeAll(user.role) && sppd.created_by !== user.id) return res.status(403).json({ error: 'Forbidden' });
+
+  const laporan = db.prepare('SELECT * FROM sppd_laporan WHERE sppd_id = ?').get(req.params.id);
+  if (!laporan) return res.status(404).json({ error: 'Laporan tidak ditemukan' });
+  if (laporan.status !== 'approved')
+    return res.status(400).json({ error: 'Laporan belum disetujui' });
+
+  try {
+    const settings = {};
+    db.prepare('SELECT key, value FROM settings').all().forEach(s => { settings[s.key] = s.value; });
+    const kunjungan = db.prepare('SELECT * FROM sppd_laporan_kunjungan WHERE laporan_id = ? ORDER BY id').all(laporan.id);
+    const biaya     = db.prepare('SELECT * FROM sppd_laporan_biaya WHERE laporan_id = ? ORDER BY id').all(laporan.id);
+    const approvals = db.prepare(`
+      SELECT la.*, u.full_name, u.id AS approver_user_id
+      FROM sppd_laporan_approvals la JOIN users u ON la.approver_user_id = u.id
+      WHERE la.laporan_id = ? ORDER BY la.level
+    `).all(laporan.id);
+
+    const html = generateLaporanHtml(sppd, laporan, kunjungan, biaya, approvals, settings);
+    const { generateHeaderHTML, generateFooterHTML } = require('../htmlGenerator');
+
+    const puppeteer = require('puppeteer');
+    const browser = await puppeteer.launch({
+      headless: 'new',
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    });
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+
+    const headerHtml = generateHeaderHTML(settings);
+    const footerHtml = generateFooterHTML(settings);
+    const hasFooter  = !!(settings.company_headoffice || settings.company_warehouse);
+
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate: headerHtml,
+      footerTemplate: hasFooter ? footerHtml : '<span></span>',
+      margin: { top: '38mm', bottom: hasFooter ? '28mm' : '15mm', left: '20mm', right: '20mm' },
+    });
+    await browser.close();
+
+    const filename = `Laporan_${sppd.nomor.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error('Error generating Laporan PDF:', err);
+    res.status(500).json({ error: 'Gagal membuat PDF: ' + err.message });
+  }
+});
+
 // ── Get SPPD detail ───────────────────────────────────────────────────────────
 router.get('/:id', (req, res) => {
   const user = req.session.user;

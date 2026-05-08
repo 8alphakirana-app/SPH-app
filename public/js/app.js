@@ -1867,8 +1867,11 @@ function renderSPPDDetail(sppd, laporan, pencairan) {
                       <td>${escHtml(a.note || '-')}</td><td>${a.acted_at || '-'}</td></tr>`
               ).join('') || '<tr><td colspan="5" class="text-center">Belum ada</td></tr>';
               laporanHtml = `
-              <div><strong>Tanggal Laporan:</strong> ${laporan.tanggal_laporan}</div>
-              <div><strong>Status:</strong> <span class="badge badge-${laporan.status === 'approved' ? 'approved' : laporan.status === 'rejected' ? 'rejected' : 'pending'}">${laporan.status}</span></div>
+              <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:4px">
+                <div><strong>Tanggal Laporan:</strong> ${laporan.tanggal_laporan}</div>
+                <div><strong>Status:</strong> <span class="badge badge-${laporan.status === 'approved' ? 'approved' : laporan.status === 'rejected' ? 'rejected' : 'pending'}">${laporan.status}</span></div>
+                ${laporan.status === 'approved' ? `<a href="/api/sppd/${sppd.id}/laporan/download/pdf" target="_blank" class="btn btn-sm btn-pdf">🖨️ Cetak PDF Laporan</a>` : ''}
+              </div>
               <div style="margin-top:8px"><strong>Isi:</strong><br><div style="white-space:pre-wrap;background:var(--bg);padding:8px;border-radius:6px;margin-top:4px">${escHtml(laporan.isi_laporan)}</div></div>
               <div style="margin-top:12px"><strong>Kunjungan:</strong><div class="table-responsive"><table class="table"><thead><tr><th>Tanggal</th><th>Instansi</th><th>Kontak</th><th>Hasil</th></tr></thead><tbody>${kunjRows}</tbody></table></div></div>
               <div style="margin-top:12px"><strong>Biaya:</strong><div class="table-responsive"><table class="table"><thead><tr><th>Keterangan</th><th>Jumlah</th></tr></thead><tbody>${biayaRows}</tbody><tfoot><tr><td class="fw-bold">Total</td><td class="fw-bold">${fmt(laporan.total_biaya)}</td></tr></tfoot></table></div></div>
