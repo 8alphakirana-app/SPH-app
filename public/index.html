@@ -96,6 +96,27 @@
             <div class="stat-card stat-clients"><div class="stat-icon">🏢</div><div class="stat-info"><div class="stat-number" id="stat-clients">0</div><div class="stat-label">Jumlah Pelanggan</div></div></div>
           </div>
           <div class="card" id="card-per-user" style="display:none"><div class="card-header"><h3>📊 Rekap Per Akun</h3></div><div id="per-user-stats"></div></div>
+
+          <!-- SPPD Rekap Section -->
+          <div id="sppd-dashboard-section" style="display:none">
+            <div class="section-divider"><h2>🚗 Rekap SPPD</h2></div>
+            <div class="filter-bar" style="margin-bottom:16px">
+              <select id="sppd-dash-filter-month" onchange="loadSppdDashboard()"><option value="">Semua Bulan</option></select>
+            </div>
+            <div class="stats-grid stats-grid-6">
+              <div class="stat-card stat-sppd"><div class="stat-icon">🚗</div><div class="stat-info"><div class="stat-number" id="sppd-stat-total">0</div><div class="stat-label">Total SPPD</div></div></div>
+              <div class="stat-card stat-aktif"><div class="stat-icon">⏳</div><div class="stat-info"><div class="stat-number" id="sppd-stat-aktif">0</div><div class="stat-label">SPPD Aktif</div></div></div>
+              <div class="stat-card stat-selesai"><div class="stat-icon">✅</div><div class="stat-info"><div class="stat-number" id="sppd-stat-selesai">0</div><div class="stat-label">SPPD Selesai</div></div></div>
+              <div class="stat-card stat-laporan"><div class="stat-icon">📋</div><div class="stat-info"><div class="stat-number" id="sppd-stat-laporan">0</div><div class="stat-label">Kertas Kerja</div></div></div>
+              <div class="stat-card stat-money"><div class="stat-icon">💰</div><div class="stat-info"><div class="stat-number-sm" id="sppd-stat-biaya-usulan">-</div><div class="stat-label">Total Biaya Usulan</div></div></div>
+              <div class="stat-card stat-cair"><div class="stat-icon">💵</div><div class="stat-info"><div class="stat-number-sm" id="sppd-stat-biaya-cair">-</div><div class="stat-label">Total Dicairkan</div></div></div>
+            </div>
+            <div class="card" id="sppd-card-per-user" style="display:none">
+              <div class="card-header"><h3>📊 Rekap SPPD Per Pegawai</h3></div>
+              <div id="sppd-per-user-stats"></div>
+            </div>
+          </div>
+
           <div class="card"><div class="card-header"><h3>Pengajuan Terbaru</h3></div><div id="recent-submissions"></div></div>
         </div>
         <div id="content-new-submission" class="content-page" style="display:none">

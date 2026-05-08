@@ -286,9 +286,19 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
 .stat-rejected { border-left-color: var(--red); }
 .stat-products { border-left-color: #7c3aed; }
 .stat-clients  { border-left-color: #0891b2; }
+.stat-sppd     { border-left-color: #d97706; }
+.stat-aktif    { border-left-color: #f59e0b; }
+.stat-selesai  { border-left-color: #10b981; }
+.stat-laporan  { border-left-color: #8b5cf6; }
+.stat-money    { border-left-color: #059669; }
+.stat-cair     { border-left-color: #0d9488; }
 .stat-icon { font-size: 28px; }
 .stat-number { font-size: 28px; font-weight: 700; color: var(--text); line-height: 1; }
+.stat-number-sm { font-size: 18px; font-weight: 700; color: var(--text); line-height: 1.2; }
 .stat-label { font-size: 12px; color: var(--text-light); margin-top: 4px; }
+.section-divider { display: flex; align-items: center; gap: 12px; margin: 8px 0 16px; }
+.section-divider h2 { font-size: 15px; font-weight: 600; color: var(--text-light); white-space: nowrap; }
+.section-divider::after { content: ''; flex: 1; height: 1px; background: var(--gray-border); }
 
 /* ==================== PAGE LAYOUTS ==================== */
 .page-title { font-size: 22px; font-weight: 700; color: var(--text); margin-bottom: 20px; }

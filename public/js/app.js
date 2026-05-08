@@ -201,6 +201,8 @@ async function loadDashboard() {
               } else {
                      await loadDashboardStaff();
               }
+              const hasSppdAccess = SPPD_ALL_ROLES.includes(currentUser.role) || SPPD_CREATE_ROLES.includes(currentUser.role);
+              if (hasSppdAccess) await loadSppdDashboard();
        } catch (e) {
               console.error(e);
        }
@@ -314,6 +316,70 @@ function populateDashMonthFilter(availableMonths, selectedMonth) {
               opts.push(`<option value="${m}"${m === selectedMonth ? ' selected' : ''}>${label}</option>`);
        });
        sel.innerHTML = opts.join('');
+}
+
+async function loadSppdDashboard() {
+       const sel = document.getElementById('sppd-dash-filter-month');
+       const month = sel?.value || '';
+       const url = '/api/sppd/dashboard-stats' + (month ? '?month=' + month : '');
+       try {
+              const res = await api(url);
+              if (!res.ok) return;
+              const { summary, per_user, available_months } = await res.json();
+
+              // Populate month filter
+              if (sel) {
+                     const opts = ['<option value="">Semua Bulan</option>'];
+                     (available_months || []).forEach(m => {
+                            const [yr, mo] = m.split('-');
+                            const label = new Date(parseInt(yr), parseInt(mo) - 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+                            opts.push(`<option value="${m}"${m === month ? ' selected' : ''}>${label}</option>`);
+                     });
+                     sel.innerHTML = opts.join('');
+              }
+
+              document.getElementById('sppd-stat-total').textContent = summary.total || 0;
+              document.getElementById('sppd-stat-aktif').textContent = summary.aktif || 0;
+              document.getElementById('sppd-stat-selesai').textContent = summary.selesai || 0;
+              document.getElementById('sppd-stat-laporan').textContent = summary.jumlah_laporan || 0;
+              document.getElementById('sppd-stat-biaya-usulan').textContent = 'Rp ' + formatRupiahShort(summary.total_biaya_usulan || 0);
+              document.getElementById('sppd-stat-biaya-cair').textContent = 'Rp ' + formatRupiahShort(summary.total_biaya_dicairkan || 0);
+
+              const section = document.getElementById('sppd-dashboard-section');
+              if (section) section.style.display = '';
+
+              const cardPerUser = document.getElementById('sppd-card-per-user');
+              const container = document.getElementById('sppd-per-user-stats');
+              if (cardPerUser && container) {
+                     const showPerUser = SPPD_ALL_ROLES.includes(currentUser.role);
+                     if (showPerUser && per_user && per_user.length > 0) {
+                            cardPerUser.style.display = '';
+                            const rows = per_user.map(u => `<tr>
+                                   <td><div style="font-weight:600">${escHtml(u.full_name)}</div><div style="font-size:11px;color:var(--text-light)">${escHtml(u.area_kerja || u.username)}</div></td>
+                                   <td class="text-center fw-bold">${u.total}</td>
+                                   <td class="text-center"><span class="badge badge-pending">${u.aktif}</span></td>
+                                   <td class="text-center"><span class="badge badge-approved">${u.selesai}</span></td>
+                                   <td class="text-right">${u.total_biaya_usulan > 0 ? 'Rp ' + formatRupiah(u.total_biaya_usulan) : '-'}</td>
+                                   <td class="text-right">${u.total_biaya_dicairkan > 0 ? 'Rp ' + formatRupiah(u.total_biaya_dicairkan) : '-'}</td>
+                            </tr>`).join('');
+                            container.innerHTML = `<div class="table-responsive"><table class="table">
+                                   <thead><tr>
+                                          <th>Pegawai</th>
+                                          <th class="text-center">Total</th>
+                                          <th class="text-center">Aktif</th>
+                                          <th class="text-center">Selesai</th>
+                                          <th class="text-right">Biaya Usulan</th>
+                                          <th class="text-right">Dicairkan</th>
+                                   </tr></thead>
+                                   <tbody>${rows}</tbody>
+                            </table></div>`;
+                     } else {
+                            cardPerUser.style.display = 'none';
+                     }
+              }
+       } catch (e) {
+              console.error('SPPD dashboard error:', e);
+       }
 }
 
 async function downloadZip() {
@@ -1618,6 +1684,14 @@ function api(url, method = 'GET', body = null) {
 function formatRupiah(n) {
        if (!n && n !== 0) return '0';
        return new Intl.NumberFormat('id-ID').format(Math.round(parseFloat(n)));
+}
+
+function formatRupiahShort(n) {
+       n = Math.round(parseFloat(n) || 0);
+       if (n >= 1000000000) return (n / 1000000000).toFixed(1).replace('.', ',') + ' M';
+       if (n >= 1000000) return (n / 1000000).toFixed(1).replace('.', ',') + ' Jt';
+       if (n >= 1000) return (n / 1000).toFixed(0) + ' Rb';
+       return String(n);
 }
 
 function formatDate(str) {
