@@ -50,6 +50,11 @@
         <li class="kk-menu kk-mine" style="display:none"><a href="#" onclick="showPage('my-kk')" class="menu-item" data-page="my-kk"><span class="icon">📋</span> Kertas Kerja Saya</a></li>
         <li class="kk-menu kk-approver" style="display:none"><a href="#" onclick="showPage('kk-approvals')" class="menu-item" data-page="kk-approvals"><span class="icon">✅</span> Persetujuan KK</a></li>
         <li class="kk-menu kk-all" style="display:none"><a href="#" onclick="showPage('admin-kk')" class="menu-item" data-page="admin-kk"><span class="icon">🗂️</span> Semua Kertas Kerja</a></li>
+        <li class="menu-divider sppd-menu" style="display:none"></li>
+        <li class="sppd-menu sppd-create" style="display:none"><a href="#" onclick="showPage('new-sppd')" class="menu-item" data-page="new-sppd"><span class="icon">🚗</span> Buat SPPD</a></li>
+        <li class="sppd-menu sppd-mine" style="display:none"><a href="#" onclick="showPage('my-sppd')" class="menu-item" data-page="my-sppd"><span class="icon">📋</span> SPPD Saya</a></li>
+        <li class="sppd-menu sppd-approver" style="display:none"><a href="#" onclick="showPage('sppd-approvals')" class="menu-item" data-page="sppd-approvals"><span class="icon">✅</span> Persetujuan SPPD</a></li>
+        <li class="sppd-menu sppd-all" style="display:none"><a href="#" onclick="showPage('admin-sppd')" class="menu-item" data-page="admin-sppd"><span class="icon">🗂️</span> Semua SPPD</a></li>
       </ul>
       <div class="sidebar-footer">
         <div class="user-info">
@@ -256,6 +261,88 @@
           </div>
           <div class="card"><div id="admin-kk-container"><div class="loading">⏳ Memuat...</div></div></div>
         </div>
+
+        <!-- ═══════════ BUAT SPPD ═══════════ -->
+        <div id="content-new-sppd" class="content-page" style="display:none">
+          <h1 class="page-title">Buat SPPD Baru</h1>
+          <form id="form-sppd" onsubmit="submitSPPDForm(event)">
+            <div class="card">
+              <div class="card-header"><h3>👤 Data Pegawai</h3></div>
+              <div class="card-body">
+                <div class="form-row">
+                  <div class="form-group"><label>Nama Pegawai <span class="required">*</span></label><input type="text" id="sppd-nama-pegawai" required></div>
+                  <div class="form-group"><label>Jabatan</label><input type="text" id="sppd-jabatan"></div>
+                </div>
+                <div class="form-group"><label>Area Kerja</label><input type="text" id="sppd-area-kerja"></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><h3>🚗 Detail Perjalanan</h3></div>
+              <div class="card-body">
+                <div class="form-row">
+                  <div class="form-group"><label>Tujuan <span class="required">*</span></label><input type="text" id="sppd-tujuan" required></div>
+                  <div class="form-group"><label>Moda Transportasi</label><input type="text" id="sppd-transport" placeholder="Cth: Pesawat, Mobil Dinas"></div>
+                </div>
+                <div class="form-group"><label>Keperluan / Tujuan Kunjungan <span class="required">*</span></label><textarea id="sppd-keperluan" rows="2" required></textarea></div>
+                <div class="form-row">
+                  <div class="form-group"><label>Tanggal Berangkat <span class="required">*</span></label><input type="date" id="sppd-tgl-berangkat" required></div>
+                  <div class="form-group"><label>Tanggal Kembali <span class="required">*</span></label><input type="date" id="sppd-tgl-kembali" required></div>
+                </div>
+                <div class="form-group"><label>Uang Muka (Rp)</label><input type="number" id="sppd-uang-muka" min="0" value="0"></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><h3>🗺️ Rencana Itinerary</h3><button type="button" onclick="addSPPDItineraryRow()" class="btn btn-secondary btn-sm">+ Tambah Baris</button></div>
+              <div class="card-body no-padding">
+                <div class="table-responsive">
+                  <table class="table">
+                    <thead><tr><th>Tanggal</th><th>Dari</th><th>Ke</th><th>Transport</th><th>Keterangan</th><th width="50"></th></tr></thead>
+                    <tbody id="sppd-itinerary-tbody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div class="form-actions">
+              <div id="sppd-form-error" class="alert alert-error" style="display:none"></div>
+              <button type="submit" class="btn btn-primary">📤 Kirim SPPD</button>
+              <button type="button" onclick="showPage('my-sppd')" class="btn btn-outline">Batal</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- ═══════════ SPPD SAYA ═══════════ -->
+        <div id="content-my-sppd" class="content-page" style="display:none">
+          <div class="page-header">
+            <h1 class="page-title">SPPD Saya</h1>
+            <div class="filter-bar">
+              <select id="my-sppd-filter" onchange="loadMySPPD()"><option value="">Semua Status</option><option value="pending">Menunggu</option><option value="approved">Disetujui</option><option value="rejected">Ditolak</option><option value="completed">Selesai</option></select>
+              <button onclick="showPage('new-sppd')" class="btn btn-primary btn-sm">+ Buat SPPD</button>
+            </div>
+          </div>
+          <div class="card"><div id="my-sppd-container"><div class="loading">⏳ Memuat...</div></div></div>
+        </div>
+
+        <!-- ═══════════ PERSETUJUAN SPPD ═══════════ -->
+        <div id="content-sppd-approvals" class="content-page" style="display:none">
+          <div class="page-header">
+            <h1 class="page-title">Persetujuan SPPD</h1>
+            <div class="filter-bar">
+              <select id="sppd-approvals-filter" onchange="loadSPPDApprovals()"><option value="pending">Menunggu</option><option value="">Semua</option><option value="approved">Disetujui</option><option value="rejected">Ditolak</option></select>
+            </div>
+          </div>
+          <div class="card"><div id="sppd-approvals-container"><div class="loading">⏳ Memuat...</div></div></div>
+        </div>
+
+        <!-- ═══════════ SEMUA SPPD ═══════════ -->
+        <div id="content-admin-sppd" class="content-page" style="display:none">
+          <div class="page-header">
+            <h1 class="page-title">Semua SPPD</h1>
+            <div class="filter-bar">
+              <select id="admin-sppd-filter" onchange="loadAdminSPPD()"><option value="">Semua Status</option><option value="pending">Menunggu</option><option value="approved">Disetujui</option><option value="rejected">Ditolak</option><option value="completed">Selesai</option></select>
+            </div>
+          </div>
+          <div class="card"><div id="admin-sppd-container"><div class="loading">⏳ Memuat...</div></div></div>
+        </div>
       </div>
     </main>
   </div>
@@ -330,7 +417,7 @@
   </div>
 </div>
 <div id="modal-reject" class="modal" style="display:none"><div class="modal-backdrop" onclick="closeModal('modal-reject')"></div><div class="modal-dialog"><div class="modal-header"><h3>Tolak Pengajuan</h3><button onclick="closeModal('modal-reject')" class="btn-close">✕</button></div><div class="modal-body"><div class="form-group"><label>Alasan Penolakan</label><textarea id="reject-reason" rows="3" placeholder="Masukkan alasan penolakan..."></textarea></div></div><div class="modal-footer"><button onclick="confirmReject()" class="btn btn-danger">❌ Tolak Pengajuan</button><button onclick="closeModal('modal-reject')" class="btn btn-outline">Batal</button></div></div></div>
-<div id="modal-add-user" class="modal" style="display:none"><div class="modal-backdrop" onclick="closeModal('modal-add-user')"></div><div class="modal-dialog"><div class="modal-header"><h3>Tambah Pengguna Baru</h3><button onclick="closeModal('modal-add-user')" class="btn-close">✕</button></div><div class="modal-body"><div class="form-row"><div class="form-group"><label>Username <span class="required">*</span></label><input type="text" id="new-username" placeholder="username"></div><div class="form-group"><label>Password <span class="required">*</span></label><input type="password" id="new-password" placeholder="password"></div></div><div class="form-row"><div class="form-group"><label>Nama Lengkap <span class="required">*</span></label><input type="text" id="new-fullname" placeholder="Nama lengkap"></div><div class="form-group"><label>Role <span class="required">*</span></label><select id="new-role"><option value="staff">Staff</option><option value="kantor_pusat">Kantor Pusat</option><option value="gm">GM</option><option value="manager_keuangan">Manager Keuangan</option><option value="direktur_ops">Direktur Operasional</option><option value="direktur_utama">Direktur Utama</option><option value="admin">Admin</option></select></div></div><div id="add-user-error" class="alert alert-error" style="display:none"></div></div><div class="modal-footer"><button onclick="addUser()" class="btn btn-primary">✅ Simpan</button><button onclick="closeModal('modal-add-user')" class="btn btn-outline">Batal</button></div></div></div>
+<div id="modal-add-user" class="modal" style="display:none"><div class="modal-backdrop" onclick="closeModal('modal-add-user')"></div><div class="modal-dialog"><div class="modal-header"><h3>Tambah Pengguna Baru</h3><button onclick="closeModal('modal-add-user')" class="btn-close">✕</button></div><div class="modal-body"><div class="form-row"><div class="form-group"><label>Username <span class="required">*</span></label><input type="text" id="new-username" placeholder="username"></div><div class="form-group"><label>Password <span class="required">*</span></label><input type="password" id="new-password" placeholder="password"></div></div><div class="form-row"><div class="form-group"><label>Nama Lengkap <span class="required">*</span></label><input type="text" id="new-fullname" placeholder="Nama lengkap"></div><div class="form-group"><label>Role <span class="required">*</span></label><select id="new-role"><option value="staff">Staff</option><option value="marketing">Marketing</option><option value="supervisor">Supervisor</option><option value="area_manager">Area Manager</option><option value="gm">GM</option><option value="gm2">GM 2</option><option value="manager_keuangan">Manager Keuangan</option><option value="direktur_ops">Direktur Operasional</option><option value="direktur_utama">Direktur Utama</option><option value="kantor_pusat">Kantor Pusat</option><option value="admin">Admin</option></select></div></div><div id="add-user-error" class="alert alert-error" style="display:none"></div></div><div class="modal-footer"><button onclick="addUser()" class="btn btn-primary">✅ Simpan</button><button onclick="closeModal('modal-add-user')" class="btn btn-outline">Batal</button></div></div></div>
 <div id="modal-change-password" class="modal" style="display:none">
   <div class="modal-backdrop" onclick="closeModal('modal-change-password')"></div>
   <div class="modal-dialog">
@@ -355,6 +442,97 @@
       <div id="rp-error" class="alert alert-error" style="display:none"></div>
     </div>
     <div class="modal-footer"><button onclick="submitResetPassword()" class="btn btn-primary">💾 Reset Password</button><button onclick="closeModal('modal-reset-password')" class="btn btn-outline">Batal</button></div>
+  </div>
+</div>
+<!-- ═══════════ SPPD DETAIL MODAL ═══════════ -->
+<div id="modal-sppd-detail" class="modal" style="display:none">
+  <div class="modal-backdrop" onclick="closeModal('modal-sppd-detail')"></div>
+  <div class="modal-dialog modal-xl">
+    <div class="modal-header"><h3 id="sppd-detail-title">Detail SPPD</h3><button onclick="closeModal('modal-sppd-detail')" class="btn-close">✕</button></div>
+    <div class="modal-body" id="sppd-detail-body"></div>
+    <div class="modal-footer" id="sppd-detail-footer"></div>
+  </div>
+</div>
+<!-- ═══════════ SPPD APPROVE/REJECT MODAL ═══════════ -->
+<div id="modal-sppd-action" class="modal" style="display:none">
+  <div class="modal-backdrop" onclick="closeModal('modal-sppd-action')"></div>
+  <div class="modal-dialog">
+    <div class="modal-header"><h3 id="sppd-action-title">Konfirmasi</h3><button onclick="closeModal('modal-sppd-action')" class="btn-close">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Catatan</label><textarea id="sppd-action-note" rows="3" placeholder="Opsional..."></textarea></div>
+      <div id="sppd-action-error" class="alert alert-error" style="display:none"></div>
+    </div>
+    <div class="modal-footer" id="sppd-action-footer"></div>
+  </div>
+</div>
+<!-- ═══════════ LAPORAN SPPD MODAL ═══════════ -->
+<div id="modal-laporan-sppd" class="modal" style="display:none">
+  <div class="modal-backdrop" onclick="closeModal('modal-laporan-sppd')"></div>
+  <div class="modal-dialog modal-xl">
+    <div class="modal-header"><h3 id="laporan-sppd-title">Laporan Perjalanan Dinas</h3><button onclick="closeModal('modal-laporan-sppd')" class="btn-close">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Tanggal Laporan</label><input type="date" id="laporan-tanggal"></div>
+      <div class="form-group"><label>Isi Laporan / Hasil Kunjungan</label><textarea id="laporan-isi" rows="4" placeholder="Uraikan hasil perjalanan dinas..."></textarea></div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header"><h4>📍 Daftar Kunjungan</h4><button type="button" onclick="addLaporanKunjunganRow()" class="btn btn-secondary btn-sm">+ Tambah</button></div>
+        <div class="card-body no-padding">
+          <div class="table-responsive">
+            <table class="table">
+              <thead><tr><th>Tanggal</th><th>Nama Instansi</th><th>Nama Kontak</th><th>Hasil</th><th width="40"></th></tr></thead>
+              <tbody id="laporan-kunjungan-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h4>💰 Rincian Biaya</h4><button type="button" onclick="addLaporanBiayaRow()" class="btn btn-secondary btn-sm">+ Tambah</button></div>
+        <div class="card-body no-padding">
+          <div class="table-responsive">
+            <table class="table">
+              <thead><tr><th>Keterangan</th><th width="160">Jumlah (Rp)</th><th width="40"></th></tr></thead>
+              <tbody id="laporan-biaya-tbody"></tbody>
+              <tfoot><tr><td class="text-right fw-bold">Total</td><td class="fw-bold" id="laporan-total-biaya">Rp 0</td><td></td></tr></tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div id="laporan-error" class="alert alert-error" style="display:none;margin-top:12px"></div>
+    </div>
+    <div class="modal-footer" id="laporan-sppd-footer">
+      <button onclick="submitLaporanSPPD()" class="btn btn-primary" id="btn-submit-laporan">📤 Kirim Laporan</button>
+      <button onclick="closeModal('modal-laporan-sppd')" class="btn btn-outline">Batal</button>
+    </div>
+  </div>
+</div>
+<!-- ═══════════ PENCAIRAN SPPD MODAL ═══════════ -->
+<div id="modal-pencairan-sppd" class="modal" style="display:none">
+  <div class="modal-backdrop" onclick="closeModal('modal-pencairan-sppd')"></div>
+  <div class="modal-dialog">
+    <div class="modal-header"><h3 id="pencairan-sppd-title">Pengajuan Pencairan Dana SPPD</h3><button onclick="closeModal('modal-pencairan-sppd')" class="btn-close">✕</button></div>
+    <div class="modal-body" id="pencairan-sppd-body">
+      <div class="form-group"><label>Jumlah Diajukan (Rp) <span class="required">*</span></label><input type="number" id="pencairan-jumlah" min="0" placeholder="0"></div>
+      <div class="form-group"><label>Catatan</label><textarea id="pencairan-catatan" rows="2" placeholder="Opsional..."></textarea></div>
+      <div id="pencairan-error" class="alert alert-error" style="display:none"></div>
+    </div>
+    <div class="modal-footer" id="pencairan-sppd-footer">
+      <button onclick="submitPencairanSPPD()" class="btn btn-primary" id="btn-submit-pencairan">📤 Ajukan Pencairan</button>
+      <button onclick="closeModal('modal-pencairan-sppd')" class="btn btn-outline">Batal</button>
+    </div>
+  </div>
+</div>
+<!-- ═══════════ APPROVE LAPORAN / PENCAIRAN MODAL ═══════════ -->
+<div id="modal-laporan-action" class="modal" style="display:none">
+  <div class="modal-backdrop" onclick="closeModal('modal-laporan-action')"></div>
+  <div class="modal-dialog">
+    <div class="modal-header"><h3 id="laporan-action-title">Konfirmasi</h3><button onclick="closeModal('modal-laporan-action')" class="btn-close">✕</button></div>
+    <div class="modal-body">
+      <div id="laporan-action-pencairan-fields" style="display:none">
+        <div class="form-group"><label>Jumlah Disetujui (Rp)</label><input type="number" id="pencairan-jumlah-disetujui" min="0" placeholder="Kosongkan = sama dengan diajukan"></div>
+      </div>
+      <div class="form-group"><label>Catatan</label><textarea id="laporan-action-note" rows="3" placeholder="Opsional..."></textarea></div>
+      <div id="laporan-action-error" class="alert alert-error" style="display:none"></div>
+    </div>
+    <div class="modal-footer" id="laporan-action-footer"></div>
   </div>
 </div>
 <div id="toast" class="toast" style="display:none"></div>

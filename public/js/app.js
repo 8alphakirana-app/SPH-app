@@ -58,10 +58,17 @@ async function logout() {
 const ROLE_LABELS = {
        admin: '👑 Admin', staff: '👤 Staff', kantor_pusat: '🏢 Kantor Pusat',
        gm: '⭐ GM', manager_keuangan: '💼 Mgr. Keuangan',
-       direktur_ops: '🏭 Dir. Ops', direktur_utama: '🎯 Dir. Utama'
+       direktur_ops: '🏭 Dir. Ops', direktur_utama: '🎯 Dir. Utama',
+       marketing: '📣 Marketing', supervisor: '🔍 Supervisor',
+       area_manager: '🗺️ Area Manager', gm2: '⭐ GM 2'
 };
 const APPROVER_ROLES = ['gm', 'manager_keuangan', 'direktur_ops', 'direktur_utama'];
 const KK_LEVEL_LABELS = { 1: 'GM', 2: 'Manager Keuangan', 3: 'Direktur Operasional', 4: 'Direktur Utama' };
+const SPPD_LEVEL_LABELS = { 1: 'Area Manager', 2: 'GM', 3: 'GM 2' };
+const LAPORAN_LEVEL_LABELS = { 1: 'Supervisor', 2: 'Area Manager', 3: 'GM', 4: 'GM 2' };
+const SPPD_APPROVER_ROLES = ['area_manager', 'gm', 'gm2'];
+const SPPD_ALL_ROLES = ['admin', 'kantor_pusat', 'manager_keuangan', 'area_manager', 'gm', 'gm2'];
+const SPPD_CREATE_ROLES = ['marketing', 'supervisor', 'staff', 'admin'];
 
 function setUser(user) {
        currentUser = user;
@@ -91,6 +98,21 @@ function setUser(user) {
        }
        if (user.role === 'admin' || user.role === 'direktur_utama' || user.role === 'kantor_pusat') {
               document.querySelectorAll('.kk-all').forEach(el => el.style.display = '');
+       }
+
+       // SPPD menu visibility
+       if (SPPD_CREATE_ROLES.includes(user.role)) {
+              document.querySelectorAll('.sppd-menu').forEach(el => el.style.display = '');
+              document.querySelectorAll('.sppd-create').forEach(el => el.style.display = '');
+              document.querySelectorAll('.sppd-mine').forEach(el => el.style.display = '');
+       }
+       if (SPPD_APPROVER_ROLES.includes(user.role) || user.role === 'admin') {
+              document.querySelectorAll('.sppd-menu').forEach(el => el.style.display = '');
+              document.querySelectorAll('.sppd-approver').forEach(el => el.style.display = '');
+       }
+       if (SPPD_ALL_ROLES.includes(user.role)) {
+              document.querySelectorAll('.sppd-menu').forEach(el => el.style.display = '');
+              document.querySelectorAll('.sppd-all').forEach(el => el.style.display = '');
        }
 }
 
@@ -123,6 +145,10 @@ function showPage(page) {
               'my-kk': 'Kertas Kerja Saya',
               'kk-approvals': 'Persetujuan Kertas Kerja',
               'admin-kk': 'Semua Kertas Kerja',
+              'new-sppd': 'Buat SPPD Baru',
+              'my-sppd': 'SPPD Saya',
+              'sppd-approvals': 'Persetujuan SPPD',
+              'admin-sppd': 'Semua SPPD',
        };
        document.getElementById('top-bar-title').textContent = titles[page] || page;
        if (page === 'dashboard') loadDashboard();
@@ -135,6 +161,10 @@ function showPage(page) {
        else if (page === 'my-kk') loadMyKK();
        else if (page === 'kk-approvals') loadKKApprovals();
        else if (page === 'admin-kk') loadAdminKK();
+       else if (page === 'new-sppd') initSPPDForm();
+       else if (page === 'my-sppd') loadMySPPD();
+       else if (page === 'sppd-approvals') loadSPPDApprovals();
+       else if (page === 'admin-sppd') loadAdminSPPD();
        if (window.innerWidth <= 768) {
               document.getElementById('sidebar').classList.remove('open');
        }
@@ -834,7 +864,7 @@ async function loadApproverTTDs() {
        const container = document.getElementById('approver-ttd-list');
        if (!container) return;
        try {
-              const res   = await api('/api/submissions/meta/users');
+              const res = await api('/api/submissions/meta/users');
               const users = await res.json();
               const t = Date.now();
               if (users.length === 0) {
@@ -872,11 +902,11 @@ async function uploadUserTTD(userId, input) {
        const formData = new FormData();
        formData.append('image', file);
        try {
-              const res  = await fetch(`/api/submissions/meta/upload/user-ttd/${userId}`, { method: 'POST', body: formData });
+              const res = await fetch(`/api/submissions/meta/upload/user-ttd/${userId}`, { method: 'POST', body: formData });
               const data = await res.json();
               if (res.ok) {
                      msgEl.textContent = '✅ Berhasil!';
-                     const img   = document.getElementById(`ttd-u${userId}-img`);
+                     const img = document.getElementById(`ttd-u${userId}-img`);
                      const empty = document.getElementById(`ttd-u${userId}-empty`);
                      img.src = data.url;
                      img.style.display = '';
@@ -1163,21 +1193,21 @@ async function submitKKForm(e) {
 }
 
 function renderKKProgressBadge(r) {
-       const lvl    = r.kk_approval_level;
+       const lvl = r.kk_approval_level;
        const status = r.status;
-       const short  = ['GM', 'MK', 'DO', 'DU'];
-       const steps  = [1, 2, 3, 4].map(i => {
+       const short = ['GM', 'MK', 'DO', 'DU'];
+       const steps = [1, 2, 3, 4].map(i => {
               let icon, cls;
               if (status === 'approved') {
                      icon = '✅'; cls = 'approved';
               } else if (status === 'rejected') {
-                     if (i < lvl)      { icon = '✅'; cls = 'approved'; }
+                     if (i < lvl) { icon = '✅'; cls = 'approved'; }
                      else if (i === lvl) { icon = '❌'; cls = 'rejected'; }
-                     else               { icon = '○';  cls = 'waiting';  }
+                     else { icon = '○'; cls = 'waiting'; }
               } else {
-                     if (i < lvl)      { icon = '✅'; cls = 'approved'; }
-                     else if (i === lvl) { icon = '⏳'; cls = 'current';  }
-                     else               { icon = '○';  cls = 'waiting';  }
+                     if (i < lvl) { icon = '✅'; cls = 'approved'; }
+                     else if (i === lvl) { icon = '⏳'; cls = 'current'; }
+                     else { icon = '○'; cls = 'waiting'; }
               }
               return `<span class="kk-ps kk-ps-${cls}" title="${KK_LEVEL_LABELS[i]}">${icon} ${short[i - 1]}</span>`;
        }).join('<span class="kk-ps-sep">›</span>');
@@ -1195,7 +1225,7 @@ function renderKKTable(rows, { showCreator = false, showApproveBtn = false } = {
        if (rows.length === 0) return emptyState('Belum ada Kertas Kerja');
        const myLvl = { gm: 1, manager_keuangan: 2, direktur_ops: 3, direktur_utama: 4 }[currentUser.role];
        const tableRows = rows.map(r => {
-              const lvl    = r.kk_approval_level;
+              const lvl = r.kk_approval_level;
               const approvalBadge = renderKKProgressBadge(r);
               const canAct = showApproveBtn && r.status === 'pending' && myLvl === lvl;
               return `<tr>
@@ -1564,4 +1594,539 @@ function showToast(msg, type = '') {
        t.style.display = 'block';
        clearTimeout(t._timer);
        t._timer = setTimeout(() => { t.style.display = 'none'; }, 3500);
+}
+
+// ============================================================
+//  SPPD - Surat Perintah Perjalanan Dinas
+// ============================================================
+
+let sppdItinRowCount = 0;
+let laporanKunjunganRowCount = 0;
+let laporanBiayaRowCount = 0;
+let currentSppdId = null;
+
+// ── Approval progress badge ───────────────────────────────────────────────────
+function renderSPPDProgressBadge(sppd) {
+       const lvl = sppd.sppd_approval_level;
+       const status = sppd.status;
+       const short = ['AM', 'GM', 'GM2'];
+       const steps = [1, 2, 3].map(i => {
+              let icon, cls;
+              if (status === 'approved' || status === 'completed') { icon = '✅'; cls = 'approved'; }
+              else if (status === 'rejected') {
+                     if (i < lvl) { icon = '✅'; cls = 'approved'; }
+                     else if (i === lvl) { icon = '❌'; cls = 'rejected'; }
+                     else { icon = '○'; cls = 'waiting'; }
+              } else {
+                     if (i < lvl) { icon = '✅'; cls = 'approved'; }
+                     else if (i === lvl) { icon = '⏳'; cls = 'current'; }
+                     else { icon = '○'; cls = 'waiting'; }
+              }
+              return `<span class="kk-ps kk-ps-${cls}" title="${SPPD_LEVEL_LABELS[i]}">${icon} ${short[i - 1]}</span>`;
+       }).join('<span class="kk-ps-sep">›</span>');
+       return `<div class="kk-progress-steps">${steps}</div>`;
+}
+
+function sppdStatusBadge(sppd) {
+       const statusMap = {
+              pending: '<span class="badge badge-pending">⏳ Menunggu</span>',
+              approved: '<span class="badge badge-approved">✅ Disetujui</span>',
+              rejected: '<span class="badge badge-rejected">❌ Ditolak</span>',
+              completed: '<span class="badge badge-info">🏁 Selesai</span>',
+       };
+       return statusMap[sppd.status] || sppd.status;
+}
+
+// ── SPPD table renderer ───────────────────────────────────────────────────────
+function renderSPPDTable(rows, { showCreator = false, showApproveBtn = false } = {}) {
+       if (!rows.length) return emptyState('Tidak ada data SPPD');
+       const ths = [
+              '<th>Nomor</th>',
+              '<th>Nama Pegawai</th>',
+              showCreator ? '<th>Dibuat oleh</th>' : '',
+              '<th>Tujuan</th>',
+              '<th>Tanggal</th>',
+              '<th>Status</th>',
+              '<th>Progress</th>',
+              '<th>Aksi</th>',
+       ].join('');
+       const tds = rows.map(r => {
+              const approveBtn = showApproveBtn && r.status === 'pending'
+                     ? `<button onclick="openSPPDAction(${r.id},'approve')" class="btn btn-sm btn-success">✅ Approve</button> `
+                     : '';
+              return `<tr>
+              <td><span style="font-family:monospace;font-size:12px">${escHtml(r.nomor)}</span></td>
+              <td>${escHtml(r.nama_pegawai)}</td>
+              ${showCreator ? `<td>${escHtml(r.creator_name || '')}</td>` : ''}
+              <td>${escHtml(r.tujuan)}</td>
+              <td style="white-space:nowrap">${r.tanggal_berangkat} – ${r.tanggal_kembali}</td>
+              <td>${sppdStatusBadge(r)}</td>
+              <td>${renderSPPDProgressBadge(r)}</td>
+              <td style="white-space:nowrap">
+                ${approveBtn}
+                <button onclick="viewSPPDDetail(${r.id})" class="btn btn-sm btn-outline">🔍 Detail</button>
+              </td>
+            </tr>`;
+       }).join('');
+       return `<div class="table-responsive"><table class="table"><thead><tr>${ths}</tr></thead><tbody>${tds}</tbody></table></div>`;
+}
+
+// ── List loaders ──────────────────────────────────────────────────────────────
+async function loadMySPPD() {
+       const filter = document.getElementById('my-sppd-filter')?.value || '';
+       const container = document.getElementById('my-sppd-container');
+       container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
+       try {
+              const res = await api('/api/sppd');
+              const rows = await res.json();
+              const filtered = filter ? rows.filter(r => r.status === filter) : rows;
+              container.innerHTML = renderSPPDTable(filtered);
+       } catch { container.innerHTML = emptyState('Gagal memuat data'); }
+}
+
+async function loadSPPDApprovals() {
+       const filter = document.getElementById('sppd-approvals-filter')?.value || '';
+       const container = document.getElementById('sppd-approvals-container');
+       container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
+       try {
+              const res = await api('/api/sppd');
+              let rows = await res.json();
+              if (filter) rows = rows.filter(r => r.status === filter);
+              container.innerHTML = renderSPPDTable(rows, { showCreator: true, showApproveBtn: true });
+       } catch { container.innerHTML = emptyState('Gagal memuat data'); }
+}
+
+async function loadAdminSPPD() {
+       const filter = document.getElementById('admin-sppd-filter')?.value || '';
+       const container = document.getElementById('admin-sppd-container');
+       container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
+       try {
+              const res = await api('/api/sppd');
+              let rows = await res.json();
+              if (filter) rows = rows.filter(r => r.status === filter);
+              container.innerHTML = renderSPPDTable(rows, { showCreator: true });
+       } catch { container.innerHTML = emptyState('Gagal memuat data'); }
+}
+
+// ── Refresh helper ────────────────────────────────────────────────────────────
+function refreshSPPDList() {
+       const activePage = document.querySelector('.content-page:not([style*="display: none"]):not([style*="display:none"])');
+       if (!activePage) return;
+       const id = activePage.id;
+       if (id === 'content-my-sppd') loadMySPPD();
+       else if (id === 'content-sppd-approvals') loadSPPDApprovals();
+       else if (id === 'content-admin-sppd') loadAdminSPPD();
+}
+
+// ── SPPD Form ─────────────────────────────────────────────────────────────────
+function initSPPDForm() {
+       document.getElementById('form-sppd').reset();
+       document.getElementById('sppd-itinerary-tbody').innerHTML = '';
+       sppdItinRowCount = 0;
+       document.getElementById('sppd-form-error').style.display = 'none';
+       // Pre-fill from profile
+       if (currentUser) {
+              document.getElementById('sppd-nama-pegawai').value = currentUser.full_name || '';
+       }
+       addSPPDItineraryRow();
+}
+
+function addSPPDItineraryRow() {
+       sppdItinRowCount++;
+       const n = sppdItinRowCount;
+       const tbody = document.getElementById('sppd-itinerary-tbody');
+       const tr = document.createElement('tr');
+       tr.id = `sppd-itin-row-${n}`;
+       tr.innerHTML = `
+              <td><input type="date" class="sppd-itin-tgl" style="width:100%"></td>
+              <td><input type="text" class="sppd-itin-dari" placeholder="Kota asal" style="width:100%"></td>
+              <td><input type="text" class="sppd-itin-ke" placeholder="Kota tujuan" style="width:100%"></td>
+              <td><input type="text" class="sppd-itin-transport" placeholder="Moda" style="width:100%"></td>
+              <td><input type="text" class="sppd-itin-ket" placeholder="Keterangan" style="width:100%"></td>
+              <td><button type="button" onclick="document.getElementById('sppd-itin-row-${n}').remove()" class="btn btn-sm btn-danger">✕</button></td>`;
+       tbody.appendChild(tr);
+}
+
+async function submitSPPDForm(e) {
+       e.preventDefault();
+       const errEl = document.getElementById('sppd-form-error');
+       errEl.style.display = 'none';
+       const itinerary = [];
+       document.querySelectorAll('#sppd-itinerary-tbody tr').forEach(tr => {
+              itinerary.push({
+                     tanggal: tr.querySelector('.sppd-itin-tgl')?.value || '',
+                     dari: tr.querySelector('.sppd-itin-dari')?.value || '',
+                     ke: tr.querySelector('.sppd-itin-ke')?.value || '',
+                     transport: tr.querySelector('.sppd-itin-transport')?.value || '',
+                     keterangan: tr.querySelector('.sppd-itin-ket')?.value || '',
+              });
+       });
+       const body = {
+              nama_pegawai: document.getElementById('sppd-nama-pegawai').value,
+              jabatan: document.getElementById('sppd-jabatan').value,
+              area_kerja: document.getElementById('sppd-area-kerja').value,
+              tujuan: document.getElementById('sppd-tujuan').value,
+              keperluan: document.getElementById('sppd-keperluan').value,
+              tanggal_berangkat: document.getElementById('sppd-tgl-berangkat').value,
+              tanggal_kembali: document.getElementById('sppd-tgl-kembali').value,
+              transport: document.getElementById('sppd-transport').value,
+              uang_muka: Number(document.getElementById('sppd-uang-muka').value) || 0,
+              itinerary,
+       };
+       try {
+              const res = await api('/api/sppd', 'POST', body);
+              const data = await res.json();
+              if (!res.ok) { errEl.textContent = data.error || 'Gagal kirim SPPD'; errEl.style.display = 'block'; return; }
+              showToast('SPPD berhasil dikirim!', 'success');
+              showPage('my-sppd');
+       } catch { errEl.textContent = 'Koneksi gagal'; errEl.style.display = 'block'; }
+}
+
+// ── View SPPD Detail ──────────────────────────────────────────────────────────
+async function viewSPPDDetail(id) {
+       currentSppdId = id;
+       document.getElementById('sppd-detail-body').innerHTML = '<div class="loading">⏳ Memuat...</div>';
+       document.getElementById('sppd-detail-footer').innerHTML = '';
+       showModal('modal-sppd-detail');
+       try {
+              const [sppdRes, laporanRes, pencairanRes] = await Promise.all([
+                     api(`/api/sppd/${id}`),
+                     api(`/api/sppd/${id}/laporan`),
+                     api(`/api/sppd/${id}/pencairan`),
+              ]);
+              const sppd = await sppdRes.json();
+              const laporan = laporanRes.ok ? await laporanRes.json() : null;
+              const pencairan = pencairanRes.ok ? await pencairanRes.json() : null;
+
+              document.getElementById('sppd-detail-title').textContent = `SPPD: ${sppd.nomor}`;
+              document.getElementById('sppd-detail-body').innerHTML = renderSPPDDetail(sppd, laporan, pencairan);
+
+              const footer = [];
+              const isOwner = currentUser.id === sppd.created_by;
+              const canApprove = (SPPD_APPROVER_ROLES.includes(currentUser.role) || currentUser.role === 'admin') && sppd.status === 'pending';
+              const canSubmitLaporan = isOwner && sppd.status === 'approved' && !laporan;
+              const canSubmitPencairan = isOwner && ['approved', 'completed'].includes(sppd.status) && !pencairan;
+              const canApproveLaporan = laporan && laporan.status === 'pending' &&
+                     ['supervisor', 'area_manager', 'gm', 'gm2', 'admin'].includes(currentUser.role);
+              const canApprovePencairan = pencairan && pencairan.status === 'pending' &&
+                     ['manager_keuangan', 'admin'].includes(currentUser.role);
+
+              if (canApprove) {
+                     footer.push(`<button onclick="openSPPDAction(${id},'approve')" class="btn btn-success">✅ Setujui</button>`);
+                     footer.push(`<button onclick="openSPPDAction(${id},'reject')" class="btn btn-danger">❌ Tolak</button>`);
+              }
+              if (canSubmitLaporan) footer.push(`<button onclick="openLaporanForm(${id})" class="btn btn-primary">📋 Buat Laporan</button>`);
+              if (canSubmitPencairan) footer.push(`<button onclick="openPencairanForm(${id},${sppd.uang_muka})" class="btn btn-primary">💰 Ajukan Pencairan</button>`);
+              if (canApproveLaporan) {
+                     footer.push(`<button onclick="openLaporanAction(${id},laporan,'approve')" class="btn btn-success">✅ Setujui Laporan</button>`);
+                     footer.push(`<button onclick="openLaporanAction(${id},laporan,'reject')" class="btn btn-danger">❌ Tolak Laporan</button>`);
+              }
+              if (canApprovePencairan) {
+                     footer.push(`<button onclick="openLaporanAction(${id},pencairan,'approve-pencairan')" class="btn btn-success">💰 Proses Pencairan</button>`);
+                     footer.push(`<button onclick="openLaporanAction(${id},pencairan,'reject-pencairan')" class="btn btn-danger">❌ Tolak Pencairan</button>`);
+              }
+              footer.push(`<button onclick="closeModal('modal-sppd-detail')" class="btn btn-outline">Tutup</button>`);
+              document.getElementById('sppd-detail-footer').innerHTML = footer.join(' ');
+       } catch (err) {
+              console.error(err);
+              document.getElementById('sppd-detail-body').innerHTML = emptyState('Gagal memuat detail');
+       }
+}
+
+function renderSPPDDetail(sppd, laporan, pencairan) {
+       const fmt = v => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(v || 0);
+       const itinRows = (sppd.itinerary || []).map(r =>
+              `<tr><td>${r.tanggal}</td><td>${escHtml(r.dari)}</td><td>${escHtml(r.ke)}</td><td>${escHtml(r.transport)}</td><td>${escHtml(r.keterangan)}</td></tr>`
+       ).join('') || '<tr><td colspan="5" class="text-center" style="color:var(--text-light)">Tidak ada itinerary</td></tr>';
+
+       const approvalRows = (sppd.approvals || []).map(a =>
+              `<tr><td>${SPPD_LEVEL_LABELS[a.level] || a.level}</td><td>${escHtml(a.approver_name || '-')}</td>
+               <td><span class="badge badge-${a.status === 'approved' ? 'approved' : 'rejected'}">${a.status}</span></td>
+               <td>${escHtml(a.note || '-')}</td><td>${a.acted_at || '-'}</td></tr>`
+       ).join('') || '<tr><td colspan="5" class="text-center" style="color:var(--text-light)">Belum ada approval</td></tr>';
+
+       let laporanHtml = '<p style="color:var(--text-light)">Belum ada laporan.</p>';
+       if (laporan) {
+              const kunjRows = (laporan.kunjungan || []).map(k =>
+                     `<tr><td>${k.tanggal}</td><td>${escHtml(k.nama_instansi)}</td><td>${escHtml(k.nama_kontak)}</td><td>${escHtml(k.hasil)}</td></tr>`
+              ).join('') || '<tr><td colspan="4" class="text-center">-</td></tr>';
+              const biayaRows = (laporan.biaya || []).map(b =>
+                     `<tr><td>${escHtml(b.keterangan)}</td><td>${fmt(b.jumlah)}</td></tr>`
+              ).join('') || '<tr><td colspan="2" class="text-center">-</td></tr>';
+              const laporanApprRows = (laporan.approvals || []).map(a =>
+                     `<tr><td>${LAPORAN_LEVEL_LABELS[a.level] || a.level}</td><td>${escHtml(a.approver_name || '-')}</td>
+                      <td><span class="badge badge-${a.status === 'approved' ? 'approved' : 'rejected'}">${a.status}</span></td>
+                      <td>${escHtml(a.note || '-')}</td><td>${a.acted_at || '-'}</td></tr>`
+              ).join('') || '<tr><td colspan="5" class="text-center">Belum ada</td></tr>';
+              laporanHtml = `
+              <div><strong>Tanggal Laporan:</strong> ${laporan.tanggal_laporan}</div>
+              <div><strong>Status:</strong> <span class="badge badge-${laporan.status === 'approved' ? 'approved' : laporan.status === 'rejected' ? 'rejected' : 'pending'}">${laporan.status}</span></div>
+              <div style="margin-top:8px"><strong>Isi:</strong><br><div style="white-space:pre-wrap;background:var(--bg);padding:8px;border-radius:6px;margin-top:4px">${escHtml(laporan.isi_laporan)}</div></div>
+              <div style="margin-top:12px"><strong>Kunjungan:</strong><div class="table-responsive"><table class="table"><thead><tr><th>Tanggal</th><th>Instansi</th><th>Kontak</th><th>Hasil</th></tr></thead><tbody>${kunjRows}</tbody></table></div></div>
+              <div style="margin-top:12px"><strong>Biaya:</strong><div class="table-responsive"><table class="table"><thead><tr><th>Keterangan</th><th>Jumlah</th></tr></thead><tbody>${biayaRows}</tbody><tfoot><tr><td class="fw-bold">Total</td><td class="fw-bold">${fmt(laporan.total_biaya)}</td></tr></tfoot></table></div></div>
+              <div style="margin-top:12px"><strong>Approval Laporan:</strong><div class="table-responsive"><table class="table"><thead><tr><th>Level</th><th>Approver</th><th>Status</th><th>Catatan</th><th>Waktu</th></tr></thead><tbody>${laporanApprRows}</tbody></table></div></div>`;
+       }
+
+       let pencairanHtml = '<p style="color:var(--text-light)">Belum ada pengajuan pencairan.</p>';
+       if (pencairan) {
+              pencairanHtml = `
+              <div class="form-row" style="gap:16px">
+                <div><strong>Diajukan:</strong> ${fmt(pencairan.jumlah_diajukan)}</div>
+                <div><strong>Disetujui:</strong> ${fmt(pencairan.jumlah_disetujui)}</div>
+                <div><strong>Status:</strong> <span class="badge badge-${pencairan.status === 'approved' ? 'approved' : pencairan.status === 'rejected' ? 'rejected' : 'pending'}">${pencairan.status}</span></div>
+              </div>
+              ${pencairan.catatan ? `<div><strong>Catatan:</strong> ${escHtml(pencairan.catatan)}</div>` : ''}
+              ${pencairan.approver_name ? `<div><strong>Diproses oleh:</strong> ${escHtml(pencairan.approver_name)} pada ${pencairan.approved_at}</div>` : ''}`;
+       }
+
+       return `
+       <div class="form-row" style="gap:24px;margin-bottom:16px">
+         <div><strong>Nomor:</strong> ${escHtml(sppd.nomor)}</div>
+         <div><strong>Status:</strong> ${sppdStatusBadge(sppd)}</div>
+         <div><strong>Progress:</strong> ${renderSPPDProgressBadge(sppd)}</div>
+       </div>
+       <div class="form-row" style="gap:24px;margin-bottom:12px">
+         <div><strong>Nama Pegawai:</strong> ${escHtml(sppd.nama_pegawai)}</div>
+         <div><strong>Jabatan:</strong> ${escHtml(sppd.jabatan || '-')}</div>
+         <div><strong>Area Kerja:</strong> ${escHtml(sppd.area_kerja || '-')}</div>
+       </div>
+       <div style="margin-bottom:12px">
+         <strong>Keperluan:</strong> ${escHtml(sppd.keperluan)}
+       </div>
+       <div class="form-row" style="gap:24px;margin-bottom:12px">
+         <div><strong>Tujuan:</strong> ${escHtml(sppd.tujuan)}</div>
+         <div><strong>Transport:</strong> ${escHtml(sppd.transport || '-')}</div>
+         <div><strong>Berangkat:</strong> ${sppd.tanggal_berangkat}</div>
+         <div><strong>Kembali:</strong> ${sppd.tanggal_kembali}</div>
+       </div>
+       <div style="margin-bottom:16px"><strong>Uang Muka:</strong> ${fmt(sppd.uang_muka)}</div>
+       ${sppd.reject_reason ? `<div class="alert alert-error" style="margin-bottom:12px"><strong>Alasan Penolakan:</strong> ${escHtml(sppd.reject_reason)}</div>` : ''}
+
+       <div class="card" style="margin-bottom:16px">
+         <div class="card-header"><h4>🗺️ Itinerary</h4></div>
+         <div class="card-body no-padding"><div class="table-responsive"><table class="table">
+           <thead><tr><th>Tanggal</th><th>Dari</th><th>Ke</th><th>Transport</th><th>Keterangan</th></tr></thead>
+           <tbody>${itinRows}</tbody>
+         </table></div></div>
+       </div>
+
+       <div class="card" style="margin-bottom:16px">
+         <div class="card-header"><h4>📋 History Approval SPPD</h4></div>
+         <div class="card-body no-padding"><div class="table-responsive"><table class="table">
+           <thead><tr><th>Level</th><th>Approver</th><th>Status</th><th>Catatan</th><th>Waktu</th></tr></thead>
+           <tbody>${approvalRows}</tbody>
+         </table></div></div>
+       </div>
+
+       <div class="card" style="margin-bottom:16px">
+         <div class="card-header"><h4>📝 Laporan Perjalanan Dinas</h4></div>
+         <div class="card-body">${laporanHtml}</div>
+       </div>
+
+       <div class="card">
+         <div class="card-header"><h4>💰 Pencairan Dana</h4></div>
+         <div class="card-body">${pencairanHtml}</div>
+       </div>`;
+}
+
+// ── Approve / Reject SPPD ─────────────────────────────────────────────────────
+let sppdActionId = null;
+let sppdActionType = null;
+
+function openSPPDAction(id, type) {
+       sppdActionId = id;
+       sppdActionType = type;
+       document.getElementById('sppd-action-title').textContent = type === 'approve' ? '✅ Setujui SPPD' : '❌ Tolak SPPD';
+       document.getElementById('sppd-action-note').value = '';
+       document.getElementById('sppd-action-error').style.display = 'none';
+       document.getElementById('sppd-action-footer').innerHTML = `
+              <button onclick="confirmSPPDAction()" class="btn btn-${type === 'approve' ? 'success' : 'danger'}">
+                     ${type === 'approve' ? '✅ Ya, Setujui' : '❌ Ya, Tolak'}
+              </button>
+              <button onclick="closeModal('modal-sppd-action')" class="btn btn-outline">Batal</button>`;
+       showModal('modal-sppd-action');
+}
+
+async function confirmSPPDAction() {
+       const errEl = document.getElementById('sppd-action-error');
+       errEl.style.display = 'none';
+       const note = document.getElementById('sppd-action-note').value;
+       try {
+              const res = await api(`/api/sppd/${sppdActionId}/${sppdActionType}`, 'POST', { note });
+              const data = await res.json();
+              if (!res.ok) { errEl.textContent = data.error || 'Gagal'; errEl.style.display = 'block'; return; }
+              closeModal('modal-sppd-action');
+              closeModal('modal-sppd-detail');
+              showToast(sppdActionType === 'approve' ? 'SPPD disetujui!' : 'SPPD ditolak!', 'success');
+              refreshSPPDList();
+       } catch { errEl.textContent = 'Koneksi gagal'; errEl.style.display = 'block'; }
+}
+
+// ── Laporan Form ──────────────────────────────────────────────────────────────
+let laporanTargetSppdId = null;
+
+function openLaporanForm(sppdId) {
+       laporanTargetSppdId = sppdId;
+       document.getElementById('laporan-tanggal').value = new Date().toISOString().slice(0, 10);
+       document.getElementById('laporan-isi').value = '';
+       document.getElementById('laporan-kunjungan-tbody').innerHTML = '';
+       document.getElementById('laporan-biaya-tbody').innerHTML = '';
+       document.getElementById('laporan-total-biaya').textContent = 'Rp 0';
+       laporanKunjunganRowCount = 0;
+       laporanBiayaRowCount = 0;
+       document.getElementById('laporan-error').style.display = 'none';
+       document.getElementById('laporan-sppd-title').textContent = 'Laporan Perjalanan Dinas';
+       document.getElementById('laporan-sppd-footer').innerHTML = `
+              <button onclick="submitLaporanSPPD()" class="btn btn-primary">📤 Kirim Laporan</button>
+              <button onclick="closeModal('modal-laporan-sppd')" class="btn btn-outline">Batal</button>`;
+       addLaporanKunjunganRow();
+       addLaporanBiayaRow();
+       showModal('modal-laporan-sppd');
+}
+
+function addLaporanKunjunganRow() {
+       laporanKunjunganRowCount++;
+       const n = laporanKunjunganRowCount;
+       const tbody = document.getElementById('laporan-kunjungan-tbody');
+       const tr = document.createElement('tr');
+       tr.id = `lk-row-${n}`;
+       tr.innerHTML = `
+              <td><input type="date" class="lk-tgl" style="width:100%"></td>
+              <td><input type="text" class="lk-instansi" placeholder="Nama instansi" style="width:100%"></td>
+              <td><input type="text" class="lk-kontak" placeholder="Nama kontak" style="width:100%"></td>
+              <td><input type="text" class="lk-hasil" placeholder="Hasil kunjungan" style="width:100%"></td>
+              <td><button type="button" onclick="document.getElementById('lk-row-${n}').remove()" class="btn btn-sm btn-danger">✕</button></td>`;
+       tbody.appendChild(tr);
+}
+
+function addLaporanBiayaRow() {
+       laporanBiayaRowCount++;
+       const n = laporanBiayaRowCount;
+       const tbody = document.getElementById('laporan-biaya-tbody');
+       const tr = document.createElement('tr');
+       tr.id = `lb-row-${n}`;
+       tr.innerHTML = `
+              <td><input type="text" class="lb-ket" placeholder="Keterangan biaya" style="width:100%"></td>
+              <td><input type="number" class="lb-jml" min="0" value="0" style="width:100%" oninput="updateLaporanTotal()"></td>
+              <td><button type="button" onclick="document.getElementById('lb-row-${n}').remove();updateLaporanTotal();" class="btn btn-sm btn-danger">✕</button></td>`;
+       tbody.appendChild(tr);
+}
+
+function updateLaporanTotal() {
+       let total = 0;
+       document.querySelectorAll('#laporan-biaya-tbody .lb-jml').forEach(inp => { total += Number(inp.value) || 0; });
+       const fmt = v => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(v);
+       document.getElementById('laporan-total-biaya').textContent = fmt(total);
+}
+
+async function submitLaporanSPPD() {
+       const errEl = document.getElementById('laporan-error');
+       errEl.style.display = 'none';
+       const kunjungan = [];
+       document.querySelectorAll('#laporan-kunjungan-tbody tr').forEach(tr => {
+              kunjungan.push({
+                     tanggal: tr.querySelector('.lk-tgl')?.value || '',
+                     nama_instansi: tr.querySelector('.lk-instansi')?.value || '',
+                     nama_kontak: tr.querySelector('.lk-kontak')?.value || '',
+                     hasil: tr.querySelector('.lk-hasil')?.value || '',
+              });
+       });
+       const biaya = [];
+       document.querySelectorAll('#laporan-biaya-tbody tr').forEach(tr => {
+              biaya.push({ keterangan: tr.querySelector('.lb-ket')?.value || '', jumlah: Number(tr.querySelector('.lb-jml')?.value) || 0 });
+       });
+       const body = {
+              tanggal_laporan: document.getElementById('laporan-tanggal').value,
+              isi_laporan: document.getElementById('laporan-isi').value,
+              kunjungan, biaya,
+       };
+       try {
+              const res = await api(`/api/sppd/${laporanTargetSppdId}/laporan`, 'POST', body);
+              const data = await res.json();
+              if (!res.ok) { errEl.textContent = data.error || 'Gagal'; errEl.style.display = 'block'; return; }
+              closeModal('modal-laporan-sppd');
+              showToast('Laporan berhasil dikirim!', 'success');
+              viewSPPDDetail(laporanTargetSppdId);
+       } catch { errEl.textContent = 'Koneksi gagal'; errEl.style.display = 'block'; }
+}
+
+// ── Approve/Reject Laporan & Pencairan ────────────────────────────────────────
+let laporanActionSppdId = null;
+let laporanActionType = null;
+
+function openLaporanAction(sppdId, _, type) {
+       laporanActionSppdId = sppdId;
+       laporanActionType = type;
+       const isPencairan = type === 'approve-pencairan' || type === 'reject-pencairan';
+       const isApprove = type === 'approve' || type === 'approve-pencairan';
+       document.getElementById('laporan-action-title').textContent =
+              isPencairan ? (isApprove ? '💰 Setujui Pencairan' : '❌ Tolak Pencairan')
+                          : (isApprove ? '✅ Setujui Laporan' : '❌ Tolak Laporan');
+       document.getElementById('laporan-action-pencairan-fields').style.display = (isPencairan && isApprove) ? '' : 'none';
+       document.getElementById('pencairan-jumlah-disetujui').value = '';
+       document.getElementById('laporan-action-note').value = '';
+       document.getElementById('laporan-action-error').style.display = 'none';
+       document.getElementById('laporan-action-footer').innerHTML = `
+              <button onclick="confirmLaporanAction()" class="btn btn-${isApprove ? 'success' : 'danger'}">
+                     ${isApprove ? '✅ Ya, Setujui' : '❌ Ya, Tolak'}
+              </button>
+              <button onclick="closeModal('modal-laporan-action')" class="btn btn-outline">Batal</button>`;
+       showModal('modal-laporan-action');
+}
+
+async function confirmLaporanAction() {
+       const errEl = document.getElementById('laporan-action-error');
+       errEl.style.display = 'none';
+       const note = document.getElementById('laporan-action-note').value;
+       const isPencairan = laporanActionType === 'approve-pencairan' || laporanActionType === 'reject-pencairan';
+       const isApprove = laporanActionType === 'approve' || laporanActionType === 'approve-pencairan';
+       let url, body;
+       if (isPencairan) {
+              url = `/api/sppd/${laporanActionSppdId}/pencairan/approve`;
+              const jumlah = document.getElementById('pencairan-jumlah-disetujui').value;
+              body = { action: isApprove ? 'approve' : 'reject', catatan: note };
+              if (jumlah) body.jumlah_disetujui = Number(jumlah);
+       } else {
+              url = `/api/sppd/${laporanActionSppdId}/laporan/${isApprove ? 'approve' : 'reject'}`;
+              body = { note };
+       }
+       try {
+              const res = await api(url, 'POST', body);
+              const data = await res.json();
+              if (!res.ok) { errEl.textContent = data.error || 'Gagal'; errEl.style.display = 'block'; return; }
+              closeModal('modal-laporan-action');
+              showToast(isApprove ? 'Disetujui!' : 'Ditolak!', 'success');
+              viewSPPDDetail(laporanActionSppdId);
+       } catch { errEl.textContent = 'Koneksi gagal'; errEl.style.display = 'block'; }
+}
+
+// ── Pencairan Form ────────────────────────────────────────────────────────────
+let pencairanTargetSppdId = null;
+
+function openPencairanForm(sppdId, uangMuka) {
+       pencairanTargetSppdId = sppdId;
+       document.getElementById('pencairan-jumlah').value = uangMuka || 0;
+       document.getElementById('pencairan-catatan').value = '';
+       document.getElementById('pencairan-error').style.display = 'none';
+       document.getElementById('pencairan-sppd-footer').innerHTML = `
+              <button onclick="submitPencairanSPPD()" class="btn btn-primary">📤 Ajukan Pencairan</button>
+              <button onclick="closeModal('modal-pencairan-sppd')" class="btn btn-outline">Batal</button>`;
+       showModal('modal-pencairan-sppd');
+}
+
+async function submitPencairanSPPD() {
+       const errEl = document.getElementById('pencairan-error');
+       errEl.style.display = 'none';
+       const body = {
+              jumlah_diajukan: Number(document.getElementById('pencairan-jumlah').value) || 0,
+              catatan: document.getElementById('pencairan-catatan').value,
+       };
+       try {
+              const res = await api(`/api/sppd/${pencairanTargetSppdId}/pencairan`, 'POST', body);
+              const data = await res.json();
+              if (!res.ok) { errEl.textContent = data.error || 'Gagal'; errEl.style.display = 'block'; return; }
+              closeModal('modal-pencairan-sppd');
+              showToast('Pencairan berhasil diajukan!', 'success');
+              viewSPPDDetail(pencairanTargetSppdId);
+       } catch { errEl.textContent = 'Koneksi gagal'; errEl.style.display = 'block'; }
 }

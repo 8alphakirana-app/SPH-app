@@ -188,4 +188,143 @@ if (!companyExists) {
   }
 });
 
+// ── MIGRATION v4: add SPPD roles + area_kerja / jabatan_detail columns ────────
+const userTableDef3 = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get();
+if (userTableDef3 && !userTableDef3.sql.includes('gm2')) {
+  db.pragma('foreign_keys = OFF');
+  db.exec(`
+    CREATE TABLE users_v4 (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      full_name TEXT NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('admin','staff','gm','manager_keuangan','direktur_ops','direktur_utama','kantor_pusat','marketing','supervisor','area_manager','gm2')),
+      area_kerja TEXT DEFAULT '',
+      jabatan_detail TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now', 'localtime'))
+    );
+    INSERT INTO users_v4 SELECT id, username, password, full_name, role, '' AS area_kerja, '' AS jabatan_detail, created_at FROM users;
+    DROP TABLE users;
+    ALTER TABLE users_v4 RENAME TO users;
+  `);
+  db.pragma('foreign_keys = ON');
+  console.log('✅ Users table upgraded: SPPD roles + area_kerja/jabatan_detail added');
+}
+
+// ── Add sppd_approval_level to submissions ────────────────────────────────────
+try { db.exec("ALTER TABLE submissions ADD COLUMN sppd_approval_level INTEGER DEFAULT 0"); } catch {}
+
+// ── SPPD tables ───────────────────────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sppd (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nomor TEXT DEFAULT '',
+    created_by INTEGER NOT NULL,
+    nama_pegawai TEXT DEFAULT '',
+    jabatan TEXT DEFAULT '',
+    area_kerja TEXT DEFAULT '',
+    tujuan TEXT DEFAULT '',
+    keperluan TEXT DEFAULT '',
+    tanggal_berangkat TEXT DEFAULT '',
+    tanggal_kembali TEXT DEFAULT '',
+    transport TEXT DEFAULT '',
+    uang_muka REAL DEFAULT 0,
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected','completed')),
+    sppd_approval_level INTEGER DEFAULT 0,
+    reject_reason TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (created_by) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS sppd_itinerary (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sppd_id INTEGER NOT NULL,
+    tanggal TEXT DEFAULT '',
+    dari TEXT DEFAULT '',
+    ke TEXT DEFAULT '',
+    transport TEXT DEFAULT '',
+    keterangan TEXT DEFAULT '',
+    FOREIGN KEY (sppd_id) REFERENCES sppd(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS sppd_approvals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sppd_id INTEGER NOT NULL,
+    level INTEGER NOT NULL,
+    approver_user_id INTEGER,
+    status TEXT DEFAULT 'pending',
+    note TEXT DEFAULT '',
+    acted_at TEXT,
+    FOREIGN KEY (sppd_id) REFERENCES sppd(id),
+    FOREIGN KEY (approver_user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS sppd_laporan (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sppd_id INTEGER NOT NULL UNIQUE,
+    tanggal_laporan TEXT DEFAULT '',
+    isi_laporan TEXT DEFAULT '',
+    total_biaya REAL DEFAULT 0,
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')),
+    laporan_approval_level INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (sppd_id) REFERENCES sppd(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS sppd_laporan_kunjungan (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    laporan_id INTEGER NOT NULL,
+    tanggal TEXT DEFAULT '',
+    nama_instansi TEXT DEFAULT '',
+    nama_kontak TEXT DEFAULT '',
+    hasil TEXT DEFAULT '',
+    FOREIGN KEY (laporan_id) REFERENCES sppd_laporan(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS sppd_laporan_biaya (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    laporan_id INTEGER NOT NULL,
+    keterangan TEXT DEFAULT '',
+    jumlah REAL DEFAULT 0,
+    FOREIGN KEY (laporan_id) REFERENCES sppd_laporan(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS sppd_laporan_approvals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    laporan_id INTEGER NOT NULL,
+    level INTEGER NOT NULL,
+    approver_user_id INTEGER,
+    status TEXT DEFAULT 'pending',
+    note TEXT DEFAULT '',
+    acted_at TEXT,
+    FOREIGN KEY (laporan_id) REFERENCES sppd_laporan(id),
+    FOREIGN KEY (approver_user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS sppd_pencairan (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sppd_id INTEGER NOT NULL UNIQUE,
+    jumlah_diajukan REAL DEFAULT 0,
+    jumlah_disetujui REAL DEFAULT 0,
+    catatan TEXT DEFAULT '',
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')),
+    approved_by INTEGER,
+    approved_at TEXT,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (sppd_id) REFERENCES sppd(id),
+    FOREIGN KEY (approved_by) REFERENCES users(id)
+  );
+`);
+
+// ── Default users untuk SPPD ──────────────────────────────────────────────────
+[
+  { username: 'area_manager1', password: 'kirana', full_name: 'Area Manager 1', role: 'area_manager' },
+  { username: 'gm2',           password: 'kirana', full_name: 'GM 2',           role: 'gm2' },
+].forEach(u => {
+  if (!db.prepare('SELECT id FROM users WHERE username = ?').get(u.username)) {
+    db.prepare('INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)').run(u.username, u.password, u.full_name, u.role);
+    console.log(`✅ SPPD user default dibuat: ${u.username} (${u.role})`);
+  }
+});
+
 module.exports = db;
