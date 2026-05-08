@@ -422,7 +422,7 @@ router.delete('/:id', requireLogin, (req, res) => {
 });
 
 // GET /api/submissions/meta/settings
-router.get('/meta/settings', requireAdmin, (req, res) => {
+router.get('/meta/settings', requireAdminOrKP, (req, res) => {
     const rows = db.prepare('SELECT key, value FROM settings').all();
     const settings = {};
     rows.forEach(r => { settings[r.key] = r.value; });
@@ -430,7 +430,7 @@ router.get('/meta/settings', requireAdmin, (req, res) => {
 });
 
 // PUT /api/submissions/meta/settings
-router.put('/meta/settings', requireAdmin, (req, res) => {
+router.put('/meta/settings', requireAdminOrKP, (req, res) => {
     const allowed = ['company_name','company_tagline','company_address','company_phone','company_email','company_headoffice','company_warehouse','signer_name','signer_title','nomor_prefix','kk_kota'];
     const stmt = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
     for (const key of allowed) {
@@ -440,7 +440,7 @@ router.put('/meta/settings', requireAdmin, (req, res) => {
 });
 
 // POST /api/submissions/meta/upload/user-ttd/:userId
-router.post('/meta/upload/user-ttd/:userId', requireAdmin, upload.single('image'), async (req, res) => {
+router.post('/meta/upload/user-ttd/:userId', requireAdminOrKP, upload.single('image'), async (req, res) => {
     const userId = parseInt(req.params.userId);
     if (!userId) return res.status(400).json({ error: 'User ID tidak valid' });
     const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
@@ -458,7 +458,7 @@ router.post('/meta/upload/user-ttd/:userId', requireAdmin, upload.single('image'
 });
 
 // POST /api/submissions/meta/upload/:type
-router.post('/meta/upload/:type', requireAdmin, upload.single('image'), async (req, res) => {
+router.post('/meta/upload/:type', requireAdminOrKP, upload.single('image'), async (req, res) => {
     const type = req.params.type;
     if (!['logo', 'ttd'].includes(type)) {
           return res.status(400).json({ error: 'Tipe tidak valid. Gunakan "logo" atau "ttd"' });
@@ -476,13 +476,13 @@ router.post('/meta/upload/:type', requireAdmin, upload.single('image'), async (r
 });
 
 // GET /api/submissions/meta/users
-router.get('/meta/users', requireAdmin, (req, res) => {
+router.get('/meta/users', requireAdminOrKP, (req, res) => {
     const rows = db.prepare('SELECT id, username, full_name, role, created_at FROM users ORDER BY role, full_name').all();
     res.json(rows);
 });
 
 // POST /api/submissions/meta/users
-router.post('/meta/users', requireAdmin, (req, res) => {
+router.post('/meta/users', requireAdminOrKP, (req, res) => {
     const { username, password, full_name, role } = req.body;
     if (!username || !password || !full_name || !role) {
           return res.status(400).json({ error: 'Semua field wajib diisi' });
@@ -496,7 +496,7 @@ router.post('/meta/users', requireAdmin, (req, res) => {
 });
 
 // PUT /api/submissions/meta/users/:id/password  (admin reset password user)
-router.put('/meta/users/:id/password', requireAdmin, (req, res) => {
+router.put('/meta/users/:id/password', requireAdminOrKP, (req, res) => {
     const { new_password } = req.body;
     if (!new_password || new_password.length < 6) {
         return res.status(400).json({ error: 'Password minimal 6 karakter' });
@@ -508,7 +508,7 @@ router.put('/meta/users/:id/password', requireAdmin, (req, res) => {
 });
 
 // DELETE /api/submissions/meta/users/:id
-router.delete('/meta/users/:id', requireAdmin, (req, res) => {
+router.delete('/meta/users/:id', requireAdminOrKP, (req, res) => {
     if (req.params.id == req.session.user.id) {
           return res.status(400).json({ error: 'Tidak bisa menghapus akun sendiri' });
     }
