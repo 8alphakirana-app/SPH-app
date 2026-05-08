@@ -65,9 +65,10 @@ const ROLE_LABELS = {
 const APPROVER_ROLES = ['gm', 'manager_keuangan', 'direktur_ops', 'direktur_utama'];
 const KK_LEVEL_LABELS = { 1: 'GM', 2: 'Manager Keuangan', 3: 'Direktur Operasional', 4: 'Direktur Utama' };
 const SPPD_LEVEL_LABELS = { 1: 'Area Manager', 2: 'GM', 3: 'GM 2' };
-const LAPORAN_LEVEL_LABELS = { 1: 'Supervisor', 2: 'Area Manager', 3: 'GM', 4: 'GM 2' };
+const LAPORAN_LEVEL_LABELS = { 1: 'GM', 2: 'GM 2', 3: 'Direktur Operasional', 4: 'Direktur Utama' };
 const SPPD_APPROVER_ROLES = ['area_manager', 'gm', 'gm2'];
-const SPPD_ALL_ROLES = ['admin', 'kantor_pusat', 'manager_keuangan', 'area_manager', 'gm', 'gm2'];
+const LAPORAN_APPROVER_ROLES = ['gm', 'gm2', 'direktur_ops', 'direktur_utama'];
+const SPPD_ALL_ROLES = ['admin', 'kantor_pusat', 'manager_keuangan', 'area_manager', 'gm', 'gm2', 'direktur_ops', 'direktur_utama'];
 const SPPD_CREATE_ROLES = ['marketing', 'supervisor', 'staff', 'admin'];
 
 function setUser(user) {
@@ -101,17 +102,28 @@ function setUser(user) {
        }
 
        // SPPD menu visibility
-       if (SPPD_CREATE_ROLES.includes(user.role)) {
+       const isSppdCreator = SPPD_CREATE_ROLES.includes(user.role);
+       const isSppdApprover = SPPD_APPROVER_ROLES.includes(user.role) || user.role === 'admin';
+       const isLaporanApprover = LAPORAN_APPROVER_ROLES.includes(user.role) || user.role === 'admin';
+       const isPencairanMgr = user.role === 'manager_keuangan' || user.role === 'admin';
+       const isSppdAll = SPPD_ALL_ROLES.includes(user.role);
+       if (isSppdCreator || isSppdApprover || isLaporanApprover || isPencairanMgr || isSppdAll) {
               document.querySelectorAll('.sppd-menu').forEach(el => el.style.display = '');
+       }
+       if (isSppdCreator) {
               document.querySelectorAll('.sppd-create').forEach(el => el.style.display = '');
               document.querySelectorAll('.sppd-mine').forEach(el => el.style.display = '');
        }
-       if (SPPD_APPROVER_ROLES.includes(user.role) || user.role === 'admin') {
-              document.querySelectorAll('.sppd-menu').forEach(el => el.style.display = '');
-              document.querySelectorAll('.sppd-approver').forEach(el => el.style.display = '');
+       if (isSppdApprover) {
+              document.querySelectorAll('.sppd-approve').forEach(el => el.style.display = '');
        }
-       if (SPPD_ALL_ROLES.includes(user.role)) {
-              document.querySelectorAll('.sppd-menu').forEach(el => el.style.display = '');
+       if (isLaporanApprover) {
+              document.querySelectorAll('.sppd-laporan-approve').forEach(el => el.style.display = '');
+       }
+       if (isPencairanMgr) {
+              document.querySelectorAll('.sppd-pencairan-menu').forEach(el => el.style.display = '');
+       }
+       if (isSppdAll) {
               document.querySelectorAll('.sppd-all').forEach(el => el.style.display = '');
        }
 }
@@ -148,6 +160,8 @@ function showPage(page) {
               'new-sppd': 'Buat SPPD Baru',
               'my-sppd': 'SPPD Saya',
               'sppd-approvals': 'Persetujuan SPPD',
+              'sppd-laporan-approvals': 'Persetujuan Laporan',
+              'sppd-pencairan': 'Pencairan Dana SPPD',
               'admin-sppd': 'Semua SPPD',
               'profile': 'Profil Saya',
        };
@@ -165,6 +179,8 @@ function showPage(page) {
        else if (page === 'new-sppd') initSPPDForm();
        else if (page === 'my-sppd') loadMySPPD();
        else if (page === 'sppd-approvals') loadSPPDApprovals();
+       else if (page === 'sppd-laporan-approvals') loadLaporanApprovals();
+       else if (page === 'sppd-pencairan') loadPencairan();
        else if (page === 'admin-sppd') loadAdminSPPD();
        else if (page === 'profile') loadProfile();
        if (window.innerWidth <= 768) {
@@ -733,9 +749,10 @@ async function loadUsers() {
                           <td>${escHtml(u.username)}</td>
                           <td>${escHtml(u.full_name)}</td>
                           <td><span class="badge ${u.role === 'admin' ? 'badge-approved' : u.role === 'kantor_pusat' ? 'badge-info' : 'badge-pending'}">${ROLE_LABELS[u.role] || u.role}</span></td>
-                          <td style="font-size:12px;color:var(--text-light)">${formatDate(u.created_at)}</td>
+                          <td style="font-size:12px;color:var(--text-light)">${escHtml(u.area_kerja || '-')}</td>
                           <td>
                                 <div style="display:flex;gap:6px;flex-wrap:wrap">
+                                        <button onclick="openEditUserModal(${u.id},'${escHtml(u.username)}','${escHtml(u.full_name)}','${u.role}','${escHtml(u.area_kerja||'')}','${escHtml(u.jabatan_detail||'')}')" class="btn btn-secondary btn-sm">✏️ Edit</button>
                                         <button onclick="openResetPasswordModal(${u.id}, '${escHtml(u.full_name)}')" class="btn btn-secondary btn-sm">🔑 Reset</button>
                                         ${u.id !== currentUser.id
                             ? `<button onclick="deleteUser(${u.id}, '${escHtml(u.full_name)}')" class="btn btn-danger btn-sm">🗑️ Hapus</button>`
@@ -745,7 +762,7 @@ async function loadUsers() {
                   </tr>`).join('');
               container.innerHTML = `<div class="table-responsive">
                   <table class="table">
-                          <thead><tr><th>Username</th><th>Nama</th><th>Role</th><th>Dibuat</th><th>Aksi</th></tr></thead>
+                          <thead><tr><th>Username</th><th>Nama</th><th>Role</th><th>Area Kerja</th><th>Aksi</th></tr></thead>
                           <tbody>${rows}</tbody>
                   </table></div>`;
        } catch {
@@ -753,27 +770,69 @@ async function loadUsers() {
        }
 }
 
-async function addUser() {
+function openAddUserModal() {
+       document.getElementById('add-user-modal-title').textContent = 'Tambah Pengguna Baru';
+       document.getElementById('new-username').value = '';
+       document.getElementById('new-username').disabled = false;
+       document.getElementById('new-password').value = '';
+       document.getElementById('new-password').placeholder = 'Password';
+       document.getElementById('new-fullname').value = '';
+       document.getElementById('new-role').value = 'staff';
+       document.getElementById('new-area-kerja').value = '';
+       document.getElementById('new-jabatan-detail').value = '';
+       document.getElementById('edit-user-id').value = '';
+       document.getElementById('add-user-error').style.display = 'none';
+       showModal('modal-add-user');
+}
+
+function openEditUserModal(id, username, fullName, role, areaKerja, jabatanDetail) {
+       document.getElementById('add-user-modal-title').textContent = 'Edit Pengguna';
+       document.getElementById('new-username').value = username;
+       document.getElementById('new-username').disabled = true;
+       document.getElementById('new-password').value = '';
+       document.getElementById('new-password').placeholder = 'Kosongkan jika tidak diubah';
+       document.getElementById('new-fullname').value = fullName;
+       document.getElementById('new-role').value = role;
+       document.getElementById('new-area-kerja').value = areaKerja;
+       document.getElementById('new-jabatan-detail').value = jabatanDetail;
+       document.getElementById('edit-user-id').value = id;
+       document.getElementById('add-user-error').style.display = 'none';
+       showModal('modal-add-user');
+}
+
+async function saveUser() {
+       const editId = document.getElementById('edit-user-id').value;
+       const isEdit = !!editId;
        const username = document.getElementById('new-username').value.trim();
        const password = document.getElementById('new-password').value.trim();
        const full_name = document.getElementById('new-fullname').value.trim();
        const role = document.getElementById('new-role').value;
+       const area_kerja = document.getElementById('new-area-kerja').value.trim();
+       const jabatan_detail = document.getElementById('new-jabatan-detail').value.trim();
        const errEl = document.getElementById('add-user-error');
        errEl.style.display = 'none';
-       if (!username || !password || !full_name) {
-              errEl.textContent = 'Semua field wajib diisi';
+       if (!full_name || (!isEdit && (!username || !password))) {
+              errEl.textContent = isEdit ? 'Nama wajib diisi' : 'Username, password, dan nama wajib diisi';
               errEl.style.display = 'block';
               return;
        }
        try {
-              const res = await api('/api/submissions/meta/users', 'POST', { username, password, full_name, role });
+              let res;
+              if (isEdit) {
+                     res = await api(`/api/submissions/meta/users/${editId}`, 'PUT', { full_name, role, area_kerja, jabatan_detail });
+                     if (res.ok && password) {
+                            await api(`/api/submissions/meta/users/${editId}/password`, 'PUT', { new_password: password });
+                     }
+              } else {
+                     res = await api('/api/submissions/meta/users', 'POST', { username, password, full_name, role, area_kerja, jabatan_detail });
+              }
               const data = await res.json();
               if (res.ok) {
-                     showToast('Pengguna berhasil ditambahkan', 'success');
+                     showToast(isEdit ? 'Pengguna berhasil diperbarui' : 'Pengguna berhasil ditambahkan', 'success');
                      closeModal('modal-add-user');
                      loadUsers();
               } else {
-                     errEl.textContent = data.error || 'Gagal menambahkan pengguna';
+                     errEl.textContent = data.error || 'Gagal';
                      errEl.style.display = 'block';
               }
        } catch {
@@ -814,6 +873,8 @@ async function loadSettings() {
               document.getElementById('set-signer-title').value = settings.signer_title || '';
               document.getElementById('set-nomor-prefix').value = settings.nomor_prefix || '';
               document.getElementById('set-kk-kota').value = settings.kk_kota || '';
+              document.getElementById('set-sppd-nomor-prefix').value = settings.sppd_nomor_prefix || '';
+              document.getElementById('set-sppd-kota-asal').value = settings.sppd_kota_asal || '';
               const t = Date.now();
               const logoImg = document.getElementById('logo-preview');
               logoImg.style.display = '';
@@ -843,6 +904,8 @@ document.getElementById('form-settings').addEventListener('submit', async (e) =>
               signer_title: document.getElementById('set-signer-title').value.trim(),
               nomor_prefix: document.getElementById('set-nomor-prefix').value.trim(),
               kk_kota: document.getElementById('set-kk-kota').value.trim(),
+              sppd_nomor_prefix: document.getElementById('set-sppd-nomor-prefix').value.trim(),
+              sppd_kota_asal: document.getElementById('set-sppd-kota-asal').value.trim(),
        };
        try {
               const res = await api('/api/submissions/meta/settings', 'PUT', payload);
@@ -1713,6 +1776,109 @@ async function loadAdminSPPD() {
        } catch { container.innerHTML = emptyState('Gagal memuat data'); }
 }
 
+// ── Laporan Approvals list ────────────────────────────────────────────────────
+async function loadLaporanApprovals() {
+       const filter = document.getElementById('laporan-approvals-filter')?.value || '';
+       const container = document.getElementById('laporan-approvals-container');
+       container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
+       try {
+              const res = await api('/api/sppd/laporan');
+              let rows = await res.json();
+              if (filter) rows = rows.filter(r => r.status === filter);
+              if (!rows.length) { container.innerHTML = emptyState('Tidak ada laporan'); return; }
+              const fmtRp = v => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(v || 0);
+              const trs = rows.map(r => {
+                     const statusBadge = r.status === 'approved' ? '<span class="badge badge-approved">✅ Disetujui</span>'
+                            : r.status === 'rejected' ? '<span class="badge badge-rejected">❌ Ditolak</span>'
+                            : `<span class="badge badge-pending">⏳ Lv ${r.laporan_approval_level + 1}</span>`;
+                     return `<tr>
+                            <td>${escHtml(r.nomor || '-')}</td>
+                            <td>${escHtml(r.nama_pegawai)}</td>
+                            <td>${escHtml(r.tujuan)}</td>
+                            <td>${r.tanggal_laporan || '-'}</td>
+                            <td>${statusBadge}</td>
+                            <td>${fmtRp(r.total_biaya)}</td>
+                            <td><button onclick="viewSPPDDetail(${r.sppd_id})" class="btn btn-sm btn-outline">🔍 Detail</button></td>
+                     </tr>`;
+              }).join('');
+              container.innerHTML = `<div class="table-responsive"><table class="table">
+                     <thead><tr><th>No. SPPD</th><th>Pegawai</th><th>Tujuan</th><th>Tgl Laporan</th><th>Status</th><th>Total Biaya</th><th>Aksi</th></tr></thead>
+                     <tbody>${trs}</tbody></table></div>`;
+       } catch { container.innerHTML = emptyState('Gagal memuat data'); }
+}
+
+// ── Pencairan list (manager_keuangan) ─────────────────────────────────────────
+async function loadPencairan() {
+       const filter = document.getElementById('pencairan-filter')?.value || '';
+       const container = document.getElementById('pencairan-container');
+       container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
+       try {
+              const res = await api('/api/sppd/pencairan');
+              let rows = await res.json();
+              if (filter) rows = rows.filter(r => r.status === filter);
+              if (!rows.length) { container.innerHTML = emptyState('Tidak ada data pencairan'); return; }
+              const fmtRp = v => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(v || 0);
+              const statusBadgeMap = {
+                     belum_cair: '<span class="badge badge-pending">🔴 Belum Cair</span>',
+                     dalam_proses: '<span class="badge badge-info">🟡 Dalam Proses</span>',
+                     sudah_cair: '<span class="badge badge-approved">🟢 Sudah Cair</span>',
+              };
+              const trs = rows.map(r => `<tr>
+                     <td>${escHtml(r.nomor || '-')}</td>
+                     <td>${escHtml(r.nama_pegawai)}</td>
+                     <td>${escHtml(r.tujuan)}</td>
+                     <td>${fmtRp(r.jumlah_usulan)}</td>
+                     <td>${fmtRp(r.jumlah_realisasi)}</td>
+                     <td>${fmtRp(r.jumlah_dicairkan)}</td>
+                     <td>${statusBadgeMap[r.status] || r.status}</td>
+                     <td><button onclick="openUpdatePencairan(${r.sppd_id})" class="btn btn-sm btn-primary">✏️ Update</button></td>
+              </tr>`).join('');
+              container.innerHTML = `<div class="table-responsive"><table class="table">
+                     <thead><tr><th>No. SPPD</th><th>Pegawai</th><th>Tujuan</th><th>Uang Muka</th><th>Realisasi</th><th>Dicairkan</th><th>Status</th><th>Aksi</th></tr></thead>
+                     <tbody>${trs}</tbody></table></div>`;
+       } catch { container.innerHTML = emptyState('Gagal memuat data'); }
+}
+
+// ── Update Pencairan (manager_keuangan) ───────────────────────────────────────
+let updatePencairanSppdId = null;
+
+async function openUpdatePencairan(sppdId) {
+       updatePencairanSppdId = sppdId;
+       try {
+              const [sppdRes, pencRes] = await Promise.all([api(`/api/sppd/${sppdId}`), api(`/api/sppd/${sppdId}/pencairan`)]);
+              const sppd = await sppdRes.json();
+              const pencairan = pencRes.ok ? await pencRes.json() : null;
+              if (!pencairan) { showToast('Data pencairan tidak ditemukan', 'error'); return; }
+              const fmtRp = v => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(v || 0);
+              document.getElementById('pencairan-modal-info').innerHTML = `
+                     <strong>SPPD:</strong> ${escHtml(sppd.nomor)} &nbsp;|&nbsp; <strong>Pegawai:</strong> ${escHtml(sppd.nama_pegawai)}<br>
+                     <strong>Uang Muka:</strong> ${fmtRp(pencairan.jumlah_usulan)} &nbsp;|&nbsp; <strong>Realisasi Biaya:</strong> ${fmtRp(pencairan.jumlah_realisasi)}`;
+              document.getElementById('pencairan-update-status').value = pencairan.status || 'belum_cair';
+              document.getElementById('pencairan-update-jumlah').value = pencairan.jumlah_dicairkan || 0;
+              document.getElementById('pencairan-update-catatan').value = pencairan.catatan || '';
+              document.getElementById('pencairan-update-error').style.display = 'none';
+              showModal('modal-update-pencairan');
+       } catch { showToast('Gagal memuat data', 'error'); }
+}
+
+async function submitUpdatePencairan() {
+       const errEl = document.getElementById('pencairan-update-error');
+       errEl.style.display = 'none';
+       const body = {
+              status: document.getElementById('pencairan-update-status').value,
+              jumlah_dicairkan: Number(document.getElementById('pencairan-update-jumlah').value) || 0,
+              catatan: document.getElementById('pencairan-update-catatan').value,
+       };
+       try {
+              const res = await api(`/api/sppd/${updatePencairanSppdId}/pencairan`, 'PUT', body);
+              const data = await res.json();
+              if (!res.ok) { errEl.textContent = data.error || 'Gagal'; errEl.style.display = 'block'; return; }
+              closeModal('modal-update-pencairan');
+              showToast('Status pencairan diperbarui!', 'success');
+              loadPencairan();
+       } catch { errEl.textContent = 'Koneksi gagal'; errEl.style.display = 'block'; }
+}
+
 // ── Refresh helper ────────────────────────────────────────────────────────────
 function refreshSPPDList() {
        const activePage = document.querySelector('.content-page:not([style*="display: none"]):not([style*="display:none"])');
@@ -1729,14 +1895,17 @@ function initSPPDForm() {
        document.getElementById('sppd-itinerary-tbody').innerHTML = '';
        sppdItinRowCount = 0;
        document.getElementById('sppd-form-error').style.display = 'none';
-       // Pre-fill from profile
+       document.querySelectorAll('.sppd-biaya-field').forEach(el => { el.value = 0; });
+       document.getElementById('sppd-biaya-total').textContent = 'Rp 0';
        if (currentUser) {
               document.getElementById('sppd-nama-pegawai').value = currentUser.full_name || '';
+              if (currentUser.jabatan_detail) document.getElementById('sppd-jabatan').value = currentUser.jabatan_detail;
+              if (currentUser.area_kerja) document.getElementById('sppd-area-kerja').value = currentUser.area_kerja;
        }
-       addSPPDItineraryRow();
+       addSPPDKunjunganRow();
 }
 
-function addSPPDItineraryRow() {
+function addSPPDKunjunganRow() {
        sppdItinRowCount++;
        const n = sppdItinRowCount;
        const tbody = document.getElementById('sppd-itinerary-tbody');
@@ -1744,12 +1913,21 @@ function addSPPDItineraryRow() {
        tr.id = `sppd-itin-row-${n}`;
        tr.innerHTML = `
               <td><input type="date" class="sppd-itin-tgl" style="width:100%"></td>
-              <td><input type="text" class="sppd-itin-dari" placeholder="Kota asal" style="width:100%"></td>
-              <td><input type="text" class="sppd-itin-ke" placeholder="Kota tujuan" style="width:100%"></td>
-              <td><input type="text" class="sppd-itin-transport" placeholder="Moda" style="width:100%"></td>
-              <td><input type="text" class="sppd-itin-ket" placeholder="Keterangan" style="width:100%"></td>
+              <td><input type="text" class="sppd-itin-lokasi" placeholder="Lokasi" style="width:100%"></td>
+              <td><input type="text" class="sppd-itin-pelanggan" placeholder="Nama pelanggan/instansi" style="width:100%"></td>
+              <td><input type="text" class="sppd-itin-aktivitas" placeholder="Rencana aktivitas" style="width:100%"></td>
+              <td><input type="number" class="sppd-itin-nilai" min="0" value="0" style="width:100%"></td>
+              <td><input type="text" class="sppd-itin-produk" placeholder="Produk" style="width:100%"></td>
               <td><button type="button" onclick="document.getElementById('sppd-itin-row-${n}').remove()" class="btn btn-sm btn-danger">✕</button></td>`;
        tbody.appendChild(tr);
+}
+
+function updateSPPDBiayaTotal() {
+       const fields = document.querySelectorAll('.sppd-biaya-field');
+       let total = 0;
+       fields.forEach(f => { total += Number(f.value) || 0; });
+       const fmt = v => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(v);
+       document.getElementById('sppd-biaya-total').textContent = fmt(total);
 }
 
 async function submitSPPDForm(e) {
@@ -1760,12 +1938,22 @@ async function submitSPPDForm(e) {
        document.querySelectorAll('#sppd-itinerary-tbody tr').forEach(tr => {
               itinerary.push({
                      tanggal: tr.querySelector('.sppd-itin-tgl')?.value || '',
-                     dari: tr.querySelector('.sppd-itin-dari')?.value || '',
-                     ke: tr.querySelector('.sppd-itin-ke')?.value || '',
-                     transport: tr.querySelector('.sppd-itin-transport')?.value || '',
-                     keterangan: tr.querySelector('.sppd-itin-ket')?.value || '',
+                     lokasi: tr.querySelector('.sppd-itin-lokasi')?.value || '',
+                     pelanggan: tr.querySelector('.sppd-itin-pelanggan')?.value || '',
+                     aktivitas: tr.querySelector('.sppd-itin-aktivitas')?.value || '',
+                     sasaran_nilai_project: Number(tr.querySelector('.sppd-itin-nilai')?.value) || 0,
+                     produk: tr.querySelector('.sppd-itin-produk')?.value || '',
               });
        });
+       const biaya = {
+              akomodasi: Number(document.getElementById('biaya-akomodasi').value) || 0,
+              konsumsi: Number(document.getElementById('biaya-konsumsi').value) || 0,
+              transportasi: Number(document.getElementById('biaya-transportasi').value) || 0,
+              entertain: Number(document.getElementById('biaya-entertain').value) || 0,
+              uang_saku: Number(document.getElementById('biaya-uang-saku').value) || 0,
+              biaya_lain: Number(document.getElementById('biaya-lain').value) || 0,
+              biaya_lain_ket: document.getElementById('biaya-lain-ket').value,
+       };
        const body = {
               nama_pegawai: document.getElementById('sppd-nama-pegawai').value,
               jabatan: document.getElementById('sppd-jabatan').value,
@@ -1776,7 +1964,7 @@ async function submitSPPDForm(e) {
               tanggal_kembali: document.getElementById('sppd-tgl-kembali').value,
               transport: document.getElementById('sppd-transport').value,
               uang_muka: Number(document.getElementById('sppd-uang-muka').value) || 0,
-              itinerary,
+              itinerary, biaya,
        };
        try {
               const res = await api('/api/sppd', 'POST', body);
@@ -1810,11 +1998,8 @@ async function viewSPPDDetail(id) {
               const isOwner = currentUser.id === sppd.created_by;
               const canApprove = (SPPD_APPROVER_ROLES.includes(currentUser.role) || currentUser.role === 'admin') && sppd.status === 'pending';
               const canSubmitLaporan = isOwner && sppd.status === 'approved' && !laporan;
-              const canSubmitPencairan = isOwner && ['approved', 'completed'].includes(sppd.status) && !pencairan;
               const canApproveLaporan = laporan && laporan.status === 'pending' &&
-                     ['supervisor', 'area_manager', 'gm', 'gm2', 'admin'].includes(currentUser.role);
-              const canApprovePencairan = pencairan && pencairan.status === 'pending' &&
-                     ['manager_keuangan', 'admin'].includes(currentUser.role);
+                     (LAPORAN_APPROVER_ROLES.includes(currentUser.role) || currentUser.role === 'admin');
 
               if (canApprove) {
                      footer.push(`<button onclick="openSPPDAction(${id},'approve')" class="btn btn-success">✅ Setujui</button>`);
@@ -1824,14 +2009,9 @@ async function viewSPPDDetail(id) {
                      footer.push(`<a href="/api/sppd/${id}/download/pdf" target="_blank" class="btn btn-pdf">🖨️ Cetak PDF</a>`);
               }
               if (canSubmitLaporan) footer.push(`<button onclick="openLaporanForm(${id})" class="btn btn-primary">📋 Buat Laporan</button>`);
-              if (canSubmitPencairan) footer.push(`<button onclick="openPencairanForm(${id},${sppd.uang_muka})" class="btn btn-primary">💰 Ajukan Pencairan</button>`);
               if (canApproveLaporan) {
                      footer.push(`<button onclick="openLaporanAction(${id},laporan,'approve')" class="btn btn-success">✅ Setujui Laporan</button>`);
                      footer.push(`<button onclick="openLaporanAction(${id},laporan,'reject')" class="btn btn-danger">❌ Tolak Laporan</button>`);
-              }
-              if (canApprovePencairan) {
-                     footer.push(`<button onclick="openLaporanAction(${id},pencairan,'approve-pencairan')" class="btn btn-success">💰 Proses Pencairan</button>`);
-                     footer.push(`<button onclick="openLaporanAction(${id},pencairan,'reject-pencairan')" class="btn btn-danger">❌ Tolak Pencairan</button>`);
               }
               footer.push(`<button onclick="closeModal('modal-sppd-detail')" class="btn btn-outline">Tutup</button>`);
               document.getElementById('sppd-detail-footer').innerHTML = footer.join(' ');
@@ -1844,8 +2024,8 @@ async function viewSPPDDetail(id) {
 function renderSPPDDetail(sppd, laporan, pencairan) {
        const fmt = v => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(v || 0);
        const itinRows = (sppd.itinerary || []).map(r =>
-              `<tr><td>${r.tanggal}</td><td>${escHtml(r.dari)}</td><td>${escHtml(r.ke)}</td><td>${escHtml(r.transport)}</td><td>${escHtml(r.keterangan)}</td></tr>`
-       ).join('') || '<tr><td colspan="5" class="text-center" style="color:var(--text-light)">Tidak ada itinerary</td></tr>';
+              `<tr><td>${r.tanggal}</td><td>${escHtml(r.lokasi||r.dari||'')}</td><td>${escHtml(r.pelanggan||r.ke||'')}</td><td>${escHtml(r.aktivitas||r.transport||'')}</td><td>${r.sasaran_nilai_project ? fmt(r.sasaran_nilai_project) : '-'}</td><td>${escHtml(r.produk||'')}</td></tr>`
+       ).join('') || '<tr><td colspan="6" class="text-center" style="color:var(--text-light)">Tidak ada rencana kunjungan</td></tr>';
 
        const approvalRows = (sppd.approvals || []).map(a =>
               `<tr><td>${SPPD_LEVEL_LABELS[a.level] || a.level}</td><td>${escHtml(a.approver_name || '-')}</td>
@@ -1856,8 +2036,8 @@ function renderSPPDDetail(sppd, laporan, pencairan) {
        let laporanHtml = '<p style="color:var(--text-light)">Belum ada laporan.</p>';
        if (laporan) {
               const kunjRows = (laporan.kunjungan || []).map(k =>
-                     `<tr><td>${k.tanggal}</td><td>${escHtml(k.nama_instansi)}</td><td>${escHtml(k.nama_kontak)}</td><td>${escHtml(k.hasil)}</td></tr>`
-              ).join('') || '<tr><td colspan="4" class="text-center">-</td></tr>';
+                     `<tr><td>${k.tanggal}</td><td>${escHtml(k.nama_instansi)}</td><td>${escHtml(k.nama_kontak)}</td><td>${escHtml(k.nama_pelanggan||'')}</td><td style="white-space:pre-wrap">${escHtml(k.laporan_kunjungan||k.hasil||'')}</td></tr>`
+              ).join('') || '<tr><td colspan="5" class="text-center">-</td></tr>';
               const biayaRows = (laporan.biaya || []).map(b =>
                      `<tr><td>${escHtml(b.keterangan)}</td><td>${fmt(b.jumlah)}</td></tr>`
               ).join('') || '<tr><td colspan="2" class="text-center">-</td></tr>';
@@ -1873,21 +2053,23 @@ function renderSPPDDetail(sppd, laporan, pencairan) {
                 ${laporan.status === 'approved' ? `<a href="/api/sppd/${sppd.id}/laporan/download/pdf" target="_blank" class="btn btn-sm btn-pdf">🖨️ Cetak PDF Laporan</a>` : ''}
               </div>
               <div style="margin-top:8px"><strong>Isi:</strong><br><div style="white-space:pre-wrap;background:var(--bg);padding:8px;border-radius:6px;margin-top:4px">${escHtml(laporan.isi_laporan)}</div></div>
-              <div style="margin-top:12px"><strong>Kunjungan:</strong><div class="table-responsive"><table class="table"><thead><tr><th>Tanggal</th><th>Instansi</th><th>Kontak</th><th>Hasil</th></tr></thead><tbody>${kunjRows}</tbody></table></div></div>
+              <div style="margin-top:12px"><strong>Kunjungan:</strong><div class="table-responsive"><table class="table"><thead><tr><th>Tanggal</th><th>Instansi</th><th>Kontak</th><th>Nama Pelanggan</th><th>Laporan Kunjungan</th></tr></thead><tbody>${kunjRows}</tbody></table></div></div>
               <div style="margin-top:12px"><strong>Biaya:</strong><div class="table-responsive"><table class="table"><thead><tr><th>Keterangan</th><th>Jumlah</th></tr></thead><tbody>${biayaRows}</tbody><tfoot><tr><td class="fw-bold">Total</td><td class="fw-bold">${fmt(laporan.total_biaya)}</td></tr></tfoot></table></div></div>
               <div style="margin-top:12px"><strong>Approval Laporan:</strong><div class="table-responsive"><table class="table"><thead><tr><th>Level</th><th>Approver</th><th>Status</th><th>Catatan</th><th>Waktu</th></tr></thead><tbody>${laporanApprRows}</tbody></table></div></div>`;
        }
 
-       let pencairanHtml = '<p style="color:var(--text-light)">Belum ada pengajuan pencairan.</p>';
+       const pencStatusBadge = s => ({ belum_cair: '<span class="badge badge-pending">🔴 Belum Cair</span>', dalam_proses: '<span class="badge badge-info">🟡 Dalam Proses</span>', sudah_cair: '<span class="badge badge-approved">🟢 Sudah Cair</span>' }[s] || s);
+       let pencairanHtml = '<p style="color:var(--text-light)">Belum ada data pencairan. Akan dibuat otomatis setelah laporan disetujui penuh.</p>';
        if (pencairan) {
               pencairanHtml = `
-              <div class="form-row" style="gap:16px">
-                <div><strong>Diajukan:</strong> ${fmt(pencairan.jumlah_diajukan)}</div>
-                <div><strong>Disetujui:</strong> ${fmt(pencairan.jumlah_disetujui)}</div>
-                <div><strong>Status:</strong> <span class="badge badge-${pencairan.status === 'approved' ? 'approved' : pencairan.status === 'rejected' ? 'rejected' : 'pending'}">${pencairan.status}</span></div>
+              <div class="form-row" style="gap:16px;flex-wrap:wrap">
+                <div><strong>Uang Muka:</strong> ${fmt(pencairan.jumlah_usulan)}</div>
+                <div><strong>Realisasi Biaya:</strong> ${fmt(pencairan.jumlah_realisasi)}</div>
+                <div><strong>Dicairkan:</strong> ${fmt(pencairan.jumlah_dicairkan)}</div>
+                <div><strong>Status:</strong> ${pencStatusBadge(pencairan.status)}</div>
               </div>
-              ${pencairan.catatan ? `<div><strong>Catatan:</strong> ${escHtml(pencairan.catatan)}</div>` : ''}
-              ${pencairan.approver_name ? `<div><strong>Diproses oleh:</strong> ${escHtml(pencairan.approver_name)} pada ${pencairan.approved_at}</div>` : ''}`;
+              ${pencairan.catatan ? `<div style="margin-top:6px"><strong>Catatan:</strong> ${escHtml(pencairan.catatan)}</div>` : ''}
+              ${pencairan.updated_by_name ? `<div style="margin-top:4px;font-size:12px;color:var(--text-light)">Diperbarui oleh: ${escHtml(pencairan.updated_by_name)} pada ${pencairan.updated_at}</div>` : ''}`;
        }
 
        return `
@@ -1914,12 +2096,28 @@ function renderSPPDDetail(sppd, laporan, pencairan) {
        ${sppd.reject_reason ? `<div class="alert alert-error" style="margin-bottom:12px"><strong>Alasan Penolakan:</strong> ${escHtml(sppd.reject_reason)}</div>` : ''}
 
        <div class="card" style="margin-bottom:16px">
-         <div class="card-header"><h4>🗺️ Itinerary</h4></div>
+         <div class="card-header"><h4>📍 Rencana Kunjungan</h4></div>
          <div class="card-body no-padding"><div class="table-responsive"><table class="table">
-           <thead><tr><th>Tanggal</th><th>Dari</th><th>Ke</th><th>Transport</th><th>Keterangan</th></tr></thead>
+           <thead><tr><th>Tanggal</th><th>Lokasi</th><th>Pelanggan/Instansi</th><th>Aktivitas</th><th>Target Nilai</th><th>Produk</th></tr></thead>
            <tbody>${itinRows}</tbody>
          </table></div></div>
        </div>
+
+       ${sppd.biaya ? `
+       <div class="card" style="margin-bottom:16px">
+         <div class="card-header"><h4>💰 Usulan Biaya</h4></div>
+         <div class="card-body">
+           <div class="form-row" style="gap:24px;flex-wrap:wrap">
+             ${sppd.biaya.akomodasi ? `<div><strong>Akomodasi:</strong> ${fmt(sppd.biaya.akomodasi)}</div>` : ''}
+             ${sppd.biaya.konsumsi ? `<div><strong>Konsumsi:</strong> ${fmt(sppd.biaya.konsumsi)}</div>` : ''}
+             ${sppd.biaya.transportasi ? `<div><strong>Transportasi:</strong> ${fmt(sppd.biaya.transportasi)}</div>` : ''}
+             ${sppd.biaya.entertain ? `<div><strong>Entertain:</strong> ${fmt(sppd.biaya.entertain)}</div>` : ''}
+             ${sppd.biaya.uang_saku ? `<div><strong>Uang Saku:</strong> ${fmt(sppd.biaya.uang_saku)}</div>` : ''}
+             ${sppd.biaya.biaya_lain ? `<div><strong>Lain-lain:</strong> ${fmt(sppd.biaya.biaya_lain)}${sppd.biaya.biaya_lain_ket ? ` (${escHtml(sppd.biaya.biaya_lain_ket)})` : ''}</div>` : ''}
+           </div>
+           <div style="margin-top:10px;font-weight:bold">Total Usulan: ${fmt(sppd.biaya.total)}</div>
+         </div>
+       </div>` : ''}
 
        <div class="card" style="margin-bottom:16px">
          <div class="card-header"><h4>📋 History Approval SPPD</h4></div>
@@ -2005,7 +2203,8 @@ function addLaporanKunjunganRow() {
               <td><input type="date" class="lk-tgl" style="width:100%"></td>
               <td><input type="text" class="lk-instansi" placeholder="Nama instansi" style="width:100%"></td>
               <td><input type="text" class="lk-kontak" placeholder="Nama kontak" style="width:100%"></td>
-              <td><input type="text" class="lk-hasil" placeholder="Hasil kunjungan" style="width:100%"></td>
+              <td><input type="text" class="lk-pelanggan" placeholder="Nama pelanggan" style="width:100%"></td>
+              <td><textarea class="lk-laporan" rows="2" placeholder="Laporan kunjungan..." style="width:100%"></textarea></td>
               <td><button type="button" onclick="document.getElementById('lk-row-${n}').remove()" class="btn btn-sm btn-danger">✕</button></td>`;
        tbody.appendChild(tr);
 }
@@ -2039,7 +2238,8 @@ async function submitLaporanSPPD() {
                      tanggal: tr.querySelector('.lk-tgl')?.value || '',
                      nama_instansi: tr.querySelector('.lk-instansi')?.value || '',
                      nama_kontak: tr.querySelector('.lk-kontak')?.value || '',
-                     hasil: tr.querySelector('.lk-hasil')?.value || '',
+                     nama_pelanggan: tr.querySelector('.lk-pelanggan')?.value || '',
+                     laporan_kunjungan: tr.querySelector('.lk-laporan')?.value || '',
               });
        });
        const biaya = [];
@@ -2068,13 +2268,9 @@ let laporanActionType = null;
 function openLaporanAction(sppdId, _, type) {
        laporanActionSppdId = sppdId;
        laporanActionType = type;
-       const isPencairan = type === 'approve-pencairan' || type === 'reject-pencairan';
-       const isApprove = type === 'approve' || type === 'approve-pencairan';
-       document.getElementById('laporan-action-title').textContent =
-              isPencairan ? (isApprove ? '💰 Setujui Pencairan' : '❌ Tolak Pencairan')
-                          : (isApprove ? '✅ Setujui Laporan' : '❌ Tolak Laporan');
-       document.getElementById('laporan-action-pencairan-fields').style.display = (isPencairan && isApprove) ? '' : 'none';
-       document.getElementById('pencairan-jumlah-disetujui').value = '';
+       const isApprove = type === 'approve';
+       document.getElementById('laporan-action-title').textContent = isApprove ? '✅ Setujui Laporan' : '❌ Tolak Laporan';
+       document.getElementById('laporan-action-pencairan-fields').style.display = 'none';
        document.getElementById('laporan-action-note').value = '';
        document.getElementById('laporan-action-error').style.display = 'none';
        document.getElementById('laporan-action-footer').innerHTML = `
@@ -2089,56 +2285,16 @@ async function confirmLaporanAction() {
        const errEl = document.getElementById('laporan-action-error');
        errEl.style.display = 'none';
        const note = document.getElementById('laporan-action-note').value;
-       const isPencairan = laporanActionType === 'approve-pencairan' || laporanActionType === 'reject-pencairan';
-       const isApprove = laporanActionType === 'approve' || laporanActionType === 'approve-pencairan';
-       let url, body;
-       if (isPencairan) {
-              url = `/api/sppd/${laporanActionSppdId}/pencairan/approve`;
-              const jumlah = document.getElementById('pencairan-jumlah-disetujui').value;
-              body = { action: isApprove ? 'approve' : 'reject', catatan: note };
-              if (jumlah) body.jumlah_disetujui = Number(jumlah);
-       } else {
-              url = `/api/sppd/${laporanActionSppdId}/laporan/${isApprove ? 'approve' : 'reject'}`;
-              body = { note };
-       }
+       const isApprove = laporanActionType === 'approve';
+       const url = `/api/sppd/${laporanActionSppdId}/laporan/${isApprove ? 'approve' : 'reject'}`;
+       const body = { note };
        try {
               const res = await api(url, 'POST', body);
               const data = await res.json();
               if (!res.ok) { errEl.textContent = data.error || 'Gagal'; errEl.style.display = 'block'; return; }
               closeModal('modal-laporan-action');
-              showToast(isApprove ? 'Disetujui!' : 'Ditolak!', 'success');
+              showToast(isApprove ? 'Laporan disetujui!' : 'Laporan ditolak!', 'success');
               viewSPPDDetail(laporanActionSppdId);
-       } catch { errEl.textContent = 'Koneksi gagal'; errEl.style.display = 'block'; }
-}
-
-// ── Pencairan Form ────────────────────────────────────────────────────────────
-let pencairanTargetSppdId = null;
-
-function openPencairanForm(sppdId, uangMuka) {
-       pencairanTargetSppdId = sppdId;
-       document.getElementById('pencairan-jumlah').value = uangMuka || 0;
-       document.getElementById('pencairan-catatan').value = '';
-       document.getElementById('pencairan-error').style.display = 'none';
-       document.getElementById('pencairan-sppd-footer').innerHTML = `
-              <button onclick="submitPencairanSPPD()" class="btn btn-primary">📤 Ajukan Pencairan</button>
-              <button onclick="closeModal('modal-pencairan-sppd')" class="btn btn-outline">Batal</button>`;
-       showModal('modal-pencairan-sppd');
-}
-
-async function submitPencairanSPPD() {
-       const errEl = document.getElementById('pencairan-error');
-       errEl.style.display = 'none';
-       const body = {
-              jumlah_diajukan: Number(document.getElementById('pencairan-jumlah').value) || 0,
-              catatan: document.getElementById('pencairan-catatan').value,
-       };
-       try {
-              const res = await api(`/api/sppd/${pencairanTargetSppdId}/pencairan`, 'POST', body);
-              const data = await res.json();
-              if (!res.ok) { errEl.textContent = data.error || 'Gagal'; errEl.style.display = 'block'; return; }
-              closeModal('modal-pencairan-sppd');
-              showToast('Pencairan berhasil diajukan!', 'success');
-              viewSPPDDetail(pencairanTargetSppdId);
        } catch { errEl.textContent = 'Koneksi gagal'; errEl.style.display = 'block'; }
 }
 
@@ -2167,10 +2323,17 @@ function loadMyTTDPreview(userId) {
        const placeholder = document.getElementById('my-ttd-placeholder');
        const uid = userId || (currentUser && currentUser.id);
        if (!uid) return;
-       const url = `/uploads/ttd_u${uid}.png?t=${Date.now()}`;
+       const t = Date.now();
        img.onload = () => { img.style.display = ''; placeholder.style.display = 'none'; };
-       img.onerror = () => { img.style.display = 'none'; placeholder.style.display = 'flex'; };
-       img.src = url;
+       img.onerror = () => {
+              const fallback = `/uploads/ttd_u${uid}.png?t=${t}`;
+              if (!img.src.includes('/uploads/')) {
+                     img.src = fallback;
+              } else {
+                     img.style.display = 'none'; placeholder.style.display = 'flex';
+              }
+       };
+       img.src = `/img/ttd_u${uid}.png?t=${t}`;
 }
 
 async function saveProfile() {
@@ -2218,7 +2381,7 @@ async function uploadMyTTD(input) {
        const formData = new FormData();
        formData.append('ttd', input.files[0]);
        try {
-              const res = await fetch('/api/sppd/upload/my-ttd', {
+              const res = await fetch('/api/submissions/meta/upload/my-ttd', {
                      method: 'POST',
                      body: formData,
                      credentials: 'same-origin',

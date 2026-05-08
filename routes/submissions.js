@@ -477,21 +477,53 @@ router.post('/meta/upload/:type', requireAdminOrKP, upload.single('image'), asyn
 
 // GET /api/submissions/meta/users
 router.get('/meta/users', requireAdminOrKP, (req, res) => {
-    const rows = db.prepare('SELECT id, username, full_name, role, created_at FROM users ORDER BY role, full_name').all();
+    const rows = db.prepare('SELECT id, username, full_name, role, area_kerja, jabatan_detail, created_at FROM users ORDER BY role, full_name').all();
     res.json(rows);
 });
 
 // POST /api/submissions/meta/users
 router.post('/meta/users', requireAdminOrKP, (req, res) => {
-    const { username, password, full_name, role } = req.body;
+    const { username, password, full_name, role, area_kerja, jabatan_detail } = req.body;
     if (!username || !password || !full_name || !role) {
           return res.status(400).json({ error: 'Semua field wajib diisi' });
     }
     try {
-          const result = db.prepare('INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)').run(username, password, full_name, role);
-          res.json({ success: true, id: result.lastInsertRowid })
+          const result = db.prepare('INSERT INTO users (username, password, full_name, role, area_kerja, jabatan_detail) VALUES (?, ?, ?, ?, ?, ?)')
+            .run(username, password, full_name, role, area_kerja || '', jabatan_detail || '');
+          res.json({ success: true, id: result.lastInsertRowid });
     } catch (e) {
           res.status(400).json({ error: 'Username sudah digunakan' });
+    }
+});
+
+// PUT /api/submissions/meta/users/:id (edit user data)
+router.put('/meta/users/:id', requireAdminOrKP, (req, res) => {
+    const { full_name, role, area_kerja, jabatan_detail } = req.body;
+    if (!full_name || !role) {
+        return res.status(400).json({ error: 'Nama dan role wajib diisi' });
+    }
+    const user = db.prepare('SELECT id FROM users WHERE id = ?').get(req.params.id);
+    if (!user) return res.status(404).json({ error: 'Pengguna tidak ditemukan' });
+    db.prepare('UPDATE users SET full_name=?, role=?, area_kerja=?, jabatan_detail=? WHERE id=?')
+      .run(full_name, role, area_kerja || '', jabatan_detail || '', req.params.id);
+    res.json({ success: true });
+});
+
+// POST /api/submissions/meta/upload/my-ttd (any logged-in user uploads own TTD)
+const ttdUploadSelf = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+router.post('/meta/upload/my-ttd', requireLogin, ttdUploadSelf.single('ttd'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+        const filename = `ttd_u${req.session.user.id}.png`;
+        const outputPath = path.join(__dirname, '..', 'public', 'img', filename);
+        await sharp(req.file.buffer)
+          .resize(300, 150, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 0 } })
+          .png()
+          .toFile(outputPath);
+        res.json({ success: true, filename, url: `/img/${filename}?t=${Date.now()}` });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Upload gagal' });
     }
 });
 

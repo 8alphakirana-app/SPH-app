@@ -16,10 +16,21 @@ router.use(requireLogin);
 
 // ── Approval level definitions ────────────────────────────────────────────────
 const SPPD_LEVEL_ROLES  = { 1: 'area_manager', 2: 'gm', 3: 'gm2' };
-const LAPORAN_LEVEL_ROLES = { 1: 'supervisor', 2: 'area_manager', 3: 'gm', 4: 'gm2' };
+const LAPORAN_LEVEL_ROLES = { 1: 'gm', 2: 'gm2', 3: 'direktur_ops', 4: 'direktur_utama' };
 
 function canSeeAll(role) {
-  return ['admin', 'kantor_pusat', 'area_manager', 'gm', 'gm2', 'manager_keuangan'].includes(role);
+  return ['admin', 'kantor_pusat', 'area_manager', 'gm', 'gm2', 'manager_keuangan', 'direktur_ops', 'direktur_utama'].includes(role);
+}
+
+function generateNomorSppd() {
+  const settings = {};
+  db.prepare('SELECT key, value FROM settings').all().forEach(s => { settings[s.key] = s.value; });
+  const prefix = settings.sppd_nomor_prefix || 'SPPD-LAK';
+  const now = new Date();
+  const year = now.getFullYear();
+  const romanMonth = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'][now.getMonth()];
+  const count = db.prepare(`SELECT COUNT(*) as cnt FROM sppd WHERE nomor LIKE ?`).get(`%/${prefix}/%/${year}`).cnt;
+  return `${String(count + 1).padStart(3, '0')}/${prefix}/${romanMonth}/${year}`;
 }
 
 // ── TTD upload setup ──────────────────────────────────────────────────────────
@@ -64,6 +75,40 @@ router.post('/upload/my-ttd', ttdUpload.single('ttd'), async (req, res) => {
   }
 });
 
+// ── List all laporan (for laporan approvers) ──────────────────────────────────
+router.get('/laporan', (req, res) => {
+  const { role } = req.session.user;
+  const laporanApproverRoles = Object.values(LAPORAN_LEVEL_ROLES);
+  if (!laporanApproverRoles.includes(role) && role !== 'admin' && !canSeeAll(role))
+    return res.status(403).json({ error: 'Forbidden' });
+  const rows = db.prepare(`
+    SELECT l.*, s.nomor, s.nama_pegawai, s.tujuan, s.tanggal_berangkat, s.tanggal_kembali,
+           u.full_name AS creator_name
+    FROM sppd_laporan l
+    JOIN sppd s ON l.sppd_id = s.id
+    JOIN users u ON s.created_by = u.id
+    ORDER BY l.created_at DESC
+  `).all();
+  res.json(rows);
+});
+
+// ── List all pencairan (for manager_keuangan) ─────────────────────────────────
+router.get('/pencairan', (req, res) => {
+  const { role } = req.session.user;
+  if (role !== 'manager_keuangan' && role !== 'admin')
+    return res.status(403).json({ error: 'Forbidden' });
+  const rows = db.prepare(`
+    SELECT p.*, s.nomor, s.nama_pegawai, s.tujuan, s.uang_muka,
+           u.full_name AS creator_name, uu.full_name AS updated_by_name
+    FROM sppd_pencairan p
+    JOIN sppd s ON p.sppd_id = s.id
+    JOIN users u ON s.created_by = u.id
+    LEFT JOIN users uu ON p.updated_by = uu.id
+    ORDER BY p.created_at DESC
+  `).all();
+  res.json(rows);
+});
+
 // ── List SPPD ─────────────────────────────────────────────────────────────────
 router.get('/', (req, res) => {
   const { role, id } = req.session.user;
@@ -90,10 +135,11 @@ router.post('/', (req, res) => {
   const { id: userId } = req.session.user;
   const {
     nama_pegawai, jabatan, area_kerja, tujuan, keperluan,
-    tanggal_berangkat, tanggal_kembali, transport, uang_muka, itinerary
+    tanggal_berangkat, tanggal_kembali, transport, uang_muka,
+    itinerary, biaya
   } = req.body;
 
-  const nomor = `SPPD-${Date.now()}`;
+  const nomor = `DRAFT-${Date.now()}`;
   const result = db.prepare(`
     INSERT INTO sppd (nomor, created_by, nama_pegawai, jabatan, area_kerja, tujuan, keperluan,
       tanggal_berangkat, tanggal_kembali, transport, uang_muka)
@@ -106,10 +152,23 @@ router.post('/', (req, res) => {
 
   if (Array.isArray(itinerary) && itinerary.length) {
     const ins = db.prepare(`
-      INSERT INTO sppd_itinerary (sppd_id, tanggal, dari, ke, transport, keterangan)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO sppd_itinerary (sppd_id, tanggal, lokasi, pelanggan, aktivitas, sasaran_nilai_project, produk, keterangan)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    itinerary.forEach(r => ins.run(sppdId, r.tanggal || '', r.dari || '', r.ke || '', r.transport || '', r.keterangan || ''));
+    itinerary.forEach(r => ins.run(sppdId, r.tanggal || '', r.lokasi || '', r.pelanggan || '',
+      r.aktivitas || '', Number(r.sasaran_nilai_project) || 0, r.produk || '', r.keterangan || ''));
+  }
+
+  if (biaya && typeof biaya === 'object') {
+    const total = (Number(biaya.akomodasi) || 0) + (Number(biaya.konsumsi) || 0) +
+      (Number(biaya.transportasi) || 0) + (Number(biaya.entertain) || 0) +
+      (Number(biaya.uang_saku) || 0) + (Number(biaya.biaya_lain) || 0);
+    db.prepare(`INSERT INTO sppd_biaya (sppd_id, akomodasi, konsumsi, transportasi, entertain, uang_saku, biaya_lain, biaya_lain_ket, total)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(sppdId, Number(biaya.akomodasi) || 0, Number(biaya.konsumsi) || 0,
+        Number(biaya.transportasi) || 0, Number(biaya.entertain) || 0,
+        Number(biaya.uang_saku) || 0, Number(biaya.biaya_lain) || 0,
+        biaya.biaya_lain_ket || '', total);
   }
 
   res.json({ success: true, id: sppdId, nomor });
@@ -168,10 +227,12 @@ function generateSPPDHtml(sppd, itinerary, approvals, settings) {
   const itinRows = itinerary.map((r, i) => `
     <tr style="background:${i%2===0?'#fff':'#f5f8fc'}">
       <td style="text-align:center">${esc(r.tanggal)}</td>
-      <td>${esc(r.dari)}</td>
-      <td>${esc(r.ke)}</td>
-      <td>${esc(r.transport)}</td>
-      <td>${esc(r.keterangan)}</td>
+      <td>${esc(r.lokasi||r.dari||'')}</td>
+      <td>${esc(r.pelanggan||r.ke||'')}</td>
+      <td>${esc(r.aktivitas||r.transport||'')}</td>
+      <td style="text-align:right">${r.sasaran_nilai_project ? `Rp ${fmtRp(r.sasaran_nilai_project)}` : ''}</td>
+      <td>${esc(r.produk||'')}</td>
+      <td>${esc(r.keterangan||'')}</td>
     </tr>`).join('');
 
   const approvalRows = approvals.map(a => {
@@ -245,7 +306,7 @@ function generateSPPDHtml(sppd, itinerary, approvals, settings) {
 ${itinerary.length ? `
 <p class="section-title">Rencana Itinerary</p>
 <table class="itin-table">
-  <thead><tr><th>Tanggal</th><th>Dari</th><th>Ke</th><th>Transportasi</th><th>Keterangan</th></tr></thead>
+  <thead><tr><th>Tanggal</th><th>Lokasi</th><th>Pelanggan/Instansi</th><th>Aktivitas</th><th>Sasaran Nilai</th><th>Produk</th><th>Keterangan</th></tr></thead>
   <tbody>${itinRows}</tbody>
 </table>` : ''}
 
@@ -348,7 +409,7 @@ function generateLaporanHtml(sppd, laporan, kunjungan, biaya, approvals, setting
   const topTTD      = topAppr ? getTTDBase64(topAppr.approver_user_id) : null;
   const creatorTTD  = getTTDBase64(sppd.created_by);
 
-  const LAPORAN_LABEL = { 1:'Supervisor', 2:'Area Manager', 3:'GM', 4:'GM 2' };
+  const LAPORAN_LABEL = { 1:'GM', 2:'GM 2', 3:'Direktur Operasional', 4:'Direktur Utama' };
 
   const kunjRows = kunjungan.map((k, i) => `
     <tr style="background:${i%2===0?'#fff':'#f5f8fc'}">
@@ -560,8 +621,9 @@ router.get('/:id', (req, res) => {
     FROM sppd_approvals sa LEFT JOIN users u ON sa.approver_user_id = u.id
     WHERE sa.sppd_id = ? ORDER BY sa.level
   `).all(req.params.id);
+  const biaya = db.prepare('SELECT * FROM sppd_biaya WHERE sppd_id = ?').get(req.params.id) || null;
 
-  res.json({ ...sppd, itinerary, approvals });
+  res.json({ ...sppd, itinerary, approvals, biaya });
 });
 
 // ── Update SPPD ───────────────────────────────────────────────────────────────
@@ -575,7 +637,7 @@ router.put('/:id', (req, res) => {
 
   const {
     nama_pegawai, jabatan, area_kerja, tujuan, keperluan,
-    tanggal_berangkat, tanggal_kembali, transport, uang_muka, itinerary
+    tanggal_berangkat, tanggal_kembali, transport, uang_muka, itinerary, biaya
   } = req.body;
 
   db.prepare(`
@@ -589,10 +651,23 @@ router.put('/:id', (req, res) => {
   if (Array.isArray(itinerary)) {
     db.prepare('DELETE FROM sppd_itinerary WHERE sppd_id = ?').run(req.params.id);
     const ins = db.prepare(`
-      INSERT INTO sppd_itinerary (sppd_id, tanggal, dari, ke, transport, keterangan)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO sppd_itinerary (sppd_id, tanggal, lokasi, pelanggan, aktivitas, sasaran_nilai_project, produk, keterangan)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    itinerary.forEach(r => ins.run(req.params.id, r.tanggal || '', r.dari || '', r.ke || '', r.transport || '', r.keterangan || ''));
+    itinerary.forEach(r => ins.run(req.params.id, r.tanggal || '', r.lokasi || '', r.pelanggan || '',
+      r.aktivitas || '', Number(r.sasaran_nilai_project) || 0, r.produk || '', r.keterangan || ''));
+  }
+
+  if (biaya && typeof biaya === 'object') {
+    const total = (Number(biaya.akomodasi) || 0) + (Number(biaya.konsumsi) || 0) +
+      (Number(biaya.transportasi) || 0) + (Number(biaya.entertain) || 0) +
+      (Number(biaya.uang_saku) || 0) + (Number(biaya.biaya_lain) || 0);
+    db.prepare(`INSERT OR REPLACE INTO sppd_biaya (sppd_id, akomodasi, konsumsi, transportasi, entertain, uang_saku, biaya_lain, biaya_lain_ket, total)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(req.params.id, Number(biaya.akomodasi) || 0, Number(biaya.konsumsi) || 0,
+        Number(biaya.transportasi) || 0, Number(biaya.entertain) || 0,
+        Number(biaya.uang_saku) || 0, Number(biaya.biaya_lain) || 0,
+        biaya.biaya_lain_ket || '', total);
   }
 
   res.json({ success: true });
@@ -633,7 +708,8 @@ router.post('/:id/approve', (req, res) => {
   `).run(sppd.id, nextLevel, user.id, note || '');
 
   if (nextLevel >= 3) {
-    db.prepare("UPDATE sppd SET status='approved', sppd_approval_level=? WHERE id=?").run(nextLevel, sppd.id);
+    const formalNomor = generateNomorSppd();
+    db.prepare("UPDATE sppd SET status='approved', sppd_approval_level=?, nomor=? WHERE id=?").run(nextLevel, formalNomor, sppd.id);
   } else {
     db.prepare('UPDATE sppd SET sppd_approval_level=? WHERE id=?').run(nextLevel, sppd.id);
   }
@@ -697,18 +773,18 @@ router.post('/:id/laporan', (req, res) => {
   if (db.prepare('SELECT id FROM sppd_laporan WHERE sppd_id = ?').get(req.params.id))
     return res.status(400).json({ error: 'Laporan sudah ada' });
 
-  const { tanggal_laporan, isi_laporan, kunjungan, biaya } = req.body;
+  const { tanggal_laporan, isi_laporan, catatan_umum, kunjungan, biaya } = req.body;
   const totalBiaya = Array.isArray(biaya) ? biaya.reduce((s, b) => s + (Number(b.jumlah) || 0), 0) : 0;
 
   const result = db.prepare(`
-    INSERT INTO sppd_laporan (sppd_id, tanggal_laporan, isi_laporan, total_biaya)
-    VALUES (?, ?, ?, ?)
-  `).run(req.params.id, tanggal_laporan || '', isi_laporan || '', totalBiaya);
+    INSERT INTO sppd_laporan (sppd_id, tanggal_laporan, isi_laporan, catatan_umum, total_biaya)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(req.params.id, tanggal_laporan || '', isi_laporan || '', catatan_umum || '', totalBiaya);
   const laporanId = result.lastInsertRowid;
 
   if (Array.isArray(kunjungan) && kunjungan.length) {
-    const ins = db.prepare('INSERT INTO sppd_laporan_kunjungan (laporan_id, tanggal, nama_instansi, nama_kontak, hasil) VALUES (?, ?, ?, ?, ?)');
-    kunjungan.forEach(k => ins.run(laporanId, k.tanggal || '', k.nama_instansi || '', k.nama_kontak || '', k.hasil || ''));
+    const ins = db.prepare('INSERT INTO sppd_laporan_kunjungan (laporan_id, tanggal, nama_instansi, nama_kontak, nama_pelanggan, laporan_kunjungan, hasil) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    kunjungan.forEach(k => ins.run(laporanId, k.tanggal || '', k.nama_instansi || '', k.nama_kontak || '', k.nama_pelanggan || '', k.laporan_kunjungan || '', k.hasil || ''));
   }
 
   if (Array.isArray(biaya) && biaya.length) {
@@ -731,16 +807,16 @@ router.put('/:id/laporan', (req, res) => {
   if (laporan.status !== 'pending' || laporan.laporan_approval_level > 0)
     return res.status(400).json({ error: 'Tidak bisa diedit setelah proses approval dimulai' });
 
-  const { tanggal_laporan, isi_laporan, kunjungan, biaya } = req.body;
+  const { tanggal_laporan, isi_laporan, catatan_umum, kunjungan, biaya } = req.body;
   const totalBiaya = Array.isArray(biaya) ? biaya.reduce((s, b) => s + (Number(b.jumlah) || 0), 0) : laporan.total_biaya;
 
-  db.prepare('UPDATE sppd_laporan SET tanggal_laporan=?, isi_laporan=?, total_biaya=? WHERE id=?')
-    .run(tanggal_laporan || '', isi_laporan || '', totalBiaya, laporan.id);
+  db.prepare('UPDATE sppd_laporan SET tanggal_laporan=?, isi_laporan=?, catatan_umum=?, total_biaya=? WHERE id=?')
+    .run(tanggal_laporan || '', isi_laporan || '', catatan_umum || '', totalBiaya, laporan.id);
 
   if (Array.isArray(kunjungan)) {
     db.prepare('DELETE FROM sppd_laporan_kunjungan WHERE laporan_id = ?').run(laporan.id);
-    const ins = db.prepare('INSERT INTO sppd_laporan_kunjungan (laporan_id, tanggal, nama_instansi, nama_kontak, hasil) VALUES (?, ?, ?, ?, ?)');
-    kunjungan.forEach(k => ins.run(laporan.id, k.tanggal || '', k.nama_instansi || '', k.nama_kontak || '', k.hasil || ''));
+    const ins = db.prepare('INSERT INTO sppd_laporan_kunjungan (laporan_id, tanggal, nama_instansi, nama_kontak, nama_pelanggan, laporan_kunjungan, hasil) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    kunjungan.forEach(k => ins.run(laporan.id, k.tanggal || '', k.nama_instansi || '', k.nama_kontak || '', k.nama_pelanggan || '', k.laporan_kunjungan || '', k.hasil || ''));
   }
 
   if (Array.isArray(biaya)) {
@@ -777,6 +853,12 @@ router.post('/:id/laporan/approve', (req, res) => {
   if (nextLevel >= 4) {
     db.prepare("UPDATE sppd_laporan SET status='approved', laporan_approval_level=? WHERE id=?").run(nextLevel, laporan.id);
     db.prepare("UPDATE sppd SET status='completed' WHERE id=?").run(sppd.id);
+    // Auto-create pencairan record
+    const existing = db.prepare('SELECT id FROM sppd_pencairan WHERE sppd_id = ?').get(sppd.id);
+    if (!existing) {
+      db.prepare(`INSERT INTO sppd_pencairan (sppd_id, jumlah_usulan, jumlah_realisasi, status) VALUES (?, ?, ?, 'belum_cair')`)
+        .run(sppd.id, sppd.uang_muka || 0, laporan.total_biaya || 0);
+    }
   } else {
     db.prepare('UPDATE sppd_laporan SET laporan_approval_level=? WHERE id=?').run(nextLevel, laporan.id);
   }
@@ -820,31 +902,15 @@ router.get('/:id/pencairan', (req, res) => {
   if (!canSeeAll(user.role) && sppd.created_by !== user.id) return res.status(403).json({ error: 'Forbidden' });
 
   const pencairan = db.prepare(`
-    SELECT p.*, u.full_name AS approver_name
-    FROM sppd_pencairan p LEFT JOIN users u ON p.approved_by = u.id
+    SELECT p.*, u.full_name AS updated_by_name
+    FROM sppd_pencairan p LEFT JOIN users u ON p.updated_by = u.id
     WHERE p.sppd_id = ?
   `).get(req.params.id);
   res.json(pencairan || null);
 });
 
-// ── Submit Pencairan ──────────────────────────────────────────────────────────
-router.post('/:id/pencairan', (req, res) => {
-  const user = req.session.user;
-  const sppd = db.prepare('SELECT * FROM sppd WHERE id = ?').get(req.params.id);
-  if (!sppd) return res.status(404).json({ error: 'SPPD tidak ditemukan' });
-  if (sppd.created_by !== user.id && user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-  if (!['approved', 'completed'].includes(sppd.status)) return res.status(400).json({ error: 'SPPD belum disetujui' });
-  if (db.prepare('SELECT id FROM sppd_pencairan WHERE sppd_id = ?').get(req.params.id))
-    return res.status(400).json({ error: 'Pencairan sudah diajukan' });
-
-  const { jumlah_diajukan, catatan } = req.body;
-  db.prepare('INSERT INTO sppd_pencairan (sppd_id, jumlah_diajukan, catatan) VALUES (?, ?, ?)')
-    .run(req.params.id, Number(jumlah_diajukan) || 0, catatan || '');
-  res.json({ success: true });
-});
-
-// ── Approve / Reject Pencairan (manager_keuangan) ─────────────────────────────
-router.post('/:id/pencairan/approve', (req, res) => {
+// ── Update Pencairan status (manager_keuangan) ────────────────────────────────
+router.put('/:id/pencairan', (req, res) => {
   const user = req.session.user;
   if (user.role !== 'manager_keuangan' && user.role !== 'admin')
     return res.status(403).json({ error: 'Hanya manager_keuangan yang bisa memproses pencairan' });
@@ -854,17 +920,13 @@ router.post('/:id/pencairan/approve', (req, res) => {
 
   const pencairan = db.prepare('SELECT * FROM sppd_pencairan WHERE sppd_id = ?').get(req.params.id);
   if (!pencairan) return res.status(404).json({ error: 'Pencairan tidak ditemukan' });
-  if (pencairan.status !== 'pending') return res.status(400).json({ error: 'Pencairan sudah diproses' });
 
-  const { jumlah_disetujui, catatan, action } = req.body;
+  const { status, jumlah_dicairkan, catatan } = req.body;
+  const validStatus = ['belum_cair', 'dalam_proses', 'sudah_cair'];
+  if (!validStatus.includes(status)) return res.status(400).json({ error: 'Status tidak valid' });
 
-  if (action === 'reject') {
-    db.prepare(`UPDATE sppd_pencairan SET status='rejected', catatan=?, approved_by=?, approved_at=datetime('now','localtime') WHERE id=?`)
-      .run(catatan || '', user.id, pencairan.id);
-  } else {
-    db.prepare(`UPDATE sppd_pencairan SET status='approved', jumlah_disetujui=?, catatan=?, approved_by=?, approved_at=datetime('now','localtime') WHERE id=?`)
-      .run(Number(jumlah_disetujui) || pencairan.jumlah_diajukan, catatan || '', user.id, pencairan.id);
-  }
+  db.prepare(`UPDATE sppd_pencairan SET status=?, jumlah_dicairkan=?, catatan=?, updated_by=?, updated_at=datetime('now','localtime') WHERE id=?`)
+    .run(status, Number(jumlah_dicairkan) || pencairan.jumlah_dicairkan, catatan !== undefined ? catatan : pencairan.catatan, user.id, pencairan.id);
 
   res.json({ success: true });
 });

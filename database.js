@@ -327,4 +327,83 @@ db.exec(`
   }
 });
 
+// ── MIGRATION: sppd_itinerary new columns (rencana kunjungan) ─────────────────
+[
+  "ALTER TABLE sppd_itinerary ADD COLUMN lokasi TEXT DEFAULT ''",
+  "ALTER TABLE sppd_itinerary ADD COLUMN pelanggan TEXT DEFAULT ''",
+  "ALTER TABLE sppd_itinerary ADD COLUMN aktivitas TEXT DEFAULT ''",
+  "ALTER TABLE sppd_itinerary ADD COLUMN sasaran_nilai_project REAL DEFAULT 0",
+  "ALTER TABLE sppd_itinerary ADD COLUMN produk TEXT DEFAULT ''",
+].forEach(sql => { try { db.exec(sql); } catch {} });
+
+// ── New sppd_biaya table (structured cost estimate per SPPD) ──────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sppd_biaya (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sppd_id INTEGER NOT NULL UNIQUE,
+    akomodasi REAL DEFAULT 0,
+    konsumsi REAL DEFAULT 0,
+    transportasi REAL DEFAULT 0,
+    entertain REAL DEFAULT 0,
+    uang_saku REAL DEFAULT 0,
+    biaya_lain REAL DEFAULT 0,
+    biaya_lain_ket TEXT DEFAULT '',
+    total REAL DEFAULT 0,
+    FOREIGN KEY (sppd_id) REFERENCES sppd(id)
+  );
+`);
+
+// ── MIGRATION: sppd_laporan new column ───────────────────────────────────────
+try { db.exec("ALTER TABLE sppd_laporan ADD COLUMN catatan_umum TEXT DEFAULT ''"); } catch {}
+
+// ── MIGRATION: sppd_laporan_kunjungan new columns ─────────────────────────────
+[
+  "ALTER TABLE sppd_laporan_kunjungan ADD COLUMN nama_pelanggan TEXT DEFAULT ''",
+  "ALTER TABLE sppd_laporan_kunjungan ADD COLUMN laporan_kunjungan TEXT DEFAULT ''",
+].forEach(sql => { try { db.exec(sql); } catch {} });
+
+// ── MIGRATION: recreate sppd_pencairan with new schema ────────────────────────
+const pencairanDef = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='sppd_pencairan'").get();
+if (pencairanDef && !pencairanDef.sql.includes('jumlah_usulan')) {
+  db.pragma('foreign_keys = OFF');
+  db.exec(`
+    CREATE TABLE sppd_pencairan_v2 (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sppd_id INTEGER NOT NULL UNIQUE,
+      jumlah_usulan REAL DEFAULT 0,
+      jumlah_realisasi REAL DEFAULT 0,
+      jumlah_dicairkan REAL DEFAULT 0,
+      catatan TEXT DEFAULT '',
+      status TEXT DEFAULT 'belum_cair' CHECK(status IN ('belum_cair','dalam_proses','sudah_cair')),
+      updated_by INTEGER,
+      updated_at TEXT,
+      created_at TEXT DEFAULT (datetime('now','localtime')),
+      FOREIGN KEY (sppd_id) REFERENCES sppd(id),
+      FOREIGN KEY (updated_by) REFERENCES users(id)
+    );
+    INSERT INTO sppd_pencairan_v2 (sppd_id, jumlah_usulan, jumlah_dicairkan, catatan, status, created_at)
+      SELECT sppd_id, jumlah_diajukan, jumlah_disetujui, catatan,
+        CASE status WHEN 'approved' THEN 'sudah_cair' WHEN 'pending' THEN 'belum_cair' ELSE 'belum_cair' END,
+        created_at FROM sppd_pencairan;
+    DROP TABLE sppd_pencairan;
+    ALTER TABLE sppd_pencairan_v2 RENAME TO sppd_pencairan;
+  `);
+  db.pragma('foreign_keys = ON');
+  console.log('✅ sppd_pencairan upgraded: belum_cair/dalam_proses/sudah_cair schema');
+}
+
+// ── Default SPPD settings ─────────────────────────────────────────────────────
+[
+  ['sppd_nomor_prefix', 'SPPD-LAK'],
+  ['sppd_kota_asal', 'Jakarta'],
+].forEach(([key, val]) => {
+  db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)').run(key, val);
+});
+
+// ── Default user marketing1 ───────────────────────────────────────────────────
+if (!db.prepare('SELECT id FROM users WHERE username = ?').get('marketing1')) {
+  db.prepare('INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)').run('marketing1', 'kirana', 'Marketing 1', 'marketing');
+  console.log('✅ Default user marketing1 dibuat');
+}
+
 module.exports = db;

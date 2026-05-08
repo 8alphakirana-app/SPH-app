@@ -53,7 +53,9 @@
         <li class="menu-divider sppd-menu" style="display:none"></li>
         <li class="sppd-menu sppd-create" style="display:none"><a href="#" onclick="showPage('new-sppd')" class="menu-item" data-page="new-sppd"><span class="icon">🚗</span> Buat SPPD</a></li>
         <li class="sppd-menu sppd-mine" style="display:none"><a href="#" onclick="showPage('my-sppd')" class="menu-item" data-page="my-sppd"><span class="icon">📋</span> SPPD Saya</a></li>
-        <li class="sppd-menu sppd-approver" style="display:none"><a href="#" onclick="showPage('sppd-approvals')" class="menu-item" data-page="sppd-approvals"><span class="icon">✅</span> Persetujuan SPPD</a></li>
+        <li class="sppd-menu sppd-approve" style="display:none"><a href="#" onclick="showPage('sppd-approvals')" class="menu-item" data-page="sppd-approvals"><span class="icon">✅</span> Persetujuan SPPD</a></li>
+        <li class="sppd-menu sppd-laporan-approve" style="display:none"><a href="#" onclick="showPage('sppd-laporan-approvals')" class="menu-item" data-page="sppd-laporan-approvals"><span class="icon">📝</span> Persetujuan Laporan</a></li>
+        <li class="sppd-menu sppd-pencairan-menu" style="display:none"><a href="#" onclick="showPage('sppd-pencairan')" class="menu-item" data-page="sppd-pencairan"><span class="icon">💰</span> Pencairan Dana</a></li>
         <li class="sppd-menu sppd-all" style="display:none"><a href="#" onclick="showPage('admin-sppd')" class="menu-item" data-page="admin-sppd"><span class="icon">🗂️</span> Semua SPPD</a></li>
         <li class="menu-divider"></li>
         <li><a href="#" onclick="showPage('profile')" class="menu-item" data-page="profile"><span class="icon">👤</span> Profil Saya</a></li>
@@ -143,7 +145,7 @@
         </div>
         <div id="content-my-submissions" class="content-page" style="display:none"><div class="page-header"><h1 class="page-title">Pengajuan Saya</h1><button onclick="showPage('new-submission')" class="btn btn-primary">+ Buat Pengajuan</button></div><div class="card"><div id="my-submissions-list"></div></div></div>
         <div id="content-admin-submissions" class="content-page" style="display:none"><div class="page-header"><h1 class="page-title">Semua Pengajuan</h1><div class="filter-bar"><select id="filter-status" onchange="loadAdminSubmissions()"><option value="">Semua Status</option><option value="pending">Menunggu</option><option value="approved">Disetujui</option><option value="rejected">Ditolak</option></select></div></div><div class="card"><div id="admin-submissions-list"></div></div></div>
-        <div id="content-admin-users" class="content-page" style="display:none"><div class="page-header"><h1 class="page-title">Kelola Pengguna</h1><button onclick="showModal('modal-add-user')" class="btn btn-primary">+ Tambah Pengguna</button></div><div class="card"><div id="users-list"></div></div></div>
+        <div id="content-admin-users" class="content-page" style="display:none"><div class="page-header"><h1 class="page-title">Kelola Pengguna</h1><button onclick="openAddUserModal()" class="btn btn-primary">+ Tambah Pengguna</button></div><div class="card"><div id="users-list"></div></div></div>
         <div id="content-admin-settings" class="content-page" style="display:none">
           <h1 class="page-title">Pengaturan Aplikasi</h1>
           <div class="card"><div class="card-header"><h3>🖼️ Logo Perusahaan</h3></div><div class="card-body"><div class="upload-preview-row"><div class="upload-preview-box" id="logo-preview-box"><img id="logo-preview" src="/img/logo.png" alt="Logo" onerror="this.style.display='none';document.getElementById('logo-placeholder').style.display='flex'"><div id="logo-placeholder" class="upload-placeholder" style="display:none">Belum ada logo</div></div><div class="upload-controls"><label class="btn btn-secondary" for="input-logo">📁 Pilih File Logo</label><input type="file" id="input-logo" accept="image/*" style="display:none" onchange="uploadImage('logo', this)"><small>Format: PNG, JPG, WEBP. Maks 5MB.<br>Rekomendasi: transparan (PNG) dengan lebar ≥ 300px.</small><div id="logo-upload-msg" class="alert" style="display:none;margin-top:8px"></div></div></div></div></div>
@@ -153,6 +155,7 @@
             <div class="card"><div class="card-header"><h3>✍️ Penanda Tangan</h3></div><div class="card-body"><div class="form-row"><div class="form-group"><label>Nama Penanda Tangan</label><input type="text" id="set-signer-name"></div><div class="form-group"><label>Jabatan Penanda Tangan</label><input type="text" id="set-signer-title"></div></div></div></div>
             <div class="card"><div class="card-header"><h3>🔢 Penomoran Surat</h3></div><div class="card-body"><div class="form-group"><label>Prefix Nomor Surat</label><input type="text" id="set-nomor-prefix" placeholder="Cth: PMH-LAK"><small>Format nomor: 001/[PREFIX]/III/2026</small></div></div></div>
             <div class="card"><div class="card-header"><h3>📋 Kertas Kerja</h3></div><div class="card-body"><div class="form-group"><label>Kota Penandatanganan KK</label><input type="text" id="set-kk-kota" placeholder="Cth: Jakarta"><small>Tampil di blok tanda tangan Excel Kertas Kerja.</small></div></div></div>
+            <div class="card"><div class="card-header"><h3>🚗 SPPD</h3></div><div class="card-body"><div class="form-row"><div class="form-group"><label>Prefix Nomor SPPD</label><input type="text" id="set-sppd-nomor-prefix" placeholder="Cth: SPPD-LAK"><small>Format: 001/[PREFIX]/III/2026</small></div><div class="form-group"><label>Kota Asal / Keberangkatan</label><input type="text" id="set-sppd-kota-asal" placeholder="Cth: Jakarta"><small>Tampil di blok tanda tangan PDF SPPD.</small></div></div></div></div>
             <div class="form-actions"><div id="settings-msg" class="alert" style="display:none"></div><button type="submit" class="btn btn-primary">💾 Simpan Pengaturan</button></div>
           </form>
           <div class="card" style="margin-top:16px">
@@ -269,38 +272,57 @@
           <h1 class="page-title">Buat SPPD Baru</h1>
           <form id="form-sppd" onsubmit="submitSPPDForm(event)">
             <div class="card">
-              <div class="card-header"><h3>👤 Data Pegawai</h3></div>
+              <div class="card-header"><h3>🚗 Data Perjalanan</h3></div>
               <div class="card-body">
                 <div class="form-row">
                   <div class="form-group"><label>Nama Pegawai <span class="required">*</span></label><input type="text" id="sppd-nama-pegawai" required></div>
                   <div class="form-group"><label>Jabatan</label><input type="text" id="sppd-jabatan"></div>
                 </div>
-                <div class="form-group"><label>Area Kerja</label><input type="text" id="sppd-area-kerja"></div>
-              </div>
-            </div>
-            <div class="card">
-              <div class="card-header"><h3>🚗 Detail Perjalanan</h3></div>
-              <div class="card-body">
                 <div class="form-row">
-                  <div class="form-group"><label>Tujuan <span class="required">*</span></label><input type="text" id="sppd-tujuan" required></div>
-                  <div class="form-group"><label>Moda Transportasi</label><input type="text" id="sppd-transport" placeholder="Cth: Pesawat, Mobil Dinas"></div>
+                  <div class="form-group"><label>Area Kerja / Berangkat dari</label><input type="text" id="sppd-area-kerja" placeholder="Cth: Jakarta"></div>
+                  <div class="form-group"><label>Tujuan Kota <span class="required">*</span></label><input type="text" id="sppd-tujuan" required placeholder="Cth: Surabaya"></div>
                 </div>
-                <div class="form-group"><label>Keperluan / Tujuan Kunjungan <span class="required">*</span></label><textarea id="sppd-keperluan" rows="2" required></textarea></div>
+                <div class="form-group"><label>Keperluan / Tujuan Kunjungan <span class="required">*</span></label><textarea id="sppd-keperluan" rows="2" required placeholder="Uraikan keperluan perjalanan dinas..."></textarea></div>
                 <div class="form-row">
                   <div class="form-group"><label>Tanggal Berangkat <span class="required">*</span></label><input type="date" id="sppd-tgl-berangkat" required></div>
                   <div class="form-group"><label>Tanggal Kembali <span class="required">*</span></label><input type="date" id="sppd-tgl-kembali" required></div>
                 </div>
-                <div class="form-group"><label>Uang Muka (Rp)</label><input type="number" id="sppd-uang-muka" min="0" value="0"></div>
+                <div class="form-row">
+                  <div class="form-group"><label>Moda Transportasi</label><input type="text" id="sppd-transport" placeholder="Cth: Pesawat, Mobil Dinas"></div>
+                  <div class="form-group"><label>Uang Muka (Rp)</label><input type="number" id="sppd-uang-muka" min="0" value="0"></div>
+                </div>
               </div>
             </div>
             <div class="card">
-              <div class="card-header"><h3>🗺️ Rencana Itinerary</h3><button type="button" onclick="addSPPDItineraryRow()" class="btn btn-secondary btn-sm">+ Tambah Baris</button></div>
+              <div class="card-header"><h3>📍 Rencana Kunjungan</h3><button type="button" onclick="addSPPDKunjunganRow()" class="btn btn-secondary btn-sm">+ Tambah</button></div>
               <div class="card-body no-padding">
                 <div class="table-responsive">
                   <table class="table">
-                    <thead><tr><th>Tanggal</th><th>Dari</th><th>Ke</th><th>Transport</th><th>Keterangan</th><th width="50"></th></tr></thead>
+                    <thead><tr><th>Tanggal</th><th>Lokasi</th><th>Pelanggan / Instansi</th><th>Aktivitas</th><th>Target Nilai (Rp)</th><th>Produk</th><th width="40"></th></tr></thead>
                     <tbody id="sppd-itinerary-tbody"></tbody>
                   </table>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><h3>💰 Usulan Biaya</h3></div>
+              <div class="card-body">
+                <div class="form-row">
+                  <div class="form-group"><label>Akomodasi (Rp)</label><input type="number" class="sppd-biaya-field" id="biaya-akomodasi" min="0" value="0" oninput="updateSPPDBiayaTotal()"></div>
+                  <div class="form-group"><label>Konsumsi (Rp)</label><input type="number" class="sppd-biaya-field" id="biaya-konsumsi" min="0" value="0" oninput="updateSPPDBiayaTotal()"></div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group"><label>Transportasi (Rp)</label><input type="number" class="sppd-biaya-field" id="biaya-transportasi" min="0" value="0" oninput="updateSPPDBiayaTotal()"></div>
+                  <div class="form-group"><label>Entertain (Rp)</label><input type="number" class="sppd-biaya-field" id="biaya-entertain" min="0" value="0" oninput="updateSPPDBiayaTotal()"></div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group"><label>Uang Saku (Rp)</label><input type="number" class="sppd-biaya-field" id="biaya-uang-saku" min="0" value="0" oninput="updateSPPDBiayaTotal()"></div>
+                  <div class="form-group"><label>Biaya Lain-lain (Rp)</label><input type="number" class="sppd-biaya-field" id="biaya-lain" min="0" value="0" oninput="updateSPPDBiayaTotal()"></div>
+                </div>
+                <div class="form-group"><label>Keterangan Biaya Lain-lain</label><input type="text" id="biaya-lain-ket" placeholder="Opsional..."></div>
+                <div style="background:var(--bg-alt);border-radius:8px;padding:12px 16px;margin-top:8px;display:flex;align-items:center;justify-content:space-between">
+                  <span class="fw-bold">Total Usulan Biaya:</span>
+                  <span class="fw-bold" id="sppd-biaya-total" style="font-size:15px;color:var(--primary)">Rp 0</span>
                 </div>
               </div>
             </div>
@@ -344,6 +366,28 @@
             </div>
           </div>
           <div class="card"><div id="admin-sppd-container"><div class="loading">⏳ Memuat...</div></div></div>
+        </div>
+
+        <!-- ═══════════ PERSETUJUAN LAPORAN ═══════════ -->
+        <div id="content-sppd-laporan-approvals" class="content-page" style="display:none">
+          <div class="page-header">
+            <h1 class="page-title">Persetujuan Laporan Perjalanan</h1>
+            <div class="filter-bar">
+              <select id="laporan-approvals-filter" onchange="loadLaporanApprovals()"><option value="pending">Menunggu</option><option value="">Semua</option><option value="approved">Disetujui</option><option value="rejected">Ditolak</option></select>
+            </div>
+          </div>
+          <div class="card"><div id="laporan-approvals-container"><div class="loading">⏳ Memuat...</div></div></div>
+        </div>
+
+        <!-- ═══════════ PENCAIRAN DANA ═══════════ -->
+        <div id="content-sppd-pencairan" class="content-page" style="display:none">
+          <div class="page-header">
+            <h1 class="page-title">Pencairan Dana SPPD</h1>
+            <div class="filter-bar">
+              <select id="pencairan-filter" onchange="loadPencairan()"><option value="">Semua</option><option value="belum_cair">Belum Cair</option><option value="dalam_proses">Dalam Proses</option><option value="sudah_cair">Sudah Cair</option></select>
+            </div>
+          </div>
+          <div class="card"><div id="pencairan-container"><div class="loading">⏳ Memuat...</div></div></div>
         </div>
 
         <!-- ═══════════ PROFIL SAYA ═══════════ -->
@@ -460,7 +504,7 @@
   </div>
 </div>
 <div id="modal-reject" class="modal" style="display:none"><div class="modal-backdrop" onclick="closeModal('modal-reject')"></div><div class="modal-dialog"><div class="modal-header"><h3>Tolak Pengajuan</h3><button onclick="closeModal('modal-reject')" class="btn-close">✕</button></div><div class="modal-body"><div class="form-group"><label>Alasan Penolakan</label><textarea id="reject-reason" rows="3" placeholder="Masukkan alasan penolakan..."></textarea></div></div><div class="modal-footer"><button onclick="confirmReject()" class="btn btn-danger">❌ Tolak Pengajuan</button><button onclick="closeModal('modal-reject')" class="btn btn-outline">Batal</button></div></div></div>
-<div id="modal-add-user" class="modal" style="display:none"><div class="modal-backdrop" onclick="closeModal('modal-add-user')"></div><div class="modal-dialog"><div class="modal-header"><h3>Tambah Pengguna Baru</h3><button onclick="closeModal('modal-add-user')" class="btn-close">✕</button></div><div class="modal-body"><div class="form-row"><div class="form-group"><label>Username <span class="required">*</span></label><input type="text" id="new-username" placeholder="username"></div><div class="form-group"><label>Password <span class="required">*</span></label><input type="password" id="new-password" placeholder="password"></div></div><div class="form-row"><div class="form-group"><label>Nama Lengkap <span class="required">*</span></label><input type="text" id="new-fullname" placeholder="Nama lengkap"></div><div class="form-group"><label>Role <span class="required">*</span></label><select id="new-role"><option value="staff">Staff</option><option value="marketing">Marketing</option><option value="supervisor">Supervisor</option><option value="area_manager">Area Manager</option><option value="gm">GM</option><option value="gm2">GM 2</option><option value="manager_keuangan">Manager Keuangan</option><option value="direktur_ops">Direktur Operasional</option><option value="direktur_utama">Direktur Utama</option><option value="kantor_pusat">Kantor Pusat</option><option value="admin">Admin</option></select></div></div><div id="add-user-error" class="alert alert-error" style="display:none"></div></div><div class="modal-footer"><button onclick="addUser()" class="btn btn-primary">✅ Simpan</button><button onclick="closeModal('modal-add-user')" class="btn btn-outline">Batal</button></div></div></div>
+<div id="modal-add-user" class="modal" style="display:none"><div class="modal-backdrop" onclick="closeModal('modal-add-user')"></div><div class="modal-dialog"><div class="modal-header"><h3 id="add-user-modal-title">Tambah Pengguna Baru</h3><button onclick="closeModal('modal-add-user')" class="btn-close">✕</button></div><div class="modal-body"><div class="form-row"><div class="form-group"><label>Username <span class="required">*</span></label><input type="text" id="new-username" placeholder="username"></div><div class="form-group"><label>Password <span class="required">*</span></label><input type="password" id="new-password" placeholder="password (kosongkan = tidak diubah jika edit)"></div></div><div class="form-row"><div class="form-group"><label>Nama Lengkap <span class="required">*</span></label><input type="text" id="new-fullname" placeholder="Nama lengkap"></div><div class="form-group"><label>Role <span class="required">*</span></label><select id="new-role"><option value="staff">Staff</option><option value="marketing">Marketing</option><option value="supervisor">Supervisor</option><option value="area_manager">Area Manager</option><option value="gm">GM</option><option value="gm2">GM 2</option><option value="manager_keuangan">Manager Keuangan</option><option value="direktur_ops">Direktur Operasional</option><option value="direktur_utama">Direktur Utama</option><option value="kantor_pusat">Kantor Pusat</option><option value="admin">Admin</option></select></div></div><div class="form-row"><div class="form-group"><label>Area Kerja</label><input type="text" id="new-area-kerja" placeholder="Cth: Jawa Barat"></div><div class="form-group"><label>Jabatan Detail</label><input type="text" id="new-jabatan-detail" placeholder="Cth: Sales Executive"></div></div><input type="hidden" id="edit-user-id"><div id="add-user-error" class="alert alert-error" style="display:none"></div></div><div class="modal-footer"><button onclick="saveUser()" class="btn btn-primary" id="btn-save-user">✅ Simpan</button><button onclick="closeModal('modal-add-user')" class="btn btn-outline">Batal</button></div></div></div>
 <div id="modal-change-password" class="modal" style="display:none">
   <div class="modal-backdrop" onclick="closeModal('modal-change-password')"></div>
   <div class="modal-dialog">
@@ -521,7 +565,7 @@
         <div class="card-body no-padding">
           <div class="table-responsive">
             <table class="table">
-              <thead><tr><th>Tanggal</th><th>Nama Instansi</th><th>Nama Kontak</th><th>Hasil</th><th width="40"></th></tr></thead>
+              <thead><tr><th>Tanggal</th><th>Nama Instansi</th><th>Nama Kontak</th><th>Nama Pelanggan</th><th>Laporan Kunjungan</th><th width="40"></th></tr></thead>
               <tbody id="laporan-kunjungan-tbody"></tbody>
             </table>
           </div>
@@ -576,6 +620,30 @@
       <div id="laporan-action-error" class="alert alert-error" style="display:none"></div>
     </div>
     <div class="modal-footer" id="laporan-action-footer"></div>
+  </div>
+</div>
+<!-- ═══════════ UPDATE PENCAIRAN MODAL ═══════════ -->
+<div id="modal-update-pencairan" class="modal" style="display:none">
+  <div class="modal-backdrop" onclick="closeModal('modal-update-pencairan')"></div>
+  <div class="modal-dialog">
+    <div class="modal-header"><h3>💰 Update Status Pencairan</h3><button onclick="closeModal('modal-update-pencairan')" class="btn-close">✕</button></div>
+    <div class="modal-body">
+      <div id="pencairan-modal-info" style="background:var(--bg-alt);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px"></div>
+      <div class="form-group"><label>Status <span class="required">*</span></label>
+        <select id="pencairan-update-status">
+          <option value="belum_cair">Belum Cair</option>
+          <option value="dalam_proses">Dalam Proses</option>
+          <option value="sudah_cair">Sudah Cair</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Jumlah Dicairkan (Rp)</label><input type="number" id="pencairan-update-jumlah" min="0" placeholder="0"></div>
+      <div class="form-group"><label>Catatan</label><textarea id="pencairan-update-catatan" rows="2" placeholder="Opsional..."></textarea></div>
+      <div id="pencairan-update-error" class="alert alert-error" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="submitUpdatePencairan()" class="btn btn-primary">💾 Simpan</button>
+      <button onclick="closeModal('modal-update-pencairan')" class="btn btn-outline">Batal</button>
+    </div>
   </div>
 </div>
 <div id="toast" class="toast" style="display:none"></div>
