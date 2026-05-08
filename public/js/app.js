@@ -2084,8 +2084,8 @@ async function viewSPPDDetail(id) {
               }
               if (canSubmitLaporan) footer.push(`<button onclick="openLaporanForm(${id})" class="btn btn-primary">📋 Buat Laporan</button>`);
               if (canApproveLaporan) {
-                     footer.push(`<button onclick="openLaporanAction(${id},laporan,'approve')" class="btn btn-success">✅ Setujui Laporan</button>`);
-                     footer.push(`<button onclick="openLaporanAction(${id},laporan,'reject')" class="btn btn-danger">❌ Tolak Laporan</button>`);
+                     footer.push(`<button onclick="openLaporanAction(${id},null,'approve')" class="btn btn-success">✅ Setujui Laporan</button>`);
+                     footer.push(`<button onclick="openLaporanAction(${id},null,'reject')" class="btn btn-danger">❌ Tolak Laporan</button>`);
               }
               footer.push(`<button onclick="closeModal('modal-sppd-detail')" class="btn btn-outline">Tutup</button>`);
               document.getElementById('sppd-detail-footer').innerHTML = footer.join(' ');
