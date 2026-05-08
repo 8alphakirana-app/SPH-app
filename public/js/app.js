@@ -149,6 +149,7 @@ function showPage(page) {
               'my-sppd': 'SPPD Saya',
               'sppd-approvals': 'Persetujuan SPPD',
               'admin-sppd': 'Semua SPPD',
+              'profile': 'Profil Saya',
        };
        document.getElementById('top-bar-title').textContent = titles[page] || page;
        if (page === 'dashboard') loadDashboard();
@@ -165,6 +166,7 @@ function showPage(page) {
        else if (page === 'my-sppd') loadMySPPD();
        else if (page === 'sppd-approvals') loadSPPDApprovals();
        else if (page === 'admin-sppd') loadAdminSPPD();
+       else if (page === 'profile') loadProfile();
        if (window.innerWidth <= 768) {
               document.getElementById('sidebar').classList.remove('open');
        }
@@ -2129,4 +2131,104 @@ async function submitPencairanSPPD() {
               showToast('Pencairan berhasil diajukan!', 'success');
               viewSPPDDetail(pencairanTargetSppdId);
        } catch { errEl.textContent = 'Koneksi gagal'; errEl.style.display = 'block'; }
+}
+
+// ============================================================
+//  PROFIL SAYA
+// ============================================================
+
+async function loadProfile() {
+       const msgEl = document.getElementById('profile-msg');
+       msgEl.style.display = 'none';
+       try {
+              const res = await api('/api/sppd/profile');
+              if (!res.ok) return;
+              const user = await res.json();
+              document.getElementById('profile-username').value = user.username;
+              document.getElementById('profile-role-display').value = ROLE_LABELS[user.role] || user.role;
+              document.getElementById('profile-full-name').value = user.full_name || '';
+              document.getElementById('profile-jabatan-detail').value = user.jabatan_detail || '';
+              document.getElementById('profile-area-kerja').value = user.area_kerja || '';
+              loadMyTTDPreview(user.id);
+       } catch (e) { console.error(e); }
+}
+
+function loadMyTTDPreview(userId) {
+       const img = document.getElementById('my-ttd-preview');
+       const placeholder = document.getElementById('my-ttd-placeholder');
+       const uid = userId || (currentUser && currentUser.id);
+       if (!uid) return;
+       const url = `/uploads/ttd_u${uid}.png?t=${Date.now()}`;
+       img.onload = () => { img.style.display = ''; placeholder.style.display = 'none'; };
+       img.onerror = () => { img.style.display = 'none'; placeholder.style.display = 'flex'; };
+       img.src = url;
+}
+
+async function saveProfile() {
+       const msgEl = document.getElementById('profile-msg');
+       msgEl.style.display = 'none';
+       const full_name = document.getElementById('profile-full-name').value.trim();
+       if (!full_name) {
+              msgEl.className = 'alert alert-error';
+              msgEl.textContent = 'Nama lengkap tidak boleh kosong';
+              msgEl.style.display = 'block';
+              return;
+       }
+       const body = {
+              full_name,
+              jabatan_detail: document.getElementById('profile-jabatan-detail').value,
+              area_kerja: document.getElementById('profile-area-kerja').value,
+       };
+       try {
+              const res = await api('/api/sppd/profile', 'PUT', body);
+              const data = await res.json();
+              if (!res.ok) {
+                     msgEl.className = 'alert alert-error';
+                     msgEl.textContent = data.error || 'Gagal menyimpan';
+              } else {
+                     currentUser.full_name = full_name;
+                     document.getElementById('user-name').textContent = full_name;
+                     document.getElementById('user-avatar').textContent = full_name.charAt(0).toUpperCase();
+                     document.getElementById('top-bar-user').textContent = full_name;
+                     msgEl.className = 'alert alert-success';
+                     msgEl.textContent = 'Profil berhasil disimpan!';
+              }
+              msgEl.style.display = 'block';
+              setTimeout(() => { msgEl.style.display = 'none'; }, 3000);
+       } catch {
+              msgEl.className = 'alert alert-error';
+              msgEl.textContent = 'Koneksi gagal';
+              msgEl.style.display = 'block';
+       }
+}
+
+async function uploadMyTTD(input) {
+       const msgEl = document.getElementById('my-ttd-upload-msg');
+       msgEl.style.display = 'none';
+       if (!input.files || !input.files[0]) return;
+       const formData = new FormData();
+       formData.append('ttd', input.files[0]);
+       try {
+              const res = await fetch('/api/sppd/upload/my-ttd', {
+                     method: 'POST',
+                     body: formData,
+                     credentials: 'same-origin',
+              });
+              const data = await res.json();
+              if (!res.ok) {
+                     msgEl.className = 'alert alert-error';
+                     msgEl.textContent = data.error || 'Upload gagal';
+              } else {
+                     msgEl.className = 'alert alert-success';
+                     msgEl.textContent = 'Tanda tangan berhasil diupload!';
+                     loadMyTTDPreview(currentUser.id);
+              }
+              msgEl.style.display = 'block';
+              setTimeout(() => { msgEl.style.display = 'none'; }, 3000);
+              input.value = '';
+       } catch {
+              msgEl.className = 'alert alert-error';
+              msgEl.textContent = 'Koneksi gagal';
+              msgEl.style.display = 'block';
+       }
 }

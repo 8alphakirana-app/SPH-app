@@ -55,6 +55,8 @@
         <li class="sppd-menu sppd-mine" style="display:none"><a href="#" onclick="showPage('my-sppd')" class="menu-item" data-page="my-sppd"><span class="icon">📋</span> SPPD Saya</a></li>
         <li class="sppd-menu sppd-approver" style="display:none"><a href="#" onclick="showPage('sppd-approvals')" class="menu-item" data-page="sppd-approvals"><span class="icon">✅</span> Persetujuan SPPD</a></li>
         <li class="sppd-menu sppd-all" style="display:none"><a href="#" onclick="showPage('admin-sppd')" class="menu-item" data-page="admin-sppd"><span class="icon">🗂️</span> Semua SPPD</a></li>
+        <li class="menu-divider"></li>
+        <li><a href="#" onclick="showPage('profile')" class="menu-item" data-page="profile"><span class="icon">👤</span> Profil Saya</a></li>
       </ul>
       <div class="sidebar-footer">
         <div class="user-info">
@@ -342,6 +344,47 @@
             </div>
           </div>
           <div class="card"><div id="admin-sppd-container"><div class="loading">⏳ Memuat...</div></div></div>
+        </div>
+
+        <!-- ═══════════ PROFIL SAYA ═══════════ -->
+        <div id="content-profile" class="content-page" style="display:none">
+          <h1 class="page-title">Profil Saya</h1>
+          <div class="card">
+            <div class="card-header"><h3>👤 Informasi Akun</h3></div>
+            <div class="card-body">
+              <div class="form-row">
+                <div class="form-group"><label>Username</label><input type="text" id="profile-username" disabled style="background:var(--bg-alt);color:var(--text-light)"></div>
+                <div class="form-group"><label>Role</label><input type="text" id="profile-role-display" disabled style="background:var(--bg-alt);color:var(--text-light)"></div>
+              </div>
+              <div class="form-row">
+                <div class="form-group"><label>Nama Lengkap <span class="required">*</span></label><input type="text" id="profile-full-name" placeholder="Nama lengkap"></div>
+                <div class="form-group"><label>Jabatan Detail</label><input type="text" id="profile-jabatan-detail" placeholder="Cth: Sales Executive"></div>
+              </div>
+              <div class="form-group"><label>Area Kerja</label><input type="text" id="profile-area-kerja" placeholder="Cth: Jawa Barat"></div>
+              <div class="form-actions" style="padding:0;margin-top:8px">
+                <div id="profile-msg" class="alert" style="display:none"></div>
+                <button onclick="saveProfile()" class="btn btn-primary">💾 Simpan Profil</button>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:16px">
+            <div class="card-header"><h3>✍️ Tanda Tangan Saya</h3></div>
+            <div class="card-body">
+              <p style="color:var(--text-light);font-size:13px;margin-bottom:16px">Upload tanda tangan Anda. Gambar ini akan digunakan secara otomatis pada dokumen yang membutuhkan tanda tangan Anda.</p>
+              <div class="upload-preview-row">
+                <div class="upload-preview-box upload-preview-box--ttd" id="my-ttd-preview-box">
+                  <img id="my-ttd-preview" src="" alt="TTD Saya" style="display:none" onerror="this.style.display='none';document.getElementById('my-ttd-placeholder').style.display='flex'">
+                  <div id="my-ttd-placeholder" class="upload-placeholder">Belum ada tanda tangan</div>
+                </div>
+                <div class="upload-controls">
+                  <label class="btn btn-secondary" for="input-my-ttd">📁 Pilih File TTD</label>
+                  <input type="file" id="input-my-ttd" accept="image/*" style="display:none" onchange="uploadMyTTD(this)">
+                  <small>Format: PNG (transparan disarankan). Maks 5MB.</small>
+                  <div id="my-ttd-upload-msg" class="alert" style="display:none;margin-top:8px"></div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </main>
