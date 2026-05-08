@@ -418,12 +418,30 @@ router.get('/meta/settings', requireAdmin, (req, res) => {
 
 // PUT /api/submissions/meta/settings
 router.put('/meta/settings', requireAdmin, (req, res) => {
-    const allowed = ['company_name','company_tagline','company_address','company_phone','company_email','company_headoffice','company_warehouse','signer_name','signer_title','nomor_prefix'];
+    const allowed = ['company_name','company_tagline','company_address','company_phone','company_email','company_headoffice','company_warehouse','signer_name','signer_title','nomor_prefix','kk_kota'];
     const stmt = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
     for (const key of allowed) {
           if (req.body[key] !== undefined) stmt.run(key, req.body[key]);
     }
     res.json({ success: true });
+});
+
+// POST /api/submissions/meta/upload/user-ttd/:userId
+router.post('/meta/upload/user-ttd/:userId', requireAdmin, upload.single('image'), async (req, res) => {
+    const userId = parseInt(req.params.userId);
+    if (!userId) return res.status(400).json({ error: 'User ID tidak valid' });
+    const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+    if (!user) return res.status(404).json({ error: 'User tidak ditemukan' });
+    if (!req.file) return res.status(400).json({ error: 'Tidak ada file yang diupload' });
+    const targetPath = path.join(__dirname, '..', 'public', 'img', `ttd_u${userId}.png`);
+    try {
+        await sharp(req.file.path).png().toFile(targetPath);
+        fs.unlink(req.file.path, () => {});
+        res.json({ success: true, url: `/img/ttd_u${userId}.png?t=${Date.now()}` });
+    } catch (err) {
+        fs.unlink(req.file.path, () => {});
+        res.status(500).json({ error: 'Gagal memproses gambar: ' + err.message });
+    }
 });
 
 // POST /api/submissions/meta/upload/:type

@@ -526,6 +526,29 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
 .kk-step-label { font-size: 12px; line-height: 1.5; }
 .kk-step-arrow { color: var(--text-light); font-size: 18px; flex-shrink: 0; }
 
+/* Approver TTD rows */
+.approver-ttd-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.approver-ttd-row:last-child { border-bottom: none; }
+.approver-ttd-info { flex: 1; }
+.approver-ttd-preview {
+  min-width: 120px;
+  text-align: center;
+  padding: 8px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .sidebar { transform: translateX(-100%); }

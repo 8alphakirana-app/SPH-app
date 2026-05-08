@@ -1,6 +1,8 @@
 const express = require('express');
 const router  = express.Router();
 const db      = require('../database');
+const fs      = require('fs');
+const path    = require('path');
 
 const LEVEL_ROLES  = { 1: 'gm', 2: 'manager_keuangan', 3: 'direktur_ops', 4: 'direktur_utama' };
 const ROLE_LEVELS  = { gm: 1, manager_keuangan: 2, direktur_ops: 3, direktur_utama: 4 };
@@ -444,7 +446,7 @@ async function generateExcel(row, calc, approvals, settings) {
   const dateStr = approvalLevel4
     ? new Date(approvalLevel4.acted_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
     : new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
-  const city = settings.company_city || 'Jakarta';
+  const city = settings.kk_kota || settings.company_city || 'Jakarta';
 
   // 5 signature blocks across 15 columns (3 cols each)
   const sigCols    = ['A', 'D', 'G', 'J', 'M'];
@@ -459,6 +461,15 @@ async function generateExcel(row, calc, approvals, settings) {
     approvals.find(a => a.level === 4)?.approver_name || '( _____________ )',
   ];
 
+  // TTD user IDs: index 0=creator, 1-4=approval levels
+  const ttdUserIds = [
+    row.created_by,
+    approvals.find(a => a.level === 1)?.approver_user_id || null,
+    approvals.find(a => a.level === 2)?.approver_user_id || null,
+    approvals.find(a => a.level === 3)?.approver_user_id || null,
+    approvals.find(a => a.level === 4)?.approver_user_id || null,
+  ];
+
   for (let i = 0; i < 5; i++) {
     const sc = sigCols[i]; const ec = sigEndCols[i];
 
@@ -471,9 +482,9 @@ async function generateExcel(row, calc, approvals, settings) {
     ws.getCell(`${sc}21`).font      = { bold: true };
     ws.getCell(`${sc}21`).alignment = centerMid;
 
-    // Space rows 22-23
+    // Space rows 22-23 for signature image
     ws.mergeCells(`${sc}22:${ec}23`);
-    ws.getRow(22).height = 36;
+    ws.getRow(22).height = 50;
 
     ws.mergeCells(`${sc}24:${ec}24`);
     ws.getCell(`${sc}24`).value     = sigNames[i];
@@ -484,6 +495,18 @@ async function generateExcel(row, calc, approvals, settings) {
     ws.getCell(`${sc}25`).value     = sigRoles[i];
     ws.getCell(`${sc}25`).alignment = centerMid;
     ws.getCell(`${sc}25`).font      = { italic: true, size: 9 };
+
+    // Embed TTD image if available
+    const uid = ttdUserIds[i];
+    if (uid) {
+      const imgPath = path.join(__dirname, '..', 'public', 'img', `ttd_u${uid}.png`);
+      if (fs.existsSync(imgPath)) {
+        try {
+          const imgId = wb.addImage({ buffer: fs.readFileSync(imgPath), extension: 'png' });
+          ws.addImage(imgId, `${sc}22:${ec}23`);
+        } catch {}
+      }
+    }
   }
 
   return wb.xlsx.writeBuffer();

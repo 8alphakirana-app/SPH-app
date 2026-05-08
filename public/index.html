@@ -46,10 +46,10 @@
         <li class="admin-only" style="display:none"><a href="#" onclick="showPage('admin-users')" class="menu-item" data-page="admin-users"><span class="icon">👥</span> Kelola Pengguna</a></li>
         <li class="admin-only" style="display:none"><a href="#" onclick="showPage('admin-settings')" class="menu-item" data-page="admin-settings"><span class="icon">⚙️</span> Pengaturan</a></li>
         <li class="menu-divider kk-menu" style="display:none"></li>
-        <li class="kk-menu kk-create" style="display:none"><a href="#" onclick="showPage('kk-form')" class="menu-item" data-page="kk-form"><span class="icon">📝</span> Buat KK</a></li>
-        <li class="kk-menu kk-list-mine" style="display:none"><a href="#" onclick="showPage('kk-list')" class="menu-item" data-page="kk-list"><span class="icon">📋</span> KK Saya</a></li>
-        <li class="kk-menu kk-approval" style="display:none"><a href="#" onclick="showPage('kk-list')" class="menu-item" data-page="kk-list"><span class="icon">✅</span> Approval KK</a></li>
-        <li class="kk-menu kk-all" style="display:none"><a href="#" onclick="showPage('kk-list')" class="menu-item" data-page="kk-list"><span class="icon">🗂️</span> Semua KK</a></li>
+        <li class="kk-menu kk-create" style="display:none"><a href="#" onclick="showPage('new-kk')" class="menu-item" data-page="new-kk"><span class="icon">📝</span> Buat Kertas Kerja</a></li>
+        <li class="kk-menu kk-mine" style="display:none"><a href="#" onclick="showPage('my-kk')" class="menu-item" data-page="my-kk"><span class="icon">📋</span> Kertas Kerja Saya</a></li>
+        <li class="kk-menu kk-approver" style="display:none"><a href="#" onclick="showPage('kk-approvals')" class="menu-item" data-page="kk-approvals"><span class="icon">✅</span> Persetujuan KK</a></li>
+        <li class="kk-menu kk-all admin-only" style="display:none"><a href="#" onclick="showPage('admin-kk')" class="menu-item" data-page="admin-kk"><span class="icon">🗂️</span> Semua Kertas Kerja</a></li>
       </ul>
       <div class="sidebar-footer">
         <div class="user-info">
@@ -145,15 +145,23 @@
             <div class="card"><div class="card-header"><h3>🏢 Informasi Perusahaan</h3></div><div class="card-body"><div class="form-row"><div class="form-group"><label>Nama Perusahaan</label><input type="text" id="set-company-name"></div><div class="form-group"><label>Bidang Usaha / Tagline</label><input type="text" id="set-company-tagline"></div></div><div class="form-group"><label>Alamat Perusahaan</label><input type="text" id="set-company-address" placeholder="Cth: Jl. Contoh No. 1, Jakarta Selatan 12345"></div><div class="form-row"><div class="form-group"><label>Nomor Telepon</label><input type="text" id="set-company-phone" placeholder="Cth: (021) 1234-5678"></div><div class="form-group"><label>Email Perusahaan</label><input type="email" id="set-company-email" placeholder="Cth: info@perusahaan.co.id"></div></div><div class="form-group"><label>Head Office <small style="color:var(--text-light)">(tampil di footer surat)</small></label><input type="text" id="set-company-headoffice" placeholder="Cth: Jl. Sudirman Kav. 52, Jakarta Selatan 12190"></div><div class="form-group"><label>Warehouse <small style="color:var(--text-light)">(tampil di footer surat)</small></label><input type="text" id="set-company-warehouse" placeholder="Cth: Jl. Industri No. 10, Cibitung, Bekasi"></div></div></div>
             <div class="card"><div class="card-header"><h3>✍️ Penanda Tangan</h3></div><div class="card-body"><div class="form-row"><div class="form-group"><label>Nama Penanda Tangan</label><input type="text" id="set-signer-name"></div><div class="form-group"><label>Jabatan Penanda Tangan</label><input type="text" id="set-signer-title"></div></div></div></div>
             <div class="card"><div class="card-header"><h3>🔢 Penomoran Surat</h3></div><div class="card-body"><div class="form-group"><label>Prefix Nomor Surat</label><input type="text" id="set-nomor-prefix" placeholder="Cth: PMH-LAK"><small>Format nomor: 001/[PREFIX]/III/2026</small></div></div></div>
+            <div class="card"><div class="card-header"><h3>📋 Kertas Kerja</h3></div><div class="card-body"><div class="form-group"><label>Kota Penandatanganan KK</label><input type="text" id="set-kk-kota" placeholder="Cth: Jakarta"><small>Tampil di blok tanda tangan Excel Kertas Kerja.</small></div></div></div>
             <div class="form-actions"><div id="settings-msg" class="alert" style="display:none"></div><button type="submit" class="btn btn-primary">💾 Simpan Pengaturan</button></div>
           </form>
+          <div class="card" style="margin-top:16px">
+            <div class="card-header"><h3>🖊️ Tanda Tangan Akun Approver</h3></div>
+            <div class="card-body">
+              <p style="color:var(--text-light);font-size:13px;margin-bottom:16px">Upload tanda tangan untuk setiap akun. Gambar akan disisipkan otomatis pada blok TTD di Excel Kertas Kerja.</p>
+              <div id="approver-ttd-list"><div class="loading">⏳ Memuat...</div></div>
+            </div>
+          </div>
         </div>
-        <!-- ═══════════ KK FORM ═══════════ -->
-        <div id="content-kk-form" class="content-page" style="display:none">
+        <!-- ═══════════ BUAT KK ═══════════ -->
+        <div id="content-new-kk" class="content-page" style="display:none">
           <h1 class="page-title">Buat Kertas Kerja (KK) Baru</h1>
           <form id="form-kk" onsubmit="submitKKForm(event)">
             <div class="card">
-              <div class="card-header"><h3>📋 Informasi Pekerjaan</h3></div>
+              <div class="card-header"><h3>📄 Informasi Kertas Kerja</h3></div>
               <div class="card-body">
                 <div class="form-row">
                   <div class="form-group"><label>Nama Pekerjaan <span class="required">*</span></label><input type="text" id="kk-nama-pekerjaan" required></div>
@@ -168,80 +176,85 @@
                   <div class="form-group"><label>Nama Barang</label><input type="text" id="kk-nama-barang"></div>
                 </div>
                 <div class="form-row">
-                  <div class="form-group"><label>Pelanggan <span class="required">*</span></label><input type="text" id="kk-pelanggan" required></div>
+                  <div class="form-group"><label>Nama Pelanggan <span class="required">*</span></label><input type="text" id="kk-pelanggan" required></div>
                   <div class="form-group"><label>Sumber Anggaran</label><input type="text" id="kk-sumber-anggaran"></div>
                 </div>
-              </div>
-            </div>
-            <div class="card">
-              <div class="card-header"><h3>💰 Nilai &amp; Perhitungan</h3></div>
-              <div class="card-body">
-                <div class="form-row">
-                  <div class="form-group"><label>Nilai Kontrak Total (Rp) <span class="required">*</span></label><input type="number" id="kk-nilai-kontrak" min="0" oninput="updateKKCalc()" required></div>
-                  <div class="form-group"><label>Nilai Pembayaran / Nilai Pembyr (Rp) <span class="required">*</span></label><input type="number" id="kk-nilai-pembyr" min="0" oninput="updateKKCalc()" required></div>
-                </div>
-                <div class="form-row">
-                  <div class="form-group"><label>B. Distribusi &amp; Ongkir (Rp)</label><input type="number" id="kk-bdo" min="0" value="0" oninput="updateKKCalc()"></div>
-                  <div class="form-group"></div>
-                </div>
-                <div class="kk-calc-preview" id="kk-calc-preview" style="display:none">
-                  <div class="kk-calc-grid">
-                    <div class="kk-calc-section">
-                      <div class="kk-calc-title">Nilai Kontrak</div>
-                      <div class="kk-calc-row"><span>DPP</span><span id="cv-dpp-kontrak">Rp 0</span></div>
-                      <div class="kk-calc-row"><span>PPN 11%</span><span id="cv-ppn-kontrak">Rp 0</span></div>
-                      <div class="kk-calc-row"><span>PPh 1,5%</span><span id="cv-pph-kontrak">Rp 0</span></div>
-                      <div class="kk-calc-row kk-calc-total"><span>Penerimaan Uang</span><span id="cv-penerimaan">Rp 0</span></div>
-                    </div>
-                    <div class="kk-calc-section">
-                      <div class="kk-calc-title">Pembelian</div>
-                      <div class="kk-calc-row"><span>DPP Beli</span><span id="cv-dpp-beli">Rp 0</span></div>
-                      <div class="kk-calc-row"><span>PPN 11%</span><span id="cv-ppn-beli">Rp 0</span></div>
-                      <div class="kk-calc-row"><span>PPh 1,5%</span><span id="cv-pph-beli">Rp 0</span></div>
-                    </div>
-                    <div class="kk-calc-section">
-                      <div class="kk-calc-title">Hasil</div>
-                      <div class="kk-calc-row"><span>Surplus / Defisit</span><span id="cv-surplus">Rp 0</span></div>
-                      <div class="kk-calc-row kk-calc-total"><span>Laba</span><span id="cv-laba">Rp 0</span></div>
-                      <div class="kk-calc-row kk-calc-total"><span>Net Margin</span><span id="cv-margin">0%</span></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="card">
-              <div class="card-header"><h3>📑 Term of Payment &amp; Catatan</h3></div>
-              <div class="card-body">
                 <div class="form-row">
                   <div class="form-group"><label>Term of Payment Supplier</label><input type="text" id="kk-tp-supplier" placeholder="Cth: Cash"></div>
-                  <div class="form-group"><label>Term of Payment Pelanggan</label><input type="text" id="kk-tp-pelanggan" placeholder="Cth: 30 hari"></div>
+                  <div class="form-group"><label>Term of Payment Pelanggan / Satker (hari)</label><input type="text" id="kk-tp-pelanggan" placeholder="Cth: 30 hari"></div>
                 </div>
                 <div class="form-group"><label>Catatan</label><textarea id="kk-notes" rows="2"></textarea></div>
               </div>
             </div>
+            <div class="card">
+              <div class="card-header"><h3>💰 Nilai Transaksi &amp; Kalkulasi</h3></div>
+              <div class="card-body">
+                <table class="table kk-calc-table">
+                  <colgroup><col style="width:40%"><col style="width:60%"></colgroup>
+                  <tbody>
+                    <tr class="kk-section-header"><td colspan="2">NILAI KONTRAK</td></tr>
+                    <tr class="kk-input-row"><td>Nilai Kontrak Total</td><td><input type="number" id="kk-nilai-kontrak" class="kk-num-input" min="0" placeholder="0" oninput="updateKKCalc()" required></td></tr>
+                    <tr><td>DPP</td><td class="kk-auto" id="cv-dpp-kontrak">Rp 0</td></tr>
+                    <tr><td>PPN 11%</td><td class="kk-auto" id="cv-ppn-kontrak">Rp 0</td></tr>
+                    <tr><td>PPh 1,5%</td><td class="kk-auto" id="cv-pph-kontrak">Rp 0</td></tr>
+                    <tr class="kk-section-header"><td colspan="2">PENERIMAAN UANG</td></tr>
+                    <tr class="kk-result-row"><td>= Total − (PPN + PPh)</td><td class="kk-auto kk-highlight" id="cv-penerimaan">Rp 0</td></tr>
+                    <tr class="kk-section-header"><td colspan="2">PEMBELIAN</td></tr>
+                    <tr><td>DPP Beli</td><td class="kk-auto" id="cv-dpp-beli">Rp 0</td></tr>
+                    <tr><td>PPN Beli 11%</td><td class="kk-auto" id="cv-ppn-beli">Rp 0</td></tr>
+                    <tr class="kk-input-row"><td>Nilai Pembyr / Nilai Pembelian</td><td><input type="number" id="kk-nilai-pembyr" class="kk-num-input" min="0" placeholder="0" oninput="updateKKCalc()" required></td></tr>
+                    <tr><td>PPh Beli 1,5%</td><td class="kk-auto" id="cv-pph-beli">Rp 0</td></tr>
+                    <tr class="kk-section-header"><td colspan="2">HASIL</td></tr>
+                    <tr class="kk-input-row"><td>B. Distribusi &amp; Ongkir</td><td><input type="number" id="kk-bdo" class="kk-num-input" min="0" value="0" oninput="updateKKCalc()"></td></tr>
+                    <tr><td>% Net Margin</td><td class="kk-auto" id="cv-margin">0 %</td></tr>
+                    <tr><td>Surplus / Defisit</td><td class="kk-auto" id="cv-surplus">Rp 0</td></tr>
+                    <tr class="kk-result-row"><td>Laba</td><td class="kk-auto kk-highlight" id="cv-laba">Rp 0</td></tr>
+                    <tr class="kk-result-row"><td>Net Margin (%)</td><td class="kk-auto kk-highlight" id="cv-margin2">0 %</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
             <div class="form-actions">
               <div id="kk-form-error" class="alert alert-error" style="display:none"></div>
-              <button type="submit" class="btn btn-primary">📤 Kirim Kertas Kerja</button>
-              <button type="button" onclick="showPage('kk-list')" class="btn btn-outline">Batal</button>
+              <button type="submit" class="btn btn-primary">📤 Kirim Pengajuan KK</button>
+              <button type="button" onclick="showPage('my-kk')" class="btn btn-outline">Batal</button>
             </div>
           </form>
         </div>
 
-        <!-- ═══════════ KK LIST ═══════════ -->
-        <div id="content-kk-list" class="content-page" style="display:none">
+        <!-- ═══════════ KK SAYA ═══════════ -->
+        <div id="content-my-kk" class="content-page" style="display:none">
           <div class="page-header">
-            <h1 class="page-title" id="kk-list-title">Kertas Kerja</h1>
+            <h1 class="page-title">Kertas Kerja Saya</h1>
             <div class="filter-bar">
-              <select id="kk-filter-status" onchange="loadKKList()">
-                <option value="">Semua Status</option>
-                <option value="pending">Menunggu</option>
-                <option value="approved">Disetujui</option>
-                <option value="rejected">Ditolak</option>
-              </select>
-              <button onclick="showPage('kk-form')" class="btn btn-primary btn-sm kk-create" style="display:none">+ Buat KK</button>
+              <select id="my-kk-filter" onchange="loadMyKK()"><option value="">Semua Status</option><option value="pending">Menunggu</option><option value="approved">Disetujui</option><option value="rejected">Ditolak</option></select>
+              <button onclick="showPage('new-kk')" class="btn btn-primary btn-sm">+ Buat KK</button>
             </div>
           </div>
-          <div class="card"><div id="kk-list-container"><div class="loading">⏳ Memuat...</div></div></div>
+          <div class="card"><div id="my-kk-container"><div class="loading">⏳ Memuat...</div></div></div>
+        </div>
+
+        <!-- ═══════════ PERSETUJUAN KK (approver) ═══════════ -->
+        <div id="content-kk-approvals" class="content-page" style="display:none">
+          <div class="page-header">
+            <h1 class="page-title">Persetujuan KK</h1>
+            <div class="filter-bar">
+              <select id="kk-approvals-filter" onchange="loadKKApprovals()"><option value="pending">Menunggu Persetujuan</option><option value="">Semua</option><option value="approved">Disetujui</option><option value="rejected">Ditolak</option></select>
+            </div>
+          </div>
+          <div class="card"><div id="kk-approvals-container"><div class="loading">⏳ Memuat...</div></div></div>
+        </div>
+
+        <!-- ═══════════ SEMUA KK (admin) ═══════════ -->
+        <div id="content-admin-kk" class="content-page" style="display:none">
+          <div class="page-header">
+            <h1 class="page-title">Semua Kertas Kerja</h1>
+            <div class="filter-bar">
+              <select id="admin-kk-filter" onchange="loadAdminKK()"><option value="">Semua Status</option><option value="pending">Menunggu</option><option value="approved">Disetujui</option><option value="rejected">Ditolak</option></select>
+              <select id="admin-kk-month" onchange="loadAdminKK()"><option value="">Semua Bulan</option></select>
+            </div>
+          </div>
+          <div class="card"><div id="admin-kk-container"><div class="loading">⏳ Memuat...</div></div></div>
         </div>
       </div>
     </main>
