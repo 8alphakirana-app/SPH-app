@@ -1820,9 +1820,11 @@ async function loadMySPPD() {
        container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
        try {
               const res = await api('/api/sppd');
-              const rows = await res.json();
+              let rows = await res.json();
+              rows = rows.filter(r => r.created_by === currentUser.id);
               const filtered = filter ? rows.filter(r => r.status === filter) : rows;
-              container.innerHTML = renderSPPDTable(filtered);
+              const isAdminRole = currentUser.role === 'admin';
+              container.innerHTML = renderSPPDTable(filtered, { showApproveBtn: isAdminRole });
        } catch { container.innerHTML = emptyState('Gagal memuat data'); }
 }
 
