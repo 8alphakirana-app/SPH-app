@@ -1,40 +1,28 @@
-FROM node:22-bookworm-slim
+FROM node:22-alpine
 
-# Install Chromium and dependencies
-RUN apt-get update && apt-get install -y \
+# Install Chromium dari Alpine repo (jauh lebih ringan dari Debian)
+RUN apk add --no-cache \
     chromium \
-        fonts-liberation \
-            libappindicator3-1 \
-                libasound2 \
-                    libatk-bridge2.0-0 \
-                        libatk1.0-0 \
-                            libcups2 \
-                                libdbus-1-3 \
-                                    libgdk-pixbuf2.0-0 \
-                                        libgtk-3-0 \
-                                            libnspr4 \
-                                                libnss3 \
-                                                    libx11-xcb1 \
-                                                        libxcomposite1 \
-                                                            libxdamage1 \
-                                                                libxrandr2 \
-                                                                    xdg-utils \
-                                                                        --no-install-recommends \
-                                                                            && rm -rf /var/lib/apt/lists/*
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-dejavu \
+    font-noto
 
-                                                                            # Tell Puppeteer to skip downloading Chromium and use system Chromium
-                                                                            ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-                                                                            ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+# Puppeteer: pakai Chromium sistem, jangan download sendiri
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
-                                                                            WORKDIR /app
+WORKDIR /app
 
-                                                                            # Copy package files and install dependencies
-                                                                            COPY package*.json ./
-                                                                            RUN npm install --omit=dev
+# Copy package files dulu (manfaatkan Docker layer cache)
+COPY package*.json ./
+RUN npm install --omit=dev && npm cache clean --force
 
-                                                                            # Copy app source
-                                                                            COPY . .
+# Copy source app (node_modules dan file sensitif sudah di-exclude via .dockerignore)
+COPY . .
 
-                                                                            EXPOSE 3000
+EXPOSE 3000
 
-                                                                            CMD ["node", "server.js"]
+CMD ["node", "server.js"]

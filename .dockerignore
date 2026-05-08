@@ -1,0 +1,23 @@
+# Dependencies - akan di-install ulang di dalam container
+node_modules/
+
+# Data & upload - harus di-mount via Docker volume, bukan di-bake ke image
+data/
+uploads/
+
+# Git
+.git/
+.gitignore
+
+# OS & editor
+.DS_Store
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.*
+
+# Dev tools
+.vscode/
+.idea/
