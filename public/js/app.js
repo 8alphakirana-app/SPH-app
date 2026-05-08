@@ -818,7 +818,7 @@ async function loadUsers() {
                           <td style="font-size:12px;color:var(--text-light)">${escHtml(u.area_kerja || '-')}</td>
                           <td>
                                 <div style="display:flex;gap:6px;flex-wrap:wrap">
-                                        <button onclick="openEditUserModal(${u.id},'${escHtml(u.username)}','${escHtml(u.full_name)}','${u.role}','${escHtml(u.area_kerja||'')}','${escHtml(u.jabatan_detail||'')}')" class="btn btn-secondary btn-sm">✏️ Edit</button>
+                                        <button onclick="openEditUserModal(${u.id},'${escHtml(u.username)}','${escHtml(u.full_name)}','${u.role}','${escHtml(u.area_kerja || '')}','${escHtml(u.jabatan_detail || '')}')" class="btn btn-secondary btn-sm">✏️ Edit</button>
                                         <button onclick="openResetPasswordModal(${u.id}, '${escHtml(u.full_name)}')" class="btn btn-secondary btn-sm">🔑 Reset</button>
                                         ${u.id !== currentUser.id
                             ? `<button onclick="deleteUser(${u.id}, '${escHtml(u.full_name)}')" class="btn btn-danger btn-sm">🗑️ Hapus</button>`
@@ -1358,7 +1358,7 @@ function renderKKTable(rows, { showCreator = false, showApproveBtn = false } = {
        const tableRows = rows.map(r => {
               const lvl = r.kk_approval_level;
               const approvalBadge = renderKKProgressBadge(r);
-              const canAct = showApproveBtn && r.status === 'pending' && myLvl === lvl;
+              const canAct = showApproveBtn && r.status === 'pending' && (myLvl === lvl || currentUser.role === 'admin');
               return `<tr>
                    <td><div class="fw-bold">${escHtml(r.nama_pekerjaan)}</div>
                        <div style="font-size:11px;color:var(--text-light)">${escHtml(r.pelanggan)}</div></td>
@@ -1508,7 +1508,7 @@ async function viewKKDetail(id) {
               const lvl = kk.kk_approval_level;
               const myRole = currentUser.role;
               const myLvl = { gm: 1, manager_keuangan: 2, direktur_ops: 3, direktur_utama: 4 }[myRole];
-              const canAct = kk.status === 'pending' && myLvl === lvl;
+              const canAct = kk.status === 'pending' && (myLvl === lvl || currentUser.role === 'admin');
               let footer = '';
               if (canAct) {
                      footer += `<button onclick="closeModal('modal-kk-detail');setTimeout(()=>openKKAction(${id},'approve'),200)" class="btn btn-success">✅ Setujui</button>`;
@@ -1793,7 +1793,7 @@ function renderSPPDTable(rows, { showCreator = false, showApproveBtn = false } =
               const approveBtn = showApproveBtn && r.status === 'pending'
                      ? `<button onclick="openSPPDAction(${r.id},'approve')" class="btn btn-sm btn-success">✅ Approve</button> `
                      : '';
-              const pdfBtn = ['approved','completed'].includes(r.status)
+              const pdfBtn = ['approved', 'completed'].includes(r.status)
                      ? `<a href="/api/sppd/${r.id}/download/pdf" target="_blank" class="btn btn-sm btn-pdf" title="Unduh PDF">🖨️</a> `
                      : '';
               return `<tr>
@@ -1864,7 +1864,7 @@ async function loadLaporanApprovals() {
               const trs = rows.map(r => {
                      const statusBadge = r.status === 'approved' ? '<span class="badge badge-approved">✅ Disetujui</span>'
                             : r.status === 'rejected' ? '<span class="badge badge-rejected">❌ Ditolak</span>'
-                            : `<span class="badge badge-pending">⏳ Lv ${r.laporan_approval_level + 1}</span>`;
+                                   : `<span class="badge badge-pending">⏳ Lv ${r.laporan_approval_level + 1}</span>`;
                      return `<tr>
                             <td>${escHtml(r.nomor || '-')}</td>
                             <td>${escHtml(r.nama_pegawai)}</td>
@@ -2098,7 +2098,7 @@ async function viewSPPDDetail(id) {
 function renderSPPDDetail(sppd, laporan, pencairan) {
        const fmt = v => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(v || 0);
        const itinRows = (sppd.itinerary || []).map(r =>
-              `<tr><td>${r.tanggal}</td><td>${escHtml(r.lokasi||r.dari||'')}</td><td>${escHtml(r.pelanggan||r.ke||'')}</td><td>${escHtml(r.aktivitas||r.transport||'')}</td><td>${r.sasaran_nilai_project ? fmt(r.sasaran_nilai_project) : '-'}</td><td>${escHtml(r.produk||'')}</td></tr>`
+              `<tr><td>${r.tanggal}</td><td>${escHtml(r.lokasi || r.dari || '')}</td><td>${escHtml(r.pelanggan || r.ke || '')}</td><td>${escHtml(r.aktivitas || r.transport || '')}</td><td>${r.sasaran_nilai_project ? fmt(r.sasaran_nilai_project) : '-'}</td><td>${escHtml(r.produk || '')}</td></tr>`
        ).join('') || '<tr><td colspan="6" class="text-center" style="color:var(--text-light)">Tidak ada rencana kunjungan</td></tr>';
 
        const approvalRows = (sppd.approvals || []).map(a =>
@@ -2110,7 +2110,7 @@ function renderSPPDDetail(sppd, laporan, pencairan) {
        let laporanHtml = '<p style="color:var(--text-light)">Belum ada laporan.</p>';
        if (laporan) {
               const kunjRows = (laporan.kunjungan || []).map(k =>
-                     `<tr><td>${k.tanggal}</td><td>${escHtml(k.nama_instansi)}</td><td>${escHtml(k.nama_kontak)}</td><td>${escHtml(k.nama_pelanggan||'')}</td><td style="white-space:pre-wrap">${escHtml(k.laporan_kunjungan||k.hasil||'')}</td></tr>`
+                     `<tr><td>${k.tanggal}</td><td>${escHtml(k.nama_instansi)}</td><td>${escHtml(k.nama_kontak)}</td><td>${escHtml(k.nama_pelanggan || '')}</td><td style="white-space:pre-wrap">${escHtml(k.laporan_kunjungan || k.hasil || '')}</td></tr>`
               ).join('') || '<tr><td colspan="5" class="text-center">-</td></tr>';
               const biayaRows = (laporan.biaya || []).map(b =>
                      `<tr><td>${escHtml(b.keterangan)}</td><td>${fmt(b.jumlah)}</td></tr>`

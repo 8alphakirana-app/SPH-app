@@ -189,7 +189,7 @@ router.post('/:id/approve', requireLogin, (req, res) => {
   if (sub.status !== 'pending') return res.status(400).json({ error: 'KK sudah diproses' });
 
   const currentLevel = sub.kk_approval_level;
-  if (LEVEL_ROLES[currentLevel] !== user.role) {
+  if (LEVEL_ROLES[currentLevel] !== user.role && user.role !== 'admin') {
     return res.status(403).json({ error: `Anda tidak berwenang approve level ${currentLevel} (${LEVEL_LABELS[currentLevel]})` });
   }
 
@@ -216,7 +216,7 @@ router.post('/:id/reject', requireLogin, (req, res) => {
   if (sub.status !== 'pending') return res.status(400).json({ error: 'KK sudah diproses' });
 
   const currentLevel = sub.kk_approval_level;
-  if (LEVEL_ROLES[currentLevel] !== user.role) {
+  if (LEVEL_ROLES[currentLevel] !== user.role && user.role !== 'admin') {
     return res.status(403).json({ error: `Anda tidak berwenang reject level ${currentLevel}` });
   }
 
