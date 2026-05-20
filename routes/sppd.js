@@ -15,11 +15,24 @@ function requireLogin(req, res, next) {
 router.use(requireLogin);
 
 // ── Approval level definitions ────────────────────────────────────────────────
-const SPPD_LEVEL_ROLES  = { 1: 'area_manager', 2: 'gm', 3: 'gm2' };
-const LAPORAN_LEVEL_ROLES = { 1: 'gm', 2: 'gm2', 3: 'direktur_ops', 4: 'direktur_utama' };
+// SPPD: sppd_approval_level=0 waiting AM, 1=AM done waiting GM1+GM2, 2=all approved
+const SPPD_APPROVER_ROLES = ['area_manager', 'gm', 'gm2'];
+
+// Laporan/Pencairan: 6-level same as KK
+const LAPORAN_LEVEL_ROLES   = { 1:'area_manager', 2:'manager_keuangan', 3:'gm', 4:'gm2', 5:'direktur_ops', 6:'direktur_utama' };
+const PENCAIRAN_LEVEL_ROLES = { 1:'area_manager', 2:'manager_keuangan', 3:'gm', 4:'gm2', 5:'direktur_ops', 6:'direktur_utama' };
+const LP_MAX = 6;
 
 function canSeeAll(role) {
-  return ['admin', 'kantor_pusat', 'area_manager', 'gm', 'gm2', 'manager_keuangan', 'direktur_ops', 'direktur_utama'].includes(role);
+  return ['admin', 'kantor_pusat', 'gm', 'gm2', 'manager_keuangan', 'direktur_ops', 'direktur_utama'].includes(role);
+}
+
+// ── Helper: check/advance parallel GM stage for laporan/pencairan ─────────────
+function checkGmParallel(table, idCol, id) {
+  // Returns nextLevel after GM stage: 5 if both gm(3) and gm2(4) approved, else 3
+  const gm1 = db.prepare(`SELECT status FROM ${table} WHERE ${idCol}=? AND level=3`).get(id);
+  const gm2 = db.prepare(`SELECT status FROM ${table} WHERE ${idCol}=? AND level=4`).get(id);
+  return (gm1?.status === 'approved' && gm2?.status === 'approved') ? 5 : 3;
 }
 
 function generateNomorSppd() {
@@ -99,6 +112,11 @@ router.get('/dashboard-stats', (req, res) => {
     summary = month
       ? db.prepare(summaryBase + ` WHERE strftime('%Y-%m', s.created_at) = ?`).get(month)
       : db.prepare(summaryBase).get();
+  } else if (role === 'area_manager') {
+    const area = (req.session.user.area_kerja || db.prepare('SELECT area_kerja FROM users WHERE id=?').get(req.session.user.id)?.area_kerja || '').trim().toLowerCase();
+    summary = month
+      ? db.prepare(summaryBase + ` JOIN users u ON u.id = s.created_by WHERE LOWER(TRIM(u.area_kerja)) = ? AND strftime('%Y-%m', s.created_at) = ?`).get(area, month)
+      : db.prepare(summaryBase + ` JOIN users u ON u.id = s.created_by WHERE LOWER(TRIM(u.area_kerja)) = ?`).get(area);
   } else {
     summary = month
       ? db.prepare(summaryBase + ` WHERE s.created_by = ? AND strftime('%Y-%m', s.created_at) = ?`).get(id, month)
@@ -106,7 +124,9 @@ router.get('/dashboard-stats', (req, res) => {
   }
 
   let per_user = [];
-  if (canSeeAll(role)) {
+  if (canSeeAll(role) || role === 'area_manager') {
+    const area = (req.session.user.area_kerja || db.prepare('SELECT area_kerja FROM users WHERE id=?').get(req.session.user.id)?.area_kerja || '').trim().toLowerCase();
+    const areaFilter = role === 'area_manager' ? ` WHERE LOWER(TRIM(u.area_kerja)) = '${area.replace(/'/g, "''")}'` : '';
     const perUserBase = `
       SELECT u.id, u.full_name, u.username, u.area_kerja,
         COUNT(s.id) as total,
@@ -114,7 +134,7 @@ router.get('/dashboard-stats', (req, res) => {
         SUM(CASE WHEN s.status = 'completed' THEN 1 ELSE 0 END) as selesai,
         COALESCE(SUM(b.total), 0) as total_biaya_usulan,
         COALESCE(SUM(CASE WHEN p.status = 'sudah_cair' THEN p.jumlah_dicairkan ELSE 0 END), 0) as total_biaya_dicairkan
-      FROM users u`;
+      FROM users u${areaFilter}`;
     const perUserJoinMonth = month ? ` AND strftime('%Y-%m', s.created_at) = '${month.replace(/'/g, '')}'` : '';
     per_user = db.prepare(perUserBase + `
       LEFT JOIN sppd s ON s.created_by = u.id${perUserJoinMonth}
@@ -133,34 +153,47 @@ router.get('/dashboard-stats', (req, res) => {
 // ── List all laporan (for laporan approvers) ──────────────────────────────────
 router.get('/laporan', (req, res) => {
   const { role } = req.session.user;
-  const laporanApproverRoles = Object.values(LAPORAN_LEVEL_ROLES);
-  if (!laporanApproverRoles.includes(role) && role !== 'admin' && !canSeeAll(role))
+  if (!canSeeAll(role) && role !== 'admin' && role !== 'area_manager')
     return res.status(403).json({ error: 'Forbidden' });
-  const rows = db.prepare(`
+  let query = `
     SELECT l.*, s.nomor, s.nama_pegawai, s.tujuan, s.tanggal_berangkat, s.tanggal_kembali,
            u.full_name AS creator_name
     FROM sppd_laporan l
     JOIN sppd s ON l.sppd_id = s.id
     JOIN users u ON s.created_by = u.id
-    ORDER BY l.created_at DESC
-  `).all();
+  `;
+  let rows;
+  if (role === 'area_manager') {
+    query += ` WHERE LOWER(TRIM(u.area_kerja)) = LOWER(TRIM(?))`;
+    const area = req.session.user.area_kerja || db.prepare('SELECT area_kerja FROM users WHERE id=?').get(req.session.user.id)?.area_kerja || '';
+    rows = db.prepare(query + ` ORDER BY l.created_at DESC`).all(area);
+  } else {
+    rows = db.prepare(query + ` ORDER BY l.created_at DESC`).all();
+  }
   res.json(rows);
 });
 
-// ── List all pencairan (for manager_keuangan) ─────────────────────────────────
+// ── List all pencairan (for all KK-type approvers) ───────────────────────────
 router.get('/pencairan', (req, res) => {
   const { role } = req.session.user;
-  if (role !== 'manager_keuangan' && role !== 'admin')
+  if (!canSeeAll(role) && role !== 'admin' && role !== 'area_manager')
     return res.status(403).json({ error: 'Forbidden' });
-  const rows = db.prepare(`
+  let query = `
     SELECT p.*, s.nomor, s.nama_pegawai, s.tujuan, s.uang_muka,
            u.full_name AS creator_name, uu.full_name AS updated_by_name
     FROM sppd_pencairan p
     JOIN sppd s ON p.sppd_id = s.id
     JOIN users u ON s.created_by = u.id
     LEFT JOIN users uu ON p.updated_by = uu.id
-    ORDER BY p.created_at DESC
-  `).all();
+  `;
+  let rows;
+  if (role === 'area_manager') {
+    query += ` WHERE LOWER(TRIM(u.area_kerja)) = LOWER(TRIM(?))`;
+    const area = req.session.user.area_kerja || db.prepare('SELECT area_kerja FROM users WHERE id=?').get(req.session.user.id)?.area_kerja || '';
+    rows = db.prepare(query + ` ORDER BY p.created_at DESC`).all(area);
+  } else {
+    rows = db.prepare(query + ` ORDER BY p.created_at DESC`).all();
+  }
   res.json(rows);
 });
 
@@ -170,13 +203,26 @@ router.get('/', (req, res) => {
   let rows;
   if (canSeeAll(role)) {
     rows = db.prepare(`
-      SELECT s.*, u.full_name AS creator_name
+      SELECT s.*, u.full_name AS creator_name,
+       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 2 AND sa.status = 'approved') as gm1_approved,
+       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 3 AND sa.status = 'approved') as gm2_approved
       FROM sppd s JOIN users u ON s.created_by = u.id
       ORDER BY s.created_at DESC
     `).all();
+  } else if (role === 'area_manager') {
+    rows = db.prepare(`
+      SELECT s.*, u.full_name AS creator_name,
+       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 2 AND sa.status = 'approved') as gm1_approved,
+       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 3 AND sa.status = 'approved') as gm2_approved
+      FROM sppd s JOIN users u ON s.created_by = u.id
+      WHERE LOWER(TRIM(u.area_kerja)) = LOWER(TRIM(?)) OR s.created_by = ?
+      ORDER BY s.created_at DESC
+    `).all(req.session.user.area_kerja || db.prepare('SELECT area_kerja FROM users WHERE id=?').get(id)?.area_kerja || '', id);
   } else {
     rows = db.prepare(`
-      SELECT s.*, u.full_name AS creator_name
+      SELECT s.*, u.full_name AS creator_name,
+       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 2 AND sa.status = 'approved') as gm1_approved,
+       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 3 AND sa.status = 'approved') as gm2_approved
       FROM sppd s JOIN users u ON s.created_by = u.id
       WHERE s.created_by = ?
       ORDER BY s.created_at DESC
@@ -188,8 +234,13 @@ router.get('/', (req, res) => {
 // ── Create SPPD ───────────────────────────────────────────────────────────────
 router.post('/', (req, res) => {
   const { id: userId } = req.session.user;
+  const creatorUser = db.prepare('SELECT full_name, role, jabatan_detail, area_kerja FROM users WHERE id = ?').get(userId);
+  const nama_pegawai = creatorUser.full_name;
+  const jabatan = creatorUser.jabatan_detail || creatorUser.role;
+  const area_kerja = creatorUser.area_kerja || '';
+
   const {
-    nama_pegawai, jabatan, area_kerja, tujuan, keperluan,
+    tujuan, keperluan,
     tanggal_berangkat, tanggal_kembali, transport, uang_muka,
     itinerary, biaya
   } = req.body;
@@ -399,11 +450,15 @@ ${itinerary.length ? `
 router.get('/:id/download/pdf', async (req, res) => {
   const user = req.session.user;
   const sppd = db.prepare(`
-    SELECT s.*, u.full_name AS creator_name
+    SELECT s.*, u.full_name AS creator_name,
+       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 2 AND sa.status = 'approved') as gm1_approved,
+       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 3 AND sa.status = 'approved') as gm2_approved
     FROM sppd s JOIN users u ON s.created_by = u.id WHERE s.id = ?
   `).get(req.params.id);
   if (!sppd) return res.status(404).json({ error: 'SPPD tidak ditemukan' });
-  if (!canSeeAll(user.role) && sppd.created_by !== user.id) return res.status(403).json({ error: 'Forbidden' });
+  const creator = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sppd.created_by);
+  const isSameArea = user.role === 'area_manager' && (creator?.area_kerja || '').trim().toLowerCase() === (user.area_kerja || '').trim().toLowerCase();
+  if (!canSeeAll(user.role) && sppd.created_by !== user.id && !isSameArea) return res.status(403).json({ error: 'Forbidden' });
   if (!['approved', 'completed'].includes(sppd.status))
     return res.status(400).json({ error: 'SPPD belum disetujui' });
 
@@ -423,7 +478,7 @@ router.get('/:id/download/pdf', async (req, res) => {
     const puppeteer = require('puppeteer');
     const browser = await puppeteer.launch({
       headless: 'new',
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || (fs.existsSync('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome') ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : (fs.existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined)),
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
     });
     const page = await browser.newPage();
@@ -464,7 +519,7 @@ function generateLaporanHtml(sppd, laporan, kunjungan, biaya, approvals, setting
   const topTTD      = topAppr ? getTTDBase64(topAppr.approver_user_id) : null;
   const creatorTTD  = getTTDBase64(sppd.created_by);
 
-  const LAPORAN_LABEL = { 1:'GM', 2:'GM 2', 3:'Direktur Operasional', 4:'Direktur Utama' };
+  const LAPORAN_LABEL = { 1:'Area Manager', 2:'Manager Keuangan', 3:'GM 1', 4:'GM 2', 5:'Direktur Operasional', 6:'Direktur Utama' };
 
   const kunjRows = kunjungan.map((k, i) => `
     <tr style="background:${i%2===0?'#fff':'#f5f8fc'}">
@@ -601,11 +656,15 @@ function generateLaporanHtml(sppd, laporan, kunjungan, biaya, approvals, setting
 router.get('/:id/laporan/download/pdf', async (req, res) => {
   const user = req.session.user;
   const sppd = db.prepare(`
-    SELECT s.*, u.full_name AS creator_name
+    SELECT s.*, u.full_name AS creator_name,
+       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 2 AND sa.status = 'approved') as gm1_approved,
+       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 3 AND sa.status = 'approved') as gm2_approved
     FROM sppd s JOIN users u ON s.created_by = u.id WHERE s.id = ?
   `).get(req.params.id);
   if (!sppd) return res.status(404).json({ error: 'SPPD tidak ditemukan' });
-  if (!canSeeAll(user.role) && sppd.created_by !== user.id) return res.status(403).json({ error: 'Forbidden' });
+  const creator = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sppd.created_by);
+  const isSameArea = user.role === 'area_manager' && (creator?.area_kerja || '').trim().toLowerCase() === (user.area_kerja || '').trim().toLowerCase();
+  if (!canSeeAll(user.role) && sppd.created_by !== user.id && !isSameArea) return res.status(403).json({ error: 'Forbidden' });
 
   const laporan = db.prepare('SELECT * FROM sppd_laporan WHERE sppd_id = ?').get(req.params.id);
   if (!laporan) return res.status(404).json({ error: 'Laporan tidak ditemukan' });
@@ -629,7 +688,7 @@ router.get('/:id/laporan/download/pdf', async (req, res) => {
     const puppeteer = require('puppeteer');
     const browser = await puppeteer.launch({
       headless: 'new',
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || (fs.existsSync('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome') ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : (fs.existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined)),
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
     });
     const page = await browser.newPage();
@@ -663,12 +722,16 @@ router.get('/:id/laporan/download/pdf', async (req, res) => {
 router.get('/:id', (req, res) => {
   const user = req.session.user;
   const sppd = db.prepare(`
-    SELECT s.*, u.full_name AS creator_name
+    SELECT s.*, u.full_name AS creator_name,
+       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 2 AND sa.status = 'approved') as gm1_approved,
+       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 3 AND sa.status = 'approved') as gm2_approved
     FROM sppd s JOIN users u ON s.created_by = u.id
     WHERE s.id = ?
   `).get(req.params.id);
   if (!sppd) return res.status(404).json({ error: 'SPPD tidak ditemukan' });
-  if (!canSeeAll(user.role) && sppd.created_by !== user.id) return res.status(403).json({ error: 'Forbidden' });
+  const creator = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sppd.created_by);
+  const isSameArea = user.role === 'area_manager' && (creator?.area_kerja || '').trim().toLowerCase() === (user.area_kerja || '').trim().toLowerCase();
+  if (!canSeeAll(user.role) && sppd.created_by !== user.id && !isSameArea) return res.status(403).json({ error: 'Forbidden' });
 
   const itinerary = db.prepare('SELECT * FROM sppd_itinerary WHERE sppd_id = ? ORDER BY id').all(req.params.id);
   const approvals = db.prepare(`
@@ -690,8 +753,13 @@ router.put('/:id', (req, res) => {
   if (sppd.status !== 'pending' || sppd.sppd_approval_level > 0)
     return res.status(400).json({ error: 'Tidak bisa diedit setelah proses approval dimulai' });
 
+  const creatorUser = db.prepare('SELECT full_name, role, jabatan_detail, area_kerja FROM users WHERE id = ?').get(sppd.created_by);
+  const nama_pegawai = creatorUser.full_name;
+  const jabatan = creatorUser.jabatan_detail || creatorUser.role;
+  const area_kerja = creatorUser.area_kerja || '';
+
   const {
-    nama_pegawai, jabatan, area_kerja, tujuan, keperluan,
+    tujuan, keperluan,
     tanggal_berangkat, tanggal_kembali, transport, uang_muka, itinerary, biaya
   } = req.body;
 
@@ -744,29 +812,56 @@ router.delete('/:id', (req, res) => {
 });
 
 // ── Approve SPPD ──────────────────────────────────────────────────────────────
+// Flow: sppd_approval_level=0 (waiting AM) → 1 (GM stage, both GM1&GM2 parallel) → 2 (approved)
 router.post('/:id/approve', (req, res) => {
   const user = req.session.user;
   const sppd = db.prepare('SELECT * FROM sppd WHERE id = ?').get(req.params.id);
   if (!sppd) return res.status(404).json({ error: 'SPPD tidak ditemukan' });
   if (sppd.status !== 'pending') return res.status(400).json({ error: 'SPPD sudah diproses' });
 
-  const nextLevel = sppd.sppd_approval_level + 1;
-  const expectedRole = SPPD_LEVEL_ROLES[nextLevel];
-  if (!expectedRole) return res.status(400).json({ error: 'Level approval tidak valid' });
-  if (user.role !== expectedRole && user.role !== 'admin')
-    return res.status(403).json({ error: `Hanya ${expectedRole} yang bisa menyetujui di level ini` });
-
   const { note } = req.body;
-  db.prepare(`
-    INSERT INTO sppd_approvals (sppd_id, level, approver_user_id, status, note, acted_at)
-    VALUES (?, ?, ?, 'approved', ?, datetime('now','localtime'))
-  `).run(sppd.id, nextLevel, user.id, note || '');
+  const lvl = sppd.sppd_approval_level;
 
-  if (nextLevel >= 3) {
-    const formalNomor = generateNomorSppd();
-    db.prepare("UPDATE sppd SET status='approved', sppd_approval_level=?, nomor=? WHERE id=?").run(nextLevel, formalNomor, sppd.id);
+  const ins = (level, status) =>
+    db.prepare("INSERT INTO sppd_approvals (sppd_id,level,approver_user_id,status,note,acted_at) VALUES (?,?,?,'approved',?,datetime('now','localtime'))")
+      .run(sppd.id, level, user.id, note || '');
+
+  const finalize = () => {
+    const nomor = generateNomorSppd();
+    db.prepare("UPDATE sppd SET status='approved', sppd_approval_level=2, nomor=? WHERE id=?").run(nomor, sppd.id);
+  };
+
+  if (user.role === 'area_manager') {
+    if (lvl !== 0) return res.status(403).json({ error: 'Bukan giliran Area Manager' });
+    const creator = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sppd.created_by);
+    if ((creator?.area_kerja || '').trim().toLowerCase() !== (user.area_kerja || '').trim().toLowerCase())
+      return res.status(403).json({ error: 'Area Anda tidak sesuai dengan area pembuat SPPD' });
+    ins(1); db.prepare('UPDATE sppd SET sppd_approval_level=1 WHERE id=?').run(sppd.id);
+
+  } else if (user.role === 'gm') {
+    if (lvl !== 1) return res.status(403).json({ error: 'Bukan giliran GM' });
+    if (db.prepare("SELECT id FROM sppd_approvals WHERE sppd_id=? AND level=2").get(sppd.id))
+      return res.status(400).json({ error: 'Anda sudah menyetujui SPPD ini' });
+    ins(2);
+    if (db.prepare("SELECT id FROM sppd_approvals WHERE sppd_id=? AND level=3 AND status='approved'").get(sppd.id)) finalize();
+
+  } else if (user.role === 'gm2') {
+    if (lvl !== 1) return res.status(403).json({ error: 'Bukan giliran GM 2' });
+    if (db.prepare("SELECT id FROM sppd_approvals WHERE sppd_id=? AND level=3").get(sppd.id))
+      return res.status(400).json({ error: 'Anda sudah menyetujui SPPD ini' });
+    ins(3);
+    if (db.prepare("SELECT id FROM sppd_approvals WHERE sppd_id=? AND level=2 AND status='approved'").get(sppd.id)) finalize();
+
+  } else if (user.role === 'admin') {
+    if (lvl === 0) {
+      ins(1); db.prepare('UPDATE sppd SET sppd_approval_level=1 WHERE id=?').run(sppd.id);
+    } else if (lvl === 1) {
+      if (!db.prepare("SELECT id FROM sppd_approvals WHERE sppd_id=? AND level=2").get(sppd.id)) ins(2);
+      if (!db.prepare("SELECT id FROM sppd_approvals WHERE sppd_id=? AND level=3").get(sppd.id)) ins(3);
+      finalize();
+    } else return res.status(400).json({ error: 'SPPD sudah selesai' });
   } else {
-    db.prepare('UPDATE sppd SET sppd_approval_level=? WHERE id=?').run(nextLevel, sppd.id);
+    return res.status(403).json({ error: 'Tidak berwenang' });
   }
 
   res.json({ success: true });
@@ -779,20 +874,31 @@ router.post('/:id/reject', (req, res) => {
   if (!sppd) return res.status(404).json({ error: 'SPPD tidak ditemukan' });
   if (sppd.status !== 'pending') return res.status(400).json({ error: 'SPPD sudah diproses' });
 
-  const nextLevel = sppd.sppd_approval_level + 1;
-  const expectedRole = SPPD_LEVEL_ROLES[nextLevel];
-  if (!expectedRole) return res.status(400).json({ error: 'Level approval tidak valid' });
-  if (user.role !== expectedRole && user.role !== 'admin')
-    return res.status(403).json({ error: `Hanya ${expectedRole} yang bisa menolak di level ini` });
-
   const { note } = req.body;
-  db.prepare(`
-    INSERT INTO sppd_approvals (sppd_id, level, approver_user_id, status, note, acted_at)
-    VALUES (?, ?, ?, 'rejected', ?, datetime('now','localtime'))
-  `).run(sppd.id, nextLevel, user.id, note || '');
+  const lvl = sppd.sppd_approval_level;
+  let approvalLevel;
 
-  db.prepare("UPDATE sppd SET status='rejected', sppd_approval_level=?, reject_reason=? WHERE id=?")
-    .run(nextLevel, note || '', sppd.id);
+  if (user.role === 'area_manager') {
+    if (lvl !== 0) return res.status(403).json({ error: 'Tidak berwenang' });
+    const creator = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sppd.created_by);
+    if ((creator?.area_kerja || '').trim().toLowerCase() !== (user.area_kerja || '').trim().toLowerCase())
+      return res.status(403).json({ error: 'Area tidak sesuai' });
+    approvalLevel = 1;
+  } else if (user.role === 'gm') {
+    if (lvl !== 1) return res.status(403).json({ error: 'Tidak berwenang' });
+    approvalLevel = 2;
+  } else if (user.role === 'gm2') {
+    if (lvl !== 1) return res.status(403).json({ error: 'Tidak berwenang' });
+    approvalLevel = 3;
+  } else if (user.role === 'admin') {
+    approvalLevel = lvl === 0 ? 1 : 2;
+  } else {
+    return res.status(403).json({ error: 'Tidak berwenang' });
+  }
+
+  db.prepare("INSERT INTO sppd_approvals (sppd_id,level,approver_user_id,status,note,acted_at) VALUES (?,?,?,'rejected',?,datetime('now','localtime'))")
+    .run(sppd.id, approvalLevel, user.id, note || '');
+  db.prepare("UPDATE sppd SET status='rejected', reject_reason=? WHERE id=?").run(note || '', sppd.id);
 
   res.json({ success: true });
 });
@@ -802,7 +908,9 @@ router.get('/:id/laporan', (req, res) => {
   const user = req.session.user;
   const sppd = db.prepare('SELECT * FROM sppd WHERE id = ?').get(req.params.id);
   if (!sppd) return res.status(404).json({ error: 'SPPD tidak ditemukan' });
-  if (!canSeeAll(user.role) && sppd.created_by !== user.id) return res.status(403).json({ error: 'Forbidden' });
+  const creator = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sppd.created_by);
+  const isSameArea = user.role === 'area_manager' && (creator?.area_kerja || '').trim().toLowerCase() === (user.area_kerja || '').trim().toLowerCase();
+  if (!canSeeAll(user.role) && sppd.created_by !== user.id && !isSameArea) return res.status(403).json({ error: 'Forbidden' });
 
   const laporan = db.prepare('SELECT * FROM sppd_laporan WHERE sppd_id = ?').get(req.params.id);
   if (!laporan) return res.json(null);
@@ -832,8 +940,8 @@ router.post('/:id/laporan', (req, res) => {
   const totalBiaya = Array.isArray(biaya) ? biaya.reduce((s, b) => s + (Number(b.jumlah) || 0), 0) : 0;
 
   const result = db.prepare(`
-    INSERT INTO sppd_laporan (sppd_id, tanggal_laporan, isi_laporan, catatan_umum, total_biaya)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO sppd_laporan (sppd_id, tanggal_laporan, isi_laporan, catatan_umum, total_biaya, laporan_approval_level)
+    VALUES (?, ?, ?, ?, ?, 1)
   `).run(req.params.id, tanggal_laporan || '', isi_laporan || '', catatan_umum || '', totalBiaya);
   const laporanId = result.lastInsertRowid;
 
@@ -883,7 +991,8 @@ router.put('/:id/laporan', (req, res) => {
   res.json({ success: true });
 });
 
-// ── Approve Laporan ───────────────────────────────────────────────────────────
+// ── Approve Laporan (6-level, same as KK) ────────────────────────────────────
+// laporan_approval_level: 1=waiting AM, 2=waiting MK, 3=GM stage, 5=waiting DO, 6=waiting DU
 router.post('/:id/laporan/approve', (req, res) => {
   const user = req.session.user;
   const sppd = db.prepare('SELECT * FROM sppd WHERE id = ?').get(req.params.id);
@@ -893,35 +1002,79 @@ router.post('/:id/laporan/approve', (req, res) => {
   if (!laporan) return res.status(404).json({ error: 'Laporan tidak ditemukan' });
   if (laporan.status !== 'pending') return res.status(400).json({ error: 'Laporan sudah diproses' });
 
-  const nextLevel = laporan.laporan_approval_level + 1;
-  const expectedRole = LAPORAN_LEVEL_ROLES[nextLevel];
-  if (!expectedRole) return res.status(400).json({ error: 'Level approval tidak valid' });
-  if (user.role !== expectedRole && user.role !== 'admin')
-    return res.status(403).json({ error: `Hanya ${expectedRole} yang bisa menyetujui di level ini` });
-
   const { note } = req.body;
-  db.prepare(`
-    INSERT INTO sppd_laporan_approvals (laporan_id, level, approver_user_id, status, note, acted_at)
-    VALUES (?, ?, ?, 'approved', ?, datetime('now','localtime'))
-  `).run(laporan.id, nextLevel, user.id, note || '');
+  const currLvl = laporan.laporan_approval_level;
 
-  if (nextLevel >= 4) {
-    db.prepare("UPDATE sppd_laporan SET status='approved', laporan_approval_level=? WHERE id=?").run(nextLevel, laporan.id);
-    db.prepare("UPDATE sppd SET status='completed' WHERE id=?").run(sppd.id);
-    // Auto-create pencairan record
-    const existing = db.prepare('SELECT id FROM sppd_pencairan WHERE sppd_id = ?').get(sppd.id);
-    if (!existing) {
-      db.prepare(`INSERT INTO sppd_pencairan (sppd_id, jumlah_usulan, jumlah_realisasi, status) VALUES (?, ?, ?, 'belum_cair')`)
-        .run(sppd.id, sppd.uang_muka || 0, laporan.total_biaya || 0);
+  const ins = (level) =>
+    db.prepare("INSERT INTO sppd_laporan_approvals (laporan_id,level,approver_user_id,status,note,acted_at) VALUES (?,?,?,'approved',?,datetime('now','localtime'))")
+      .run(laporan.id, level, user.id, note || '');
+
+  const advance = (nextLvl) => {
+    if (nextLvl > LP_MAX) {
+      // Final approval
+      db.prepare("UPDATE sppd_laporan SET status='approved', laporan_approval_level=7 WHERE id=?").run(laporan.id);
+      db.prepare("UPDATE sppd SET status='completed' WHERE id=?").run(sppd.id);
+      const existing = db.prepare('SELECT id FROM sppd_pencairan WHERE sppd_id=?').get(sppd.id);
+      if (!existing) {
+        db.prepare("INSERT INTO sppd_pencairan (sppd_id,jumlah_usulan,jumlah_realisasi,status,pencairan_approval_level) VALUES (?,?,?,'belum_cair',1)")
+          .run(sppd.id, sppd.uang_muka || 0, laporan.total_biaya || 0);
+      }
+    } else {
+      db.prepare('UPDATE sppd_laporan SET laporan_approval_level=? WHERE id=?').run(nextLvl, laporan.id);
+    }
+  };
+
+  if (user.role === 'area_manager') {
+    if (currLvl !== 1) return res.status(403).json({ error: 'Bukan giliran Area Manager' });
+    const creator = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sppd.created_by);
+    if ((creator?.area_kerja || '').trim().toLowerCase() !== (user.area_kerja || '').trim().toLowerCase())
+      return res.status(403).json({ error: 'Area tidak sesuai' });
+    ins(1); advance(2);
+
+  } else if (user.role === 'manager_keuangan') {
+    if (currLvl !== 2) return res.status(403).json({ error: 'Bukan giliran Manager Keuangan' });
+    ins(2); advance(3);
+
+  } else if (user.role === 'gm') {
+    if (currLvl !== 3) return res.status(403).json({ error: 'Bukan giliran GM' });
+    if (db.prepare("SELECT id FROM sppd_laporan_approvals WHERE laporan_id=? AND level=3").get(laporan.id))
+      return res.status(400).json({ error: 'Anda sudah menyetujui laporan ini' });
+    ins(3); advance(checkGmParallel('sppd_laporan_approvals', 'laporan_id', laporan.id));
+
+  } else if (user.role === 'gm2') {
+    if (currLvl !== 3) return res.status(403).json({ error: 'Bukan giliran GM 2' });
+    if (db.prepare("SELECT id FROM sppd_laporan_approvals WHERE laporan_id=? AND level=4").get(laporan.id))
+      return res.status(400).json({ error: 'Anda sudah menyetujui laporan ini' });
+    ins(4); advance(checkGmParallel('sppd_laporan_approvals', 'laporan_id', laporan.id));
+
+  } else if (user.role === 'direktur_ops') {
+    if (currLvl !== 5) return res.status(403).json({ error: 'Bukan giliran Direktur Operasional' });
+    ins(5); advance(6);
+
+  } else if (user.role === 'direktur_utama') {
+    if (currLvl !== 6) return res.status(403).json({ error: 'Bukan giliran Direktur Utama' });
+    ins(6); advance(7);
+
+  } else if (user.role === 'admin') {
+    if (currLvl === 3) {
+      // Parallel GM: approve whichever is pending
+      if (!db.prepare("SELECT id FROM sppd_laporan_approvals WHERE laporan_id=? AND level=3").get(laporan.id)) ins(3);
+      if (!db.prepare("SELECT id FROM sppd_laporan_approvals WHERE laporan_id=? AND level=4").get(laporan.id)) ins(4);
+      advance(5);
+    } else {
+      const levelMap = { 1:1, 2:2, 5:5, 6:6 };
+      const approvalLevel = levelMap[currLvl] || currLvl;
+      ins(approvalLevel);
+      advance(currLvl === 6 ? 7 : currLvl + 1);
     }
   } else {
-    db.prepare('UPDATE sppd_laporan SET laporan_approval_level=? WHERE id=?').run(nextLevel, laporan.id);
+    return res.status(403).json({ error: 'Tidak berwenang' });
   }
 
   res.json({ success: true });
 });
 
-// ── Reject Laporan ────────────────────────────────────────────────────────────
+// ── Reject Laporan (6-level, same as KK) ─────────────────────────────────────
 router.post('/:id/laporan/reject', (req, res) => {
   const user = req.session.user;
   const sppd = db.prepare('SELECT * FROM sppd WHERE id = ?').get(req.params.id);
@@ -931,20 +1084,160 @@ router.post('/:id/laporan/reject', (req, res) => {
   if (!laporan) return res.status(404).json({ error: 'Laporan tidak ditemukan' });
   if (laporan.status !== 'pending') return res.status(400).json({ error: 'Laporan sudah diproses' });
 
-  const nextLevel = laporan.laporan_approval_level + 1;
-  const expectedRole = LAPORAN_LEVEL_ROLES[nextLevel];
-  if (!expectedRole) return res.status(400).json({ error: 'Level approval tidak valid' });
-  if (user.role !== expectedRole && user.role !== 'admin')
-    return res.status(403).json({ error: `Hanya ${expectedRole} yang bisa menolak di level ini` });
+  const { note } = req.body;
+  const currLvl = laporan.laporan_approval_level;
+  let rejLevel;
+
+  if (user.role === 'area_manager') {
+    if (currLvl !== 1) return res.status(403).json({ error: 'Tidak berwenang' });
+    const creator = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sppd.created_by);
+    if ((creator?.area_kerja || '').trim().toLowerCase() !== (user.area_kerja || '').trim().toLowerCase())
+      return res.status(403).json({ error: 'Area tidak sesuai' });
+    rejLevel = 1;
+  } else if (user.role === 'manager_keuangan') {
+    if (currLvl !== 2) return res.status(403).json({ error: 'Tidak berwenang' });
+    rejLevel = 2;
+  } else if (user.role === 'gm') {
+    if (currLvl !== 3) return res.status(403).json({ error: 'Tidak berwenang' });
+    rejLevel = 3;
+  } else if (user.role === 'gm2') {
+    if (currLvl !== 3) return res.status(403).json({ error: 'Tidak berwenang' });
+    rejLevel = 4;
+  } else if (user.role === 'direktur_ops') {
+    if (currLvl !== 5) return res.status(403).json({ error: 'Tidak berwenang' });
+    rejLevel = 5;
+  } else if (user.role === 'direktur_utama') {
+    if (currLvl !== 6) return res.status(403).json({ error: 'Tidak berwenang' });
+    rejLevel = 6;
+  } else if (user.role === 'admin') {
+    const lvlMap = { 1:1, 2:2, 3:3, 5:5, 6:6 };
+    rejLevel = lvlMap[currLvl] || currLvl;
+  } else {
+    return res.status(403).json({ error: 'Tidak berwenang' });
+  }
+
+  db.prepare("INSERT INTO sppd_laporan_approvals (laporan_id,level,approver_user_id,status,note,acted_at) VALUES (?,?,?,'rejected',?,datetime('now','localtime'))")
+    .run(laporan.id, rejLevel, user.id, note || '');
+  db.prepare("UPDATE sppd_laporan SET status='rejected' WHERE id=?").run(laporan.id);
+
+  res.json({ success: true });
+});
+
+// ── Approve Pencairan (6-level, same as KK) ───────────────────────────────────
+// pencairan_approval_level: 1=AM, 2=MK, 3=GM stage, 5=DO, 6=DU → 7=done (sudah_cair)
+router.post('/:id/pencairan/approve', (req, res) => {
+  const user = req.session.user;
+  const sppd = db.prepare('SELECT * FROM sppd WHERE id = ?').get(req.params.id);
+  if (!sppd) return res.status(404).json({ error: 'SPPD tidak ditemukan' });
+
+  const pencairan = db.prepare('SELECT * FROM sppd_pencairan WHERE sppd_id = ?').get(req.params.id);
+  if (!pencairan) return res.status(404).json({ error: 'Pencairan tidak ditemukan' });
+  if (pencairan.status === 'sudah_cair') return res.status(400).json({ error: 'Pencairan sudah selesai' });
 
   const { note } = req.body;
-  db.prepare(`
-    INSERT INTO sppd_laporan_approvals (laporan_id, level, approver_user_id, status, note, acted_at)
-    VALUES (?, ?, ?, 'rejected', ?, datetime('now','localtime'))
-  `).run(laporan.id, nextLevel, user.id, note || '');
+  const currLvl = pencairan.pencairan_approval_level;
 
-  db.prepare("UPDATE sppd_laporan SET status='rejected', laporan_approval_level=? WHERE id=?")
-    .run(nextLevel, laporan.id);
+  const ins = (level) =>
+    db.prepare("INSERT INTO sppd_pencairan_approvals (pencairan_id,level,approver_user_id,status,note,acted_at) VALUES (?,?,?,'approved',?,datetime('now','localtime'))")
+      .run(pencairan.id, level, user.id, note || '');
+
+  const advance = (nextLvl) => {
+    if (nextLvl > LP_MAX) {
+      db.prepare("UPDATE sppd_pencairan SET status='sudah_cair', pencairan_approval_level=7, updated_by=?, updated_at=datetime('now','localtime') WHERE id=?")
+        .run(user.id, pencairan.id);
+    } else {
+      db.prepare('UPDATE sppd_pencairan SET pencairan_approval_level=? WHERE id=?').run(nextLvl, pencairan.id);
+    }
+  };
+
+  if (user.role === 'area_manager') {
+    if (currLvl !== 1) return res.status(403).json({ error: 'Bukan giliran Area Manager' });
+    const creator = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sppd.created_by);
+    if ((creator?.area_kerja || '').trim().toLowerCase() !== (user.area_kerja || '').trim().toLowerCase())
+      return res.status(403).json({ error: 'Area tidak sesuai' });
+    ins(1); advance(2);
+  } else if (user.role === 'manager_keuangan') {
+    if (currLvl !== 2) return res.status(403).json({ error: 'Bukan giliran Manager Keuangan' });
+    ins(2); advance(3);
+  } else if (user.role === 'gm') {
+    if (currLvl !== 3) return res.status(403).json({ error: 'Bukan giliran GM' });
+    if (db.prepare("SELECT id FROM sppd_pencairan_approvals WHERE pencairan_id=? AND level=3").get(pencairan.id))
+      return res.status(400).json({ error: 'Anda sudah menyetujui pencairan ini' });
+    ins(3); advance(checkGmParallel('sppd_pencairan_approvals', 'pencairan_id', pencairan.id));
+  } else if (user.role === 'gm2') {
+    if (currLvl !== 3) return res.status(403).json({ error: 'Bukan giliran GM 2' });
+    if (db.prepare("SELECT id FROM sppd_pencairan_approvals WHERE pencairan_id=? AND level=4").get(pencairan.id))
+      return res.status(400).json({ error: 'Anda sudah menyetujui pencairan ini' });
+    ins(4); advance(checkGmParallel('sppd_pencairan_approvals', 'pencairan_id', pencairan.id));
+  } else if (user.role === 'direktur_ops') {
+    if (currLvl !== 5) return res.status(403).json({ error: 'Bukan giliran Direktur Operasional' });
+    ins(5); advance(6);
+  } else if (user.role === 'direktur_utama') {
+    if (currLvl !== 6) return res.status(403).json({ error: 'Bukan giliran Direktur Utama' });
+    ins(6); advance(7);
+  } else if (user.role === 'admin') {
+    if (currLvl === 3) {
+      if (!db.prepare("SELECT id FROM sppd_pencairan_approvals WHERE pencairan_id=? AND level=3").get(pencairan.id)) ins(3);
+      if (!db.prepare("SELECT id FROM sppd_pencairan_approvals WHERE pencairan_id=? AND level=4").get(pencairan.id)) ins(4);
+      advance(5);
+    } else {
+      const levelMap = { 1:1, 2:2, 5:5, 6:6 };
+      ins(levelMap[currLvl] || currLvl);
+      advance(currLvl === 6 ? 7 : currLvl + 1);
+    }
+  } else {
+    return res.status(403).json({ error: 'Tidak berwenang' });
+  }
+
+  res.json({ success: true });
+});
+
+// ── Reject Pencairan (6-level) ────────────────────────────────────────────────
+router.post('/:id/pencairan/reject', (req, res) => {
+  const user = req.session.user;
+  const sppd = db.prepare('SELECT * FROM sppd WHERE id = ?').get(req.params.id);
+  if (!sppd) return res.status(404).json({ error: 'SPPD tidak ditemukan' });
+
+  const pencairan = db.prepare('SELECT * FROM sppd_pencairan WHERE sppd_id = ?').get(req.params.id);
+  if (!pencairan) return res.status(404).json({ error: 'Pencairan tidak ditemukan' });
+  if (pencairan.status === 'sudah_cair') return res.status(400).json({ error: 'Pencairan sudah selesai' });
+
+  const { note } = req.body;
+  const currLvl = pencairan.pencairan_approval_level;
+  let rejLevel;
+
+  if (user.role === 'area_manager') {
+    if (currLvl !== 1) return res.status(403).json({ error: 'Tidak berwenang' });
+    const creator = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sppd.created_by);
+    if ((creator?.area_kerja || '').trim().toLowerCase() !== (user.area_kerja || '').trim().toLowerCase())
+      return res.status(403).json({ error: 'Area tidak sesuai' });
+    rejLevel = 1;
+  } else if (user.role === 'manager_keuangan') {
+    if (currLvl !== 2) return res.status(403).json({ error: 'Tidak berwenang' });
+    rejLevel = 2;
+  } else if (user.role === 'gm') {
+    if (currLvl !== 3) return res.status(403).json({ error: 'Tidak berwenang' });
+    rejLevel = 3;
+  } else if (user.role === 'gm2') {
+    if (currLvl !== 3) return res.status(403).json({ error: 'Tidak berwenang' });
+    rejLevel = 4;
+  } else if (user.role === 'direktur_ops') {
+    if (currLvl !== 5) return res.status(403).json({ error: 'Tidak berwenang' });
+    rejLevel = 5;
+  } else if (user.role === 'direktur_utama') {
+    if (currLvl !== 6) return res.status(403).json({ error: 'Tidak berwenang' });
+    rejLevel = 6;
+  } else if (user.role === 'admin') {
+    const lvlMap = { 1:1, 2:2, 3:3, 5:5, 6:6 };
+    rejLevel = lvlMap[currLvl] || currLvl;
+  } else {
+    return res.status(403).json({ error: 'Tidak berwenang' });
+  }
+
+  db.prepare("INSERT INTO sppd_pencairan_approvals (pencairan_id,level,approver_user_id,status,note,acted_at) VALUES (?,?,?,'rejected',?,datetime('now','localtime'))")
+    .run(pencairan.id, rejLevel, user.id, note || '');
+  db.prepare("UPDATE sppd_pencairan SET status='ditolak', updated_by=?, updated_at=datetime('now','localtime') WHERE id=?")
+    .run(user.id, pencairan.id);
 
   res.json({ success: true });
 });
@@ -954,14 +1247,22 @@ router.get('/:id/pencairan', (req, res) => {
   const user = req.session.user;
   const sppd = db.prepare('SELECT * FROM sppd WHERE id = ?').get(req.params.id);
   if (!sppd) return res.status(404).json({ error: 'SPPD tidak ditemukan' });
-  if (!canSeeAll(user.role) && sppd.created_by !== user.id) return res.status(403).json({ error: 'Forbidden' });
+  const creator = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sppd.created_by);
+  const isSameArea = user.role === 'area_manager' && (creator?.area_kerja || '').trim().toLowerCase() === (user.area_kerja || '').trim().toLowerCase();
+  if (!canSeeAll(user.role) && sppd.created_by !== user.id && !isSameArea) return res.status(403).json({ error: 'Forbidden' });
 
   const pencairan = db.prepare(`
     SELECT p.*, u.full_name AS updated_by_name
     FROM sppd_pencairan p LEFT JOIN users u ON p.updated_by = u.id
     WHERE p.sppd_id = ?
   `).get(req.params.id);
-  res.json(pencairan || null);
+  if (!pencairan) return res.json(null);
+  const approvals = db.prepare(`
+    SELECT pa.*, u.full_name AS approver_name
+    FROM sppd_pencairan_approvals pa LEFT JOIN users u ON pa.approver_user_id = u.id
+    WHERE pa.pencairan_id = ? ORDER BY pa.level
+  `).all(pencairan.id);
+  res.json({ ...pencairan, approvals });
 });
 
 // ── Update Pencairan status (manager_keuangan) ────────────────────────────────

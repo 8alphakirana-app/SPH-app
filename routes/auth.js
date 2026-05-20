@@ -14,7 +14,7 @@ router.post('/login', (req, res) => {
     return res.status(401).json({ error: 'Username atau password salah' });
   }
 
-  req.session.user = { id: user.id, username: user.username, full_name: user.full_name, role: user.role };
+  req.session.user = { id: user.id, username: user.username, full_name: user.full_name, role: user.role, area_kerja: user.area_kerja, jabatan_detail: user.jabatan_detail };
   res.json({ success: true, user: req.session.user });
 });
 

@@ -4,9 +4,10 @@ const db      = require('../database');
 const fs      = require('fs');
 const path    = require('path');
 
-const LEVEL_ROLES  = { 1: 'gm', 2: 'manager_keuangan', 3: 'direktur_ops', 4: 'direktur_utama' };
-const ROLE_LEVELS  = { gm: 1, manager_keuangan: 2, direktur_ops: 3, direktur_utama: 4 };
-const LEVEL_LABELS = { 1: 'GM', 2: 'Manager Keuangan', 3: 'Direktur Operasional', 4: 'Direktur Utama' };
+const LEVEL_ROLES  = { 1: 'area_manager', 2: 'manager_keuangan', 3: 'gm', 4: 'gm2', 5: 'direktur_ops', 6: 'direktur_utama' };
+const ROLE_LEVELS  = { area_manager: 1, manager_keuangan: 2, gm: 3, gm2: 4, direktur_ops: 5, direktur_utama: 6 };
+const LEVEL_LABELS = { 1: 'Area Manager', 2: 'Manager Keuangan', 3: 'GM 1', 4: 'GM 2', 5: 'Direktur Operasional', 6: 'Direktur Utama' };
+const MAX_LEVEL    = 6;
 
 function requireLogin(req, res, next) {
   if (!req.session.user) return res.status(401).json({ error: 'Belum login' });
@@ -14,37 +15,62 @@ function requireLogin(req, res, next) {
 }
 
 function calcKK(kk) {
-  const nkt = parseFloat(kk.nilai_kontrak_total) || 0;
-  const np  = parseFloat(kk.nilai_pembyr)         || 0;
-  const bdo = parseFloat(kk.b_distribusi_ongkir)  || 0;
+  let products = [];
+  try { products = JSON.parse(kk.products || '[]'); } catch {}
 
+  let nkt, dppBeli, bDistribusi, ongkir;
+  if (products.length > 0) {
+    nkt          = products.reduce((s, p) => s + (p.nilai_kontrak || 0), 0);
+    dppBeli      = products.reduce((s, p) => s + (p.dpp_beli || 0), 0);
+    bDistribusi  = products.reduce((s, p) => s + (p.b_distribusi || 0), 0);
+    ongkir       = products.reduce((s, p) => s + (p.ongkir || 0), 0);
+  } else {
+    nkt          = parseFloat(kk.nilai_kontrak_total) || 0;
+    dppBeli      = parseFloat(kk.dpp_beli) || (parseFloat(kk.nilai_pembyr) || 0) / 1.11;
+    bDistribusi  = parseFloat(kk.b_distribusi) || 0;
+    ongkir       = parseFloat(kk.ongkir) || 0;
+    const bdo    = (bDistribusi + ongkir) || parseFloat(kk.b_distribusi_ongkir) || 0;
+    if (!bDistribusi && !ongkir && bdo) bDistribusi = bdo;
+  }
+
+  const bdo            = bDistribusi + ongkir;
   const dppKontrak     = nkt / 1.11;
   const ppnKontrak     = dppKontrak * 0.11;
   const pphKontrak     = dppKontrak * 0.015;
   const penerimaanUang = nkt - (ppnKontrak + pphKontrak);
 
-  const dppBeli = np / 1.11;
-  const ppnBeli = dppBeli * 0.11;
-  const pphBeli = dppBeli * 0.015;
+  const ppnBeli        = dppBeli * 0.11;
+  const nilaiPembyr    = dppBeli * 1.11;
 
-  const surplusDefisit = penerimaanUang - (dppBeli + ppnBeli + pphBeli + bdo);
+  const surplusDefisit = penerimaanUang - (dppBeli + ppnBeli + bdo);
   const laba           = dppKontrak - dppBeli - bdo;
+  const bMargin        = penerimaanUang > 0 ? (bDistribusi / penerimaanUang) * 100 : 0;
+  const ongkirPct      = penerimaanUang > 0 ? (ongkir / penerimaanUang) * 100 : 0;
   const netMargin      = dppKontrak > 0 ? (laba / dppKontrak) * 100 : 0;
 
-  return { dppKontrak, ppnKontrak, pphKontrak, penerimaanUang, dppBeli, ppnBeli, pphBeli, surplusDefisit, laba, netMargin };
+  return { dppKontrak, ppnKontrak, pphKontrak, penerimaanUang, dppBeli, ppnBeli, nilaiPembyr, bDistribusi, ongkir, surplusDefisit, laba, bMargin, ongkirPct, netMargin, products };
 }
 
 // ── POST /api/kk ─────────────────────────────────────────────────────────────
 router.post('/', requireLogin, (req, res) => {
   const {
     nama_pekerjaan, nomor_surat, perihal, satker, prinsipal, nama_barang,
-    pelanggan, nilai_kontrak_total, nilai_pembyr, b_distribusi_ongkir,
-    term_payment_supplier, term_payment_pelanggan, sumber_anggaran, notes
+    pelanggan, nilai_kontrak_total, dpp_beli, b_distribusi, ongkir,
+    term_payment_supplier, term_payment_pelanggan, sumber_anggaran, notes,
+    products
   } = req.body;
 
   if (!nama_pekerjaan || !pelanggan) {
     return res.status(400).json({ error: 'Nama pekerjaan dan pelanggan wajib diisi' });
   }
+
+  const productsArr    = Array.isArray(products) ? products : [];
+  const productsJson   = JSON.stringify(productsArr);
+  const dppBeliVal     = parseFloat(dpp_beli) || 0;
+  const nilaiPembyrVal = dppBeliVal * 1.11;
+  const bDistribusiVal = parseFloat(b_distribusi) || 0;
+  const ongkirVal      = parseFloat(ongkir) || 0;
+  const bdoVal         = bDistribusiVal + ongkirVal;
 
   const subResult = db.prepare(`
     INSERT INTO submissions
@@ -59,18 +85,19 @@ router.post('/', requireLogin, (req, res) => {
   db.prepare(`
     INSERT INTO kertas_kerja
       (submission_id, nama_pekerjaan, nomor_surat, perihal, satker, prinsipal,
-       nama_barang, pelanggan, nilai_kontrak_total, nilai_pembyr,
-       b_distribusi_ongkir, term_payment_supplier, term_payment_pelanggan, sumber_anggaran)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+       nama_barang, pelanggan, nilai_kontrak_total, dpp_beli, nilai_pembyr,
+       b_distribusi, ongkir, b_distribusi_ongkir, term_payment_supplier, term_payment_pelanggan, sumber_anggaran, products)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `).run(
     submissionId, nama_pekerjaan, nomor_surat || '', perihal || '',
     satker || '', prinsipal || '', nama_barang || '', pelanggan,
-    parseFloat(nilai_kontrak_total) || 0, parseFloat(nilai_pembyr) || 0,
-    parseFloat(b_distribusi_ongkir) || 0,
-    term_payment_supplier || '', term_payment_pelanggan || '', sumber_anggaran || ''
+    parseFloat(nilai_kontrak_total) || 0, dppBeliVal, nilaiPembyrVal,
+    bDistribusiVal, ongkirVal, bdoVal,
+    term_payment_supplier || '', term_payment_pelanggan || '', sumber_anggaran || '',
+    productsJson
   );
 
-  for (let level = 1; level <= 4; level++) {
+  for (let level = 1; level <= MAX_LEVEL; level++) {
     db.prepare("INSERT INTO kk_approvals (submission_id, level, status) VALUES (?, ?, 'pending')").run(submissionId, level);
   }
 
@@ -84,10 +111,12 @@ router.get('/', requireLogin, (req, res) => {
 
   const base = `
     SELECT s.id, s.status, s.kk_approval_level, s.created_at, s.created_by, s.reject_reason,
-           kk.nama_pekerjaan, kk.pelanggan, kk.nilai_kontrak_total, kk.nilai_pembyr, kk.b_distribusi_ongkir,
+           kk.nama_pekerjaan, kk.pelanggan, kk.nilai_kontrak_total, kk.dpp_beli, kk.nilai_pembyr, kk.b_distribusi, kk.ongkir, kk.b_distribusi_ongkir, kk.products,
            kk.nomor_surat, kk.perihal, kk.satker, kk.prinsipal, kk.nama_barang,
            kk.term_payment_supplier, kk.term_payment_pelanggan, kk.sumber_anggaran,
-           u.full_name as creator_name
+           u.full_name as creator_name,
+           (SELECT COUNT(*) FROM kk_approvals ka WHERE ka.submission_id = s.id AND ka.level = 3 AND ka.status = 'approved') as gm1_approved,
+           (SELECT COUNT(*) FROM kk_approvals ka WHERE ka.submission_id = s.id AND ka.level = 4 AND ka.status = 'approved') as gm2_approved
     FROM submissions s
     JOIN kertas_kerja kk ON kk.submission_id = s.id
     LEFT JOIN users u ON s.created_by = u.id
@@ -96,6 +125,30 @@ router.get('/', requireLogin, (req, res) => {
 
   if (user.role === 'admin' || user.role === 'direktur_utama' || user.role === 'kantor_pusat') {
     rows = db.prepare(base + ' ORDER BY s.created_at DESC').all();
+  } else if (user.role === 'area_manager') {
+    const area = user.area_kerja || db.prepare('SELECT area_kerja FROM users WHERE id=?').get(user.id)?.area_kerja || '';
+    rows = db.prepare(base + `
+      AND (
+        (s.kk_approval_level = 1 AND EXISTS (
+          SELECT 1 FROM users u2 WHERE u2.id = s.created_by AND LOWER(TRIM(u2.area_kerja)) = LOWER(TRIM(?))
+        ))
+        OR s.status != 'pending'
+        OR EXISTS (SELECT 1 FROM kk_approvals a WHERE a.submission_id=s.id AND a.level=1 AND a.approver_user_id=?)
+      )
+      ORDER BY s.created_at DESC
+    `).all(area, user.id);
+  } else if (user.role === 'gm') {
+    rows = db.prepare(base + `
+      AND (s.kk_approval_level = 3 OR s.status != 'pending'
+           OR EXISTS (SELECT 1 FROM kk_approvals a WHERE a.submission_id=s.id AND a.level=3 AND a.approver_user_id=?))
+      ORDER BY s.created_at DESC
+    `).all(user.id);
+  } else if (user.role === 'gm2') {
+    rows = db.prepare(base + `
+      AND (s.kk_approval_level = 3 OR s.status != 'pending'
+           OR EXISTS (SELECT 1 FROM kk_approvals a WHERE a.submission_id=s.id AND a.level=4 AND a.approver_user_id=?))
+      ORDER BY s.created_at DESC
+    `).all(user.id);
   } else if (ROLE_LEVELS[user.role]) {
     const myLevel = ROLE_LEVELS[user.role];
     rows = db.prepare(base + `
@@ -114,7 +167,9 @@ router.get('/', requireLogin, (req, res) => {
 router.get('/:id', requireLogin, (req, res) => {
   const user = req.session.user;
   const row  = db.prepare(`
-    SELECT s.*, kk.*, u.full_name as creator_name
+    SELECT s.*, kk.*, u.full_name as creator_name,
+           (SELECT COUNT(*) FROM kk_approvals ka WHERE ka.submission_id = s.id AND ka.level = 3 AND ka.status = 'approved') as gm1_approved,
+           (SELECT COUNT(*) FROM kk_approvals ka WHERE ka.submission_id = s.id AND ka.level = 4 AND ka.status = 'approved') as gm2_approved
     FROM submissions s
     JOIN kertas_kerja kk ON kk.submission_id = s.id
     LEFT JOIN users u ON s.created_by = u.id
@@ -144,23 +199,32 @@ router.put('/:id', requireLogin, (req, res) => {
 
   const {
     nama_pekerjaan, nomor_surat, perihal, satker, prinsipal, nama_barang,
-    pelanggan, nilai_kontrak_total, nilai_pembyr, b_distribusi_ongkir,
-    term_payment_supplier, term_payment_pelanggan, sumber_anggaran, notes
+    pelanggan, nilai_kontrak_total, dpp_beli, b_distribusi, ongkir,
+    term_payment_supplier, term_payment_pelanggan, sumber_anggaran, notes,
+    products
   } = req.body;
 
   if (!nama_pekerjaan || !pelanggan) return res.status(400).json({ error: 'Nama pekerjaan dan pelanggan wajib diisi' });
+
+  const productsArr    = Array.isArray(products) ? products : [];
+  const productsJson   = JSON.stringify(productsArr);
+  const dppBeliVal     = parseFloat(dpp_beli) || 0;
+  const nilaiPembyrVal = dppBeliVal * 1.11;
+  const bDistribusiVal = parseFloat(b_distribusi) || 0;
+  const ongkirVal      = parseFloat(ongkir) || 0;
+  const bdoVal         = bDistribusiVal + ongkirVal;
 
   db.prepare('UPDATE submissions SET client_name=?, notes=? WHERE id=?').run(pelanggan, notes || '', req.params.id);
   db.prepare(`
     UPDATE kertas_kerja SET
       nama_pekerjaan=?, nomor_surat=?, perihal=?, satker=?, prinsipal=?, nama_barang=?,
-      pelanggan=?, nilai_kontrak_total=?, nilai_pembyr=?, b_distribusi_ongkir=?,
-      term_payment_supplier=?, term_payment_pelanggan=?, sumber_anggaran=?
+      pelanggan=?, nilai_kontrak_total=?, dpp_beli=?, nilai_pembyr=?, b_distribusi=?, ongkir=?, b_distribusi_ongkir=?,
+      term_payment_supplier=?, term_payment_pelanggan=?, sumber_anggaran=?, products=?
     WHERE submission_id=?
   `).run(
     nama_pekerjaan, nomor_surat || '', perihal || '', satker || '', prinsipal || '', nama_barang || '',
-    pelanggan, parseFloat(nilai_kontrak_total)||0, parseFloat(nilai_pembyr)||0, parseFloat(b_distribusi_ongkir)||0,
-    term_payment_supplier||'', term_payment_pelanggan||'', sumber_anggaran||'', req.params.id
+    pelanggan, parseFloat(nilai_kontrak_total)||0, dppBeliVal, nilaiPembyrVal, bDistribusiVal, ongkirVal, bdoVal,
+    term_payment_supplier||'', term_payment_pelanggan||'', sumber_anggaran||'', productsJson, req.params.id
   );
 
   res.json({ success: true });
@@ -189,22 +253,71 @@ router.post('/:id/approve', requireLogin, (req, res) => {
   if (sub.status !== 'pending') return res.status(400).json({ error: 'KK sudah diproses' });
 
   const currentLevel = sub.kk_approval_level;
-  if (LEVEL_ROLES[currentLevel] !== user.role && user.role !== 'admin') {
-    return res.status(403).json({ error: `Anda tidak berwenang approve level ${currentLevel} (${LEVEL_LABELS[currentLevel]})` });
-  }
-
   const now = new Date().toISOString();
-  db.prepare("UPDATE kk_approvals SET status='approved', approver_user_id=?, note=?, acted_at=? WHERE submission_id=? AND level=?")
-    .run(user.id, note || '', now, req.params.id, currentLevel);
+  let approvalLevel;
 
-  if (currentLevel < 4) {
-    db.prepare('UPDATE submissions SET kk_approval_level=? WHERE id=?').run(currentLevel + 1, req.params.id);
+  if (user.role === 'area_manager') {
+    if (currentLevel !== 1) return res.status(403).json({ error: 'Bukan giliran Area Manager' });
+    const creator = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sub.created_by);
+    if ((creator?.area_kerja || '').trim().toLowerCase() !== (user.area_kerja || '').trim().toLowerCase()) {
+      return res.status(403).json({ error: 'Area Anda tidak sesuai dengan area pembuat KK' });
+    }
+    approvalLevel = 1;
+  } else if (user.role === 'gm') {
+    if (currentLevel !== 3) return res.status(403).json({ error: 'Bukan giliran GM' });
+    const existing = db.prepare("SELECT status FROM kk_approvals WHERE submission_id=? AND level=3").get(req.params.id);
+    if (existing?.status !== 'pending') return res.status(400).json({ error: 'Anda sudah menyetujui KK ini' });
+    approvalLevel = 3;
+  } else if (user.role === 'gm2') {
+    if (currentLevel !== 3) return res.status(403).json({ error: 'Bukan giliran GM 2' });
+    const existing = db.prepare("SELECT status FROM kk_approvals WHERE submission_id=? AND level=4").get(req.params.id);
+    if (existing?.status !== 'pending') return res.status(400).json({ error: 'Anda sudah menyetujui KK ini' });
+    approvalLevel = 4;
+  } else if (user.role === 'admin') {
+    if (currentLevel === 3) {
+      // Admin approve GM stage: approve whichever GM level is still pending
+      const gm1 = db.prepare("SELECT status FROM kk_approvals WHERE submission_id=? AND level=3").get(req.params.id);
+      const gm2 = db.prepare("SELECT status FROM kk_approvals WHERE submission_id=? AND level=4").get(req.params.id);
+      if (gm1?.status !== 'pending' && gm2?.status !== 'pending') return res.status(400).json({ error: 'GM stage sudah selesai' });
+      if (gm1?.status === 'pending') approvalLevel = 3;
+      else approvalLevel = 4;
+    } else {
+      approvalLevel = currentLevel;
+    }
+  } else if (ROLE_LEVELS[user.role]) {
+    approvalLevel = ROLE_LEVELS[user.role];
+    if (currentLevel !== approvalLevel) {
+      return res.status(403).json({ error: `Anda tidak berwenang approve level ${currentLevel} (${LEVEL_LABELS[currentLevel]})` });
+    }
   } else {
-    db.prepare("UPDATE submissions SET status='approved', kk_approval_level=5, approved_by=?, approved_at=? WHERE id=?")
-      .run(user.id, now, req.params.id);
+    return res.status(403).json({ error: 'Tidak berwenang' });
   }
 
-  res.json({ success: true, nextLevel: currentLevel < 4 ? currentLevel + 1 : null });
+  db.prepare("UPDATE kk_approvals SET status='approved', approver_user_id=?, note=?, acted_at=? WHERE submission_id=? AND level=?")
+    .run(user.id, note || '', now, req.params.id, approvalLevel);
+
+  // Determine next kk_approval_level
+  let nextLevel;
+  if (approvalLevel === 3 || approvalLevel === 4) {
+    // GM stage: advance only when BOTH gm (3) and gm2 (4) have approved
+    const gm1 = db.prepare("SELECT status FROM kk_approvals WHERE submission_id=? AND level=3").get(req.params.id);
+    const gm2 = db.prepare("SELECT status FROM kk_approvals WHERE submission_id=? AND level=4").get(req.params.id);
+    if (gm1?.status === 'approved' && gm2?.status === 'approved') {
+      nextLevel = 5;
+    } else {
+      nextLevel = 3; // Stay at GM stage
+    }
+  } else if (approvalLevel < MAX_LEVEL) {
+    nextLevel = approvalLevel + 1;
+  } else {
+    // Final approval (direktur_utama)
+    db.prepare("UPDATE submissions SET status='approved', kk_approval_level=7, approved_by=?, approved_at=? WHERE id=?")
+      .run(user.id, now, req.params.id);
+    return res.json({ success: true, nextLevel: null });
+  }
+
+  db.prepare('UPDATE submissions SET kk_approval_level=? WHERE id=?').run(nextLevel, req.params.id);
+  res.json({ success: true, nextLevel });
 });
 
 // ── POST /api/kk/:id/reject ───────────────────────────────────────────────────
@@ -216,13 +329,33 @@ router.post('/:id/reject', requireLogin, (req, res) => {
   if (sub.status !== 'pending') return res.status(400).json({ error: 'KK sudah diproses' });
 
   const currentLevel = sub.kk_approval_level;
-  if (LEVEL_ROLES[currentLevel] !== user.role && user.role !== 'admin') {
-    return res.status(403).json({ error: `Anda tidak berwenang reject level ${currentLevel}` });
+  let approvalLevel;
+
+  if (user.role === 'area_manager') {
+    if (currentLevel !== 1) return res.status(403).json({ error: `Anda tidak berwenang reject level ${currentLevel}` });
+    const creator = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sub.created_by);
+    if ((creator?.area_kerja || '').trim().toLowerCase() !== (user.area_kerja || '').trim().toLowerCase()) {
+      return res.status(403).json({ error: 'Area Anda tidak sesuai dengan area pembuat KK' });
+    }
+    approvalLevel = 1;
+  } else if (user.role === 'gm') {
+    if (currentLevel !== 3) return res.status(403).json({ error: `Anda tidak berwenang reject level ${currentLevel}` });
+    approvalLevel = 3;
+  } else if (user.role === 'gm2') {
+    if (currentLevel !== 3) return res.status(403).json({ error: `Anda tidak berwenang reject level ${currentLevel}` });
+    approvalLevel = 4;
+  } else if (user.role === 'admin') {
+    approvalLevel = (currentLevel === 3) ? 3 : currentLevel;
+  } else if (ROLE_LEVELS[user.role]) {
+    approvalLevel = ROLE_LEVELS[user.role];
+    if (currentLevel !== approvalLevel) return res.status(403).json({ error: `Anda tidak berwenang reject level ${currentLevel}` });
+  } else {
+    return res.status(403).json({ error: 'Tidak berwenang' });
   }
 
   const now = new Date().toISOString();
   db.prepare("UPDATE kk_approvals SET status='rejected', approver_user_id=?, note=?, acted_at=? WHERE submission_id=? AND level=?")
-    .run(user.id, note || '', now, req.params.id, currentLevel);
+    .run(user.id, note || '', now, req.params.id, approvalLevel);
   db.prepare("UPDATE submissions SET status='rejected', reject_reason=? WHERE id=?").run(note || 'Ditolak', req.params.id);
 
   res.json({ success: true });
@@ -283,8 +416,8 @@ async function generateExcel(row, calc, approvals, settings) {
     { width: 18 }, // H DPP Beli
     { width: 15 }, // I PPN 11% Beli
     { width: 18 }, // J Nilai Pembyr
-    { width: 15 }, // K PPh 1.5% Beli
-    { width: 18 }, // L B.Dist & Ongkir
+    { width: 18 }, // K B. Distribusi
+    { width: 15 }, // L Ongkir
     { width: 18 }, // M Surplus/Defisit
     { width: 15 }, // N Laba
     { width: 13 }, // O Net Margin %
@@ -351,8 +484,9 @@ async function generateExcel(row, calc, approvals, settings) {
     ['B11:B12', 'Pelanggan'],
     ['C11:F11', 'Nilai Kontrak'],
     ['G11:G12', 'Penerimaan\nUang'],
-    ['H11:K11', 'Pembelian'],
-    ['L11:L12', 'B.Distribusi\n& Ongkir'],
+    ['H11:J11', 'Pembelian'],
+    ['K11:K12', 'B.\nDistribusi'],
+    ['L11:L12', 'Ongkir'],
     ['M11:M12', 'Surplus /\nDefisit'],
     ['N11:N12', 'Laba'],
     ['O11:O12', 'Net\nMargin %'],
@@ -378,7 +512,6 @@ async function generateExcel(row, calc, approvals, settings) {
     ['H', 'DPP'],
     ['I', 'PPN 11%'],
     ['J', 'Nilai\nPembyr'],
-    ['K', 'PPh 1,5%'],
   ].forEach(([col, val]) => {
     const c = ws.getCell(`${col}12`);
     c.value     = val;
@@ -389,45 +522,112 @@ async function generateExcel(row, calc, approvals, settings) {
   });
   ws.getRow(12).height = 28;
 
-  // ── Row 13: Data ─────────────────────────────────────────────────────────
-  const dr = ws.getRow(13);
-  const numFmt = '#,##0';
-  const vals = [
-    [1,  1,            null],
-    [2,  row.pelanggan, null],
-    [3,  row.nilai_kontrak_total, numFmt],
-    [4,  Math.round(calc.dppKontrak),     numFmt],
-    [5,  Math.round(calc.ppnKontrak),     numFmt],
-    [6,  Math.round(calc.pphKontrak),     numFmt],
-    [7,  Math.round(calc.penerimaanUang), numFmt],
-    [8,  Math.round(calc.dppBeli),        numFmt],
-    [9,  Math.round(calc.ppnBeli),        numFmt],
-    [10, row.nilai_pembyr,                numFmt],
-    [11, Math.round(calc.pphBeli),        numFmt],
-    [12, row.b_distribusi_ongkir,         numFmt],
-    [13, Math.round(calc.surplusDefisit), numFmt],
-    [14, Math.round(calc.laba),           numFmt],
-    [15, parseFloat(calc.netMargin.toFixed(2)), '0.00"%"'],
-  ];
-  vals.forEach(([col, val, fmt]) => {
-    const c = dr.getCell(col);
-    c.value  = val;
-    c.border = border;
-    c.alignment = col <= 2 ? (col === 1 ? centerMid : { vertical: 'middle' }) : rightMid;
-    if (fmt) c.numFmt = fmt;
-  });
-  dr.height = 20;
+  // ── Rows 13+: Data rows (one per product, or single row fallback) ────────
+  const numFmt   = '#,##0';
+  const products = calc.products || [];
+  let nextRow    = 13;
 
-  // ── Row 14: empty ────────────────────────────────────────────────────────
+  function writeDataRow(rn, no, label, nkt, dppK, ppnK, pphK, pen, dppB, ppnB, nPembyr, bDist, onk, surplus, laba, nm) {
+    const dr = ws.getRow(rn);
+    const vals = [
+      [1,  no,              null],
+      [2,  label,           null],
+      [3,  Math.round(nkt), numFmt],
+      [4,  Math.round(dppK), numFmt],
+      [5,  Math.round(ppnK), numFmt],
+      [6,  Math.round(pphK), numFmt],
+      [7,  Math.round(pen),  numFmt],
+      [8,  Math.round(dppB), numFmt],
+      [9,  Math.round(ppnB), numFmt],
+      [10, Math.round(nPembyr), numFmt],
+      [11, Math.round(bDist), numFmt],
+      [12, Math.round(onk),  numFmt],
+      [13, Math.round(surplus), numFmt],
+      [14, Math.round(laba), numFmt],
+      [15, parseFloat(nm.toFixed(2)), '0.00"%"'],
+    ];
+    vals.forEach(([col, val, fmt]) => {
+      const c = dr.getCell(col);
+      c.value     = val;
+      c.border    = border;
+      c.alignment = col <= 2 ? (col === 1 ? centerMid : { vertical: 'middle' }) : rightMid;
+      if (fmt) c.numFmt = fmt;
+    });
+    dr.height = 20;
+  }
+
+  if (products.length > 0) {
+    products.forEach((p, idx) => {
+      const pNkt  = p.nilai_kontrak || 0;
+      const pDppB = p.dpp_beli     || 0;
+      const pDist = p.b_distribusi || 0;
+      const pOnk  = p.ongkir       || 0;
+      const pBdo  = pDist + pOnk;
+      const pDppK = pNkt / 1.11;
+      const pPpnK = pDppK * 0.11;
+      const pPphK = pDppK * 0.015;
+      const pPen  = pNkt - (pPpnK + pPphK);
+      const pPpnB = pDppB * 0.11;
+      const pNPay = pDppB * 1.11;
+      const pSurp = pPen - (pDppB + pPpnB + pBdo);
+      const pLaba = pDppK - pDppB - pBdo;
+      const pNM   = pDppK > 0 ? (pLaba / pDppK) * 100 : 0;
+      writeDataRow(nextRow, idx + 1, p.nama || '-', pNkt, pDppK, pPpnK, pPphK, pPen, pDppB, pPpnB, pNPay, pDist, pOnk, pSurp, pLaba, pNM);
+      nextRow++;
+    });
+
+    // TOTAL row
+    const tr = ws.getRow(nextRow);
+    const tVals = [
+      [1,  '',    null],
+      [2,  'TOTAL', null],
+      [3,  Math.round(products.reduce((s,p)=>s+(p.nilai_kontrak||0),0)), numFmt],
+      [4,  Math.round(calc.dppKontrak),     numFmt],
+      [5,  Math.round(calc.ppnKontrak),     numFmt],
+      [6,  Math.round(calc.pphKontrak),     numFmt],
+      [7,  Math.round(calc.penerimaanUang), numFmt],
+      [8,  Math.round(calc.dppBeli),        numFmt],
+      [9,  Math.round(calc.ppnBeli),        numFmt],
+      [10, Math.round(calc.nilaiPembyr),    numFmt],
+      [11, Math.round(calc.bDistribusi),    numFmt],
+      [12, Math.round(calc.ongkir),         numFmt],
+      [13, Math.round(calc.surplusDefisit), numFmt],
+      [14, Math.round(calc.laba),           numFmt],
+      [15, parseFloat(calc.netMargin.toFixed(2)), '0.00"%"'],
+    ];
+    tVals.forEach(([col, val, fmt]) => {
+      const c = tr.getCell(col);
+      c.value     = val;
+      c.border    = border;
+      c.font      = { bold: true };
+      c.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2EFDA' } };
+      c.alignment = col <= 2 ? (col === 1 ? centerMid : { vertical: 'middle' }) : rightMid;
+      if (fmt) c.numFmt = fmt;
+    });
+    tr.height = 20;
+    nextRow++;
+  } else {
+    writeDataRow(nextRow, 1, row.pelanggan,
+      row.nilai_kontrak_total || 0,
+      calc.dppKontrak, calc.ppnKontrak, calc.pphKontrak,
+      calc.penerimaanUang, calc.dppBeli, calc.ppnBeli, calc.nilaiPembyr,
+      calc.bDistribusi, calc.ongkir,
+      calc.surplusDefisit, calc.laba, calc.netMargin
+    );
+    nextRow++;
+  }
+
+  // ── Empty separator row ───────────────────────────────────────────────────
   ws.addRow([]);
+  nextRow++;
 
-  // ── Rows 15-17: Footer info ───────────────────────────────────────────────
+  // ── Footer info (Term of Payment, Sumber Anggaran) ────────────────────────
   const footerData = [
     ['Term of Payment Supplier',  row.term_payment_supplier],
     ['Term of Payment Pelanggan', row.term_payment_pelanggan],
     ['Sumber Anggaran',           row.sumber_anggaran],
   ];
-  let fr = 15;
+  let fr = nextRow;
   for (const [label, value] of footerData) {
     ws.getCell(`A${fr}`).value = label;
     ws.getCell(`A${fr}`).font = { bold: true };
@@ -437,74 +637,85 @@ async function generateExcel(row, calc, approvals, settings) {
     ws.getCell(`D${fr}`).value = value || '';
     fr++;
   }
+  nextRow = fr;
 
-  // ── Rows 18-19: empty ─────────────────────────────────────────────────────
-  ws.addRow([]); // 18
-  ws.addRow([]); // 19
+  // ── Two empty rows before signature ──────────────────────────────────────
+  ws.addRow([]); ws.addRow([]);
+  nextRow += 2;
 
-  // ── Rows 20-25: Signature block ───────────────────────────────────────────
-  const approvalLevel4 = approvals.find(a => a.level === 4 && a.status === 'approved');
-  const dateStr = approvalLevel4
-    ? new Date(approvalLevel4.acted_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
+  // ── Signature block ───────────────────────────────────────────────────────
+  const sigStart = nextRow;
+  const approvalLevel6 = approvals.find(a => a.level === 6 && a.status === 'approved');
+  const dateStr = approvalLevel6
+    ? new Date(approvalLevel6.acted_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
     : new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
   const city = settings.kk_kota || settings.company_city || 'Jakarta';
 
-  // 5 signature blocks across 15 columns (3 cols each)
-  const sigCols    = ['A', 'D', 'G', 'J', 'M'];
-  const sigEndCols = ['C', 'F', 'I', 'L', 'O'];
-  const sigTitles  = ['Yang Mengajukan', 'Mengetahui', 'Mengetahui', 'Mengetahui', 'Menyetujui'];
-  const sigRoles   = ['Area Manager', 'GM', 'Manager Keuangan', 'Dir. Operasional', 'Direktur Utama'];
+  // 7 signature blocks: creator (3 cols) + 6 approvals (2 cols each) = 15 cols total (A-O)
+  const sigCols    = ['A', 'D', 'F', 'H', 'J', 'L', 'N'];
+  const sigEndCols = ['C', 'E', 'G', 'I', 'K', 'M', 'O'];
+  const sigTitles  = ['Yang Mengajukan', 'Mengetahui', 'Mengetahui', 'Mengetahui', 'Mengetahui', 'Mengetahui', 'Menyetujui'];
+  const sigRoles   = ['', 'Area Manager', 'Manager Keuangan', 'GM 1', 'GM 2', 'Dir. Operasional', 'Direktur Utama'];
   const sigNames   = [
     row.creator_name || '-',
     approvals.find(a => a.level === 1)?.approver_name || '( _____________ )',
     approvals.find(a => a.level === 2)?.approver_name || '( _____________ )',
     approvals.find(a => a.level === 3)?.approver_name || '( _____________ )',
     approvals.find(a => a.level === 4)?.approver_name || '( _____________ )',
+    approvals.find(a => a.level === 5)?.approver_name || '( _____________ )',
+    approvals.find(a => a.level === 6)?.approver_name || '( _____________ )',
   ];
 
-  // TTD user IDs: index 0=creator, 1-4=approval levels
+  // TTD user IDs: index 0=creator, 1-6=approval levels
   const ttdUserIds = [
     row.created_by,
     approvals.find(a => a.level === 1)?.approver_user_id || null,
     approvals.find(a => a.level === 2)?.approver_user_id || null,
     approvals.find(a => a.level === 3)?.approver_user_id || null,
     approvals.find(a => a.level === 4)?.approver_user_id || null,
+    approvals.find(a => a.level === 5)?.approver_user_id || null,
+    approvals.find(a => a.level === 6)?.approver_user_id || null,
   ];
+
+  const r0 = sigStart;     // date / city
+  const r1 = sigStart + 1; // title
+  const r2 = sigStart + 2; // sig image top
+  const r3 = sigStart + 3; // sig image bottom
+  const r4 = sigStart + 4; // name
+  const r5 = sigStart + 5; // role
 
   for (let i = 0; i < 5; i++) {
     const sc = sigCols[i]; const ec = sigEndCols[i];
 
-    ws.mergeCells(`${sc}20:${ec}20`);
-    ws.getCell(`${sc}20`).value     = i === 0 ? `${city}, ${dateStr}` : ' ';
-    ws.getCell(`${sc}20`).alignment = centerMid;
+    ws.mergeCells(`${sc}${r0}:${ec}${r0}`);
+    ws.getCell(`${sc}${r0}`).value     = i === 0 ? `${city}, ${dateStr}` : ' ';
+    ws.getCell(`${sc}${r0}`).alignment = centerMid;
 
-    ws.mergeCells(`${sc}21:${ec}21`);
-    ws.getCell(`${sc}21`).value     = sigTitles[i];
-    ws.getCell(`${sc}21`).font      = { bold: true };
-    ws.getCell(`${sc}21`).alignment = centerMid;
+    ws.mergeCells(`${sc}${r1}:${ec}${r1}`);
+    ws.getCell(`${sc}${r1}`).value     = sigTitles[i];
+    ws.getCell(`${sc}${r1}`).font      = { bold: true };
+    ws.getCell(`${sc}${r1}`).alignment = centerMid;
 
-    // Space rows 22-23 for signature image
-    ws.mergeCells(`${sc}22:${ec}23`);
-    ws.getRow(22).height = 50;
+    ws.mergeCells(`${sc}${r2}:${ec}${r3}`);
+    ws.getRow(r2).height = 50;
 
-    ws.mergeCells(`${sc}24:${ec}24`);
-    ws.getCell(`${sc}24`).value     = sigNames[i];
-    ws.getCell(`${sc}24`).font      = { bold: true };
-    ws.getCell(`${sc}24`).alignment = centerMid;
+    ws.mergeCells(`${sc}${r4}:${ec}${r4}`);
+    ws.getCell(`${sc}${r4}`).value     = sigNames[i];
+    ws.getCell(`${sc}${r4}`).font      = { bold: true };
+    ws.getCell(`${sc}${r4}`).alignment = centerMid;
 
-    ws.mergeCells(`${sc}25:${ec}25`);
-    ws.getCell(`${sc}25`).value     = sigRoles[i];
-    ws.getCell(`${sc}25`).alignment = centerMid;
-    ws.getCell(`${sc}25`).font      = { italic: true, size: 9 };
+    ws.mergeCells(`${sc}${r5}:${ec}${r5}`);
+    ws.getCell(`${sc}${r5}`).value     = sigRoles[i];
+    ws.getCell(`${sc}${r5}`).alignment = centerMid;
+    ws.getCell(`${sc}${r5}`).font      = { italic: true, size: 9 };
 
-    // Embed TTD image if available
     const uid = ttdUserIds[i];
     if (uid) {
       const imgPath = path.join(__dirname, '..', 'public', 'img', `ttd_u${uid}.png`);
       if (fs.existsSync(imgPath)) {
         try {
           const imgId = wb.addImage({ buffer: fs.readFileSync(imgPath), extension: 'png' });
-          ws.addImage(imgId, `${sc}22:${ec}23`);
+          ws.addImage(imgId, `${sc}${r2}:${ec}${r3}`);
         } catch {}
       }
     }

@@ -218,13 +218,34 @@
               </div>
             </div>
             <div class="card">
-              <div class="card-header"><h3>💰 Nilai Transaksi &amp; Kalkulasi</h3></div>
+              <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+                <h3>💰 Nilai Transaksi &amp; Kalkulasi</h3>
+                <button type="button" onclick="addKKProduct()" class="btn btn-secondary btn-sm">+ Tambah Produk</button>
+              </div>
               <div class="card-body">
-                <table class="table kk-calc-table">
-                  <colgroup><col style="width:40%"><col style="width:60%"></colgroup>
+                <div class="table-responsive" style="margin-bottom:12px">
+                  <table class="table kk-product-table" style="min-width:740px">
+                    <thead>
+                      <tr>
+                        <th style="width:30px">No</th>
+                        <th>Nama Produk</th>
+                        <th style="width:140px">Nilai Kontrak</th>
+                        <th style="width:140px">DPP Beli</th>
+                        <th style="width:120px">B. Distribusi</th>
+                        <th style="width:60px">% Dist</th>
+                        <th style="width:120px">Ongkir</th>
+                        <th style="width:60px">% Ongkir</th>
+                        <th style="width:32px"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="kk-products-tbody"></tbody>
+                  </table>
+                </div>
+                <table class="table kk-calc-table" style="margin-top:8px">
+                  <colgroup><col style="width:45%"><col style="width:55%"></colgroup>
                   <tbody>
                     <tr class="kk-section-header"><td colspan="2">NILAI KONTRAK</td></tr>
-                    <tr class="kk-input-row"><td>Nilai Kontrak Total</td><td><input type="number" id="kk-nilai-kontrak" class="kk-num-input" min="0" placeholder="0" oninput="updateKKCalc()" required></td></tr>
+                    <tr><td>Nilai Kontrak Total</td><td class="kk-auto" id="cv-nilai-kontrak-total">Rp 0</td></tr>
                     <tr><td>DPP</td><td class="kk-auto" id="cv-dpp-kontrak">Rp 0</td></tr>
                     <tr><td>PPN 11%</td><td class="kk-auto" id="cv-ppn-kontrak">Rp 0</td></tr>
                     <tr><td>PPh 1,5%</td><td class="kk-auto" id="cv-pph-kontrak">Rp 0</td></tr>
@@ -233,11 +254,10 @@
                     <tr class="kk-section-header"><td colspan="2">PEMBELIAN</td></tr>
                     <tr><td>DPP Beli</td><td class="kk-auto" id="cv-dpp-beli">Rp 0</td></tr>
                     <tr><td>PPN Beli 11%</td><td class="kk-auto" id="cv-ppn-beli">Rp 0</td></tr>
-                    <tr class="kk-input-row"><td>Nilai Pembyr / Nilai Pembelian</td><td><input type="number" id="kk-nilai-pembyr" class="kk-num-input" min="0" placeholder="0" oninput="updateKKCalc()" required></td></tr>
-                    <tr><td>PPh Beli 1,5%</td><td class="kk-auto" id="cv-pph-beli">Rp 0</td></tr>
+                    <tr><td>Nilai Pembayaran</td><td class="kk-auto" id="cv-nilai-pembyr">Rp 0</td></tr>
                     <tr class="kk-section-header"><td colspan="2">HASIL</td></tr>
-                    <tr class="kk-input-row"><td>B. Distribusi &amp; Ongkir</td><td><input type="number" id="kk-bdo" class="kk-num-input" min="0" value="0" oninput="updateKKCalc()"></td></tr>
                     <tr><td>% Net Margin</td><td class="kk-auto" id="cv-margin">0 %</td></tr>
+                    <tr><td>% Ongkir</td><td class="kk-auto" id="cv-ongkir-pct">0 %</td></tr>
                     <tr><td>Surplus / Defisit</td><td class="kk-auto" id="cv-surplus">Rp 0</td></tr>
                     <tr class="kk-result-row"><td>Laba</td><td class="kk-auto kk-highlight" id="cv-laba">Rp 0</td></tr>
                     <tr class="kk-result-row"><td>Net Margin (%)</td><td class="kk-auto kk-highlight" id="cv-margin2">0 %</td></tr>
@@ -296,11 +316,11 @@
               <div class="card-header"><h3>🚗 Data Perjalanan</h3></div>
               <div class="card-body">
                 <div class="form-row">
-                  <div class="form-group"><label>Nama Pegawai <span class="required">*</span></label><input type="text" id="sppd-nama-pegawai" required></div>
-                  <div class="form-group"><label>Jabatan</label><input type="text" id="sppd-jabatan"></div>
+                  <div class="form-group"><label>Nama Pegawai <span class="required">*</span></label><input type="text" id="sppd-nama-pegawai" disabled placeholder="Diisi Otomatis" required></div>
+                  <div class="form-group"><label>Jabatan</label><input type="text" id="sppd-jabatan" disabled placeholder="Diisi Otomatis"></div>
                 </div>
                 <div class="form-row">
-                  <div class="form-group"><label>Area Kerja / Berangkat dari</label><input type="text" id="sppd-area-kerja" placeholder="Cth: Jakarta"></div>
+                  <div class="form-group"><label>Area Kerja / Berangkat dari</label><input type="text" id="sppd-area-kerja" disabled placeholder="Diisi Otomatis" placeholder="Cth: Jakarta"></div>
                   <div class="form-group"><label>Tujuan Kota <span class="required">*</span></label><input type="text" id="sppd-tujuan" required placeholder="Cth: Surabaya"></div>
                 </div>
                 <div class="form-group"><label>Keperluan / Tujuan Kunjungan <span class="required">*</span></label><textarea id="sppd-keperluan" rows="2" required placeholder="Uraikan keperluan perjalanan dinas..."></textarea></div>
@@ -425,7 +445,7 @@
                 <div class="form-group"><label>Nama Lengkap <span class="required">*</span></label><input type="text" id="profile-full-name" placeholder="Nama lengkap"></div>
                 <div class="form-group"><label>Jabatan Detail</label><input type="text" id="profile-jabatan-detail" placeholder="Cth: Sales Executive"></div>
               </div>
-              <div class="form-group"><label>Area Kerja</label><input type="text" id="profile-area-kerja" placeholder="Cth: Jawa Barat"></div>
+              <div class="form-group"><label>Area Kerja</label><select id="profile-area-kerja"><option value="">-- Pilih Area --</option><option value="Banten">Banten</option><option value="Jakarta">Jakarta</option><option value="Jawa Barat">Jawa Barat</option><option value="Sumatera">Sumatera</option><option value="Kalimantan">Kalimantan</option><option value="Jawa Tengah">Jawa Tengah</option><option value="Jawa Timur">Jawa Timur</option><option value="Nusa Tenggara">Nusa Tenggara</option><option value="Sulawesi">Sulawesi</option><option value="Papua">Papua</option></select></div>
               <div class="form-actions" style="padding:0;margin-top:8px">
                 <div id="profile-msg" class="alert" style="display:none"></div>
                 <button onclick="saveProfile()" class="btn btn-primary">💾 Simpan Profil</button>
@@ -525,7 +545,7 @@
   </div>
 </div>
 <div id="modal-reject" class="modal" style="display:none"><div class="modal-backdrop" onclick="closeModal('modal-reject')"></div><div class="modal-dialog"><div class="modal-header"><h3>Tolak Pengajuan</h3><button onclick="closeModal('modal-reject')" class="btn-close">✕</button></div><div class="modal-body"><div class="form-group"><label>Alasan Penolakan</label><textarea id="reject-reason" rows="3" placeholder="Masukkan alasan penolakan..."></textarea></div></div><div class="modal-footer"><button onclick="confirmReject()" class="btn btn-danger">❌ Tolak Pengajuan</button><button onclick="closeModal('modal-reject')" class="btn btn-outline">Batal</button></div></div></div>
-<div id="modal-add-user" class="modal" style="display:none"><div class="modal-backdrop" onclick="closeModal('modal-add-user')"></div><div class="modal-dialog"><div class="modal-header"><h3 id="add-user-modal-title">Tambah Pengguna Baru</h3><button onclick="closeModal('modal-add-user')" class="btn-close">✕</button></div><div class="modal-body"><div class="form-row"><div class="form-group"><label>Username <span class="required">*</span></label><input type="text" id="new-username" placeholder="username"></div><div class="form-group"><label>Password <span class="required">*</span></label><input type="password" id="new-password" placeholder="password (kosongkan = tidak diubah jika edit)"></div></div><div class="form-row"><div class="form-group"><label>Nama Lengkap <span class="required">*</span></label><input type="text" id="new-fullname" placeholder="Nama lengkap"></div><div class="form-group"><label>Role <span class="required">*</span></label><select id="new-role"><option value="staff">Staff</option><option value="marketing">Marketing</option><option value="supervisor">Supervisor</option><option value="area_manager">Area Manager</option><option value="gm">GM</option><option value="gm2">GM 2</option><option value="manager_keuangan">Manager Keuangan</option><option value="direktur_ops">Direktur Operasional</option><option value="direktur_utama">Direktur Utama</option><option value="kantor_pusat">Kantor Pusat</option><option value="admin">Admin</option></select></div></div><div class="form-row"><div class="form-group"><label>Area Kerja</label><input type="text" id="new-area-kerja" placeholder="Cth: Jawa Barat"></div><div class="form-group"><label>Jabatan Detail</label><input type="text" id="new-jabatan-detail" placeholder="Cth: Sales Executive"></div></div><input type="hidden" id="edit-user-id"><div id="add-user-error" class="alert alert-error" style="display:none"></div></div><div class="modal-footer"><button onclick="saveUser()" class="btn btn-primary" id="btn-save-user">✅ Simpan</button><button onclick="closeModal('modal-add-user')" class="btn btn-outline">Batal</button></div></div></div>
+<div id="modal-add-user" class="modal" style="display:none"><div class="modal-backdrop" onclick="closeModal('modal-add-user')"></div><div class="modal-dialog"><div class="modal-header"><h3 id="add-user-modal-title">Tambah Pengguna Baru</h3><button onclick="closeModal('modal-add-user')" class="btn-close">✕</button></div><div class="modal-body"><div class="form-row"><div class="form-group"><label>Username <span class="required">*</span></label><input type="text" id="new-username" placeholder="username"></div><div class="form-group"><label>Password <span class="required">*</span></label><input type="password" id="new-password" placeholder="password (kosongkan = tidak diubah jika edit)"></div></div><div class="form-row"><div class="form-group"><label>Nama Lengkap <span class="required">*</span></label><input type="text" id="new-fullname" placeholder="Nama lengkap"></div><div class="form-group"><label>Role <span class="required">*</span></label><select id="new-role"><option value="staff">Staff</option><option value="marketing">Marketing</option><option value="supervisor">Supervisor</option><option value="area_manager">Area Manager</option><option value="gm">GM</option><option value="gm2">GM 2</option><option value="manager_keuangan">Manager Keuangan</option><option value="direktur_ops">Direktur Operasional</option><option value="direktur_utama">Direktur Utama</option><option value="kantor_pusat">Kantor Pusat</option><option value="admin">Admin</option></select></div></div><div class="form-row"><div class="form-group"><label>Area Kerja</label><select id="new-area-kerja"><option value="">-- Pilih Area --</option><option value="Banten">Banten</option><option value="Jakarta">Jakarta</option><option value="Jawa Barat">Jawa Barat</option><option value="Sumatera">Sumatera</option><option value="Kalimantan">Kalimantan</option><option value="Jawa Tengah">Jawa Tengah</option><option value="Jawa Timur">Jawa Timur</option><option value="Nusa Tenggara">Nusa Tenggara</option><option value="Sulawesi">Sulawesi</option><option value="Papua">Papua</option></select></div><div class="form-group"><label>Jabatan Detail</label><input type="text" id="new-jabatan-detail" placeholder="Cth: Sales Executive"></div></div><input type="hidden" id="edit-user-id"><div id="add-user-error" class="alert alert-error" style="display:none"></div></div><div class="modal-footer"><button onclick="saveUser()" class="btn btn-primary" id="btn-save-user">✅ Simpan</button><button onclick="closeModal('modal-add-user')" class="btn btn-outline">Batal</button></div></div></div>
 <div id="modal-change-password" class="modal" style="display:none">
   <div class="modal-backdrop" onclick="closeModal('modal-change-password')"></div>
   <div class="modal-dialog">

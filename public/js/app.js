@@ -62,12 +62,15 @@ const ROLE_LABELS = {
        marketing: '📣 Marketing', supervisor: '🔍 Supervisor',
        area_manager: '🗺️ Area Manager', gm2: '⭐ GM 2'
 };
-const APPROVER_ROLES = ['gm', 'manager_keuangan', 'direktur_ops', 'direktur_utama'];
-const KK_LEVEL_LABELS = { 1: 'GM', 2: 'Manager Keuangan', 3: 'Direktur Operasional', 4: 'Direktur Utama' };
-const SPPD_LEVEL_LABELS = { 1: 'Area Manager', 2: 'GM', 3: 'GM 2' };
-const LAPORAN_LEVEL_LABELS = { 1: 'GM', 2: 'GM 2', 3: 'Direktur Operasional', 4: 'Direktur Utama' };
+const APPROVER_ROLES = ['area_manager', 'gm', 'gm2', 'manager_keuangan', 'direktur_ops', 'direktur_utama'];
+const KK_LEVEL_LABELS = { 1: 'Area Manager', 2: 'Manager Keuangan', 3: 'GM 1', 4: 'GM 2', 5: 'Direktur Operasional', 6: 'Direktur Utama' };
+const AREA_KERJA_LIST = ['Banten', 'Jakarta', 'Jawa Barat', 'Sumatera', 'Kalimantan', 'Jawa Tengah', 'Jawa Timur', 'Nusa Tenggara', 'Sulawesi', 'Papua'];
+const SPPD_LEVEL_LABELS = { 1: 'Area Manager', 2: 'GM 1', 3: 'GM 2' };
+const LAPORAN_LEVEL_LABELS = { 1: 'Area Manager', 2: 'Manager Keuangan', 3: 'GM 1', 4: 'GM 2', 5: 'Direktur Operasional', 6: 'Direktur Utama' };
+const PENCAIRAN_LEVEL_LABELS = { 1: 'Area Manager', 2: 'Manager Keuangan', 3: 'GM 1', 4: 'GM 2', 5: 'Direktur Operasional', 6: 'Direktur Utama' };
 const SPPD_APPROVER_ROLES = ['area_manager', 'gm', 'gm2'];
-const LAPORAN_APPROVER_ROLES = ['gm', 'gm2', 'direktur_ops', 'direktur_utama'];
+const LAPORAN_APPROVER_ROLES = ['area_manager', 'manager_keuangan', 'gm', 'gm2', 'direktur_ops', 'direktur_utama'];
+const PENCAIRAN_APPROVER_ROLES = ['area_manager', 'manager_keuangan', 'gm', 'gm2', 'direktur_ops', 'direktur_utama'];
 const SPPD_ALL_ROLES = ['admin', 'kantor_pusat', 'manager_keuangan', 'area_manager', 'gm', 'gm2', 'direktur_ops', 'direktur_utama'];
 const SPPD_CREATE_ROLES = ['marketing', 'supervisor', 'staff', 'admin'];
 
@@ -90,7 +93,7 @@ function setUser(user) {
 
        // KK menu visibility
        document.querySelectorAll('.kk-menu').forEach(el => el.style.display = '');
-       if (user.role === 'staff' || user.role === 'admin') {
+       if (['staff', 'admin', 'marketing', 'supervisor'].includes(user.role)) {
               document.querySelectorAll('.kk-create').forEach(el => el.style.display = '');
               document.querySelectorAll('.kk-mine').forEach(el => el.style.display = '');
        }
@@ -105,7 +108,7 @@ function setUser(user) {
        const isSppdCreator = SPPD_CREATE_ROLES.includes(user.role);
        const isSppdApprover = SPPD_APPROVER_ROLES.includes(user.role) || user.role === 'admin';
        const isLaporanApprover = LAPORAN_APPROVER_ROLES.includes(user.role) || user.role === 'admin';
-       const isPencairanMgr = user.role === 'manager_keuangan' || user.role === 'admin';
+       const isPencairanMgr = PENCAIRAN_APPROVER_ROLES.includes(user.role) || user.role === 'admin';
        const isSppdAll = SPPD_ALL_ROLES.includes(user.role);
        if (isSppdCreator || isSppdApprover || isLaporanApprover || isPencairanMgr || isSppdAll) {
               document.querySelectorAll('.sppd-menu').forEach(el => el.style.display = '');
@@ -1241,44 +1244,99 @@ async function deleteSubmission(id) {
 let kkActionTargetId = null;
 let kkActionType = null;
 
-function initKKForm() {
-       document.getElementById('form-kk').reset();
-       document.getElementById('kk-bdo').value = '0';
-       document.getElementById('kk-form-error').style.display = 'none';
+function renderKKProductRow(idx) {
+       return `<tr>
+         <td style="text-align:center;font-size:12px;color:var(--text-light);vertical-align:middle">${idx + 1}</td>
+         <td><input type="text" class="table-input kk-prod-nama" placeholder="Nama produk..." oninput="updateKKCalc()"></td>
+         <td><input type="number" class="table-input kk-prod-nkt" min="0" placeholder="0" oninput="updateKKCalc()" style="text-align:right"></td>
+         <td><input type="number" class="table-input kk-prod-dpp" min="0" placeholder="0" oninput="updateKKCalc()" style="text-align:right"></td>
+         <td><input type="number" class="table-input kk-prod-dist" min="0" value="0" oninput="updateKKCalc()" style="text-align:right"></td>
+         <td class="kk-pct-display">0%</td>
+         <td><input type="number" class="table-input kk-prod-ongkir" min="0" value="0" oninput="updateKKCalc()" style="text-align:right"></td>
+         <td class="kk-pct-display">0%</td>
+         <td style="text-align:center"><button type="button" onclick="removeKKProduct(this)" class="btn-remove-row" title="Hapus">✕</button></td>
+       </tr>`;
+}
+
+function addKKProduct() {
+       const tbody = document.getElementById('kk-products-tbody');
+       const idx = tbody.querySelectorAll('tr').length;
+       tbody.insertAdjacentHTML('beforeend', renderKKProductRow(idx));
        updateKKCalc();
 }
 
-function calcKKValues(nkt, np, bdo) {
+function removeKKProduct(btn) {
+       btn.closest('tr').remove();
+       document.querySelectorAll('#kk-products-tbody tr').forEach((r, i) => {
+              r.querySelector('td:first-child').textContent = i + 1;
+       });
+       updateKKCalc();
+}
+
+function getKKProductsFromDOM() {
+       return Array.from(document.querySelectorAll('#kk-products-tbody tr')).map(row => ({
+              nama: row.querySelector('.kk-prod-nama').value.trim(),
+              nilai_kontrak: parseFloat(row.querySelector('.kk-prod-nkt').value) || 0,
+              dpp_beli: parseFloat(row.querySelector('.kk-prod-dpp').value) || 0,
+              b_distribusi: parseFloat(row.querySelector('.kk-prod-dist').value) || 0,
+              ongkir: parseFloat(row.querySelector('.kk-prod-ongkir').value) || 0,
+       }));
+}
+
+function initKKForm() {
+       document.getElementById('form-kk').reset();
+       document.getElementById('kk-products-tbody').innerHTML = '';
+       addKKProduct();
+       document.getElementById('kk-form-error').style.display = 'none';
+}
+
+function calcKKValues(nkt, dppBeli, bDistribusi, ongkir) {
+       const bdo = bDistribusi + ongkir;
        const dppKontrak = nkt / 1.11;
        const ppnKontrak = dppKontrak * 0.11;
        const pphKontrak = dppKontrak * 0.015;
        const penerimaanUang = nkt - (ppnKontrak + pphKontrak);
-       const dppBeli = np / 1.11;
        const ppnBeli = dppBeli * 0.11;
-       const pphBeli = dppBeli * 0.015;
-       const surplusDefisit = penerimaanUang - (dppBeli + ppnBeli + pphBeli + bdo);
+       const nilaiPembyr = dppBeli * 1.11;
+       const surplusDefisit = penerimaanUang - (dppBeli + ppnBeli + bdo);
        const laba = dppKontrak - dppBeli - bdo;
+       const bMargin = penerimaanUang > 0 ? (bDistribusi / penerimaanUang) * 100 : 0;
+       const ongkirPct = penerimaanUang > 0 ? (ongkir / penerimaanUang) * 100 : 0;
        const netMargin = dppKontrak > 0 ? (laba / dppKontrak) * 100 : 0;
-       return { dppKontrak, ppnKontrak, pphKontrak, penerimaanUang, dppBeli, ppnBeli, pphBeli, surplusDefisit, laba, netMargin };
+       return { dppKontrak, ppnKontrak, pphKontrak, penerimaanUang, dppBeli, ppnBeli, nilaiPembyr, bDistribusi, ongkir, surplusDefisit, laba, bMargin, ongkirPct, netMargin };
 }
 
 function updateKKCalc() {
-       const nkt = parseFloat(document.getElementById('kk-nilai-kontrak')?.value) || 0;
-       const np = parseFloat(document.getElementById('kk-nilai-pembyr')?.value) || 0;
-       const bdo = parseFloat(document.getElementById('kk-bdo')?.value) || 0;
-       const c = calcKKValues(nkt, np, bdo);
+       const products = getKKProductsFromDOM();
+       document.querySelectorAll('#kk-products-tbody tr').forEach((row, i) => {
+              const p = products[i];
+              const dppK = p.nilai_kontrak / 1.11;
+              const pen = p.nilai_kontrak - dppK * 0.11 - dppK * 0.015;
+              const pctDist = pen > 0 ? (p.b_distribusi / pen) * 100 : 0;
+              const pctOngkir = pen > 0 ? (p.ongkir / pen) * 100 : 0;
+              const pcts = row.querySelectorAll('.kk-pct-display');
+              if (pcts[0]) pcts[0].textContent = pctDist.toFixed(2) + '%';
+              if (pcts[1]) pcts[1].textContent = pctOngkir.toFixed(2) + '%';
+       });
+       const totNkt = products.reduce((s, p) => s + p.nilai_kontrak, 0);
+       const totDpp = products.reduce((s, p) => s + p.dpp_beli, 0);
+       const totDist = products.reduce((s, p) => s + p.b_distribusi, 0);
+       const totOngkir = products.reduce((s, p) => s + p.ongkir, 0);
+       const c = calcKKValues(totNkt, totDpp, totDist, totOngkir);
        const fmt = n => 'Rp ' + formatRupiah(Math.round(n));
        const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+       set('cv-nilai-kontrak-total', fmt(totNkt));
        set('cv-dpp-kontrak', fmt(c.dppKontrak));
        set('cv-ppn-kontrak', fmt(c.ppnKontrak));
        set('cv-pph-kontrak', fmt(c.pphKontrak));
        set('cv-penerimaan', fmt(c.penerimaanUang));
        set('cv-dpp-beli', fmt(c.dppBeli));
        set('cv-ppn-beli', fmt(c.ppnBeli));
-       set('cv-pph-beli', fmt(c.pphBeli));
+       set('cv-nilai-pembyr', fmt(c.nilaiPembyr));
+       set('cv-margin', c.bMargin.toFixed(2) + '%');
+       set('cv-ongkir-pct', c.ongkirPct.toFixed(2) + '%');
        set('cv-surplus', fmt(c.surplusDefisit));
        set('cv-laba', fmt(c.laba));
-       set('cv-margin', c.netMargin.toFixed(2) + '%');
        set('cv-margin2', c.netMargin.toFixed(2) + '%');
        const labaEl = document.getElementById('cv-laba');
        if (labaEl) labaEl.style.color = c.laba >= 0 ? 'var(--green)' : 'var(--red)';
@@ -1288,6 +1346,16 @@ async function submitKKForm(e) {
        e.preventDefault();
        const errEl = document.getElementById('kk-form-error');
        errEl.style.display = 'none';
+       const products = getKKProductsFromDOM();
+       const totNkt = products.reduce((s, p) => s + p.nilai_kontrak, 0);
+       if (totNkt === 0) {
+              errEl.textContent = 'Minimal 1 produk dengan Nilai Kontrak harus diisi';
+              errEl.style.display = 'block';
+              return;
+       }
+       const totDpp = products.reduce((s, p) => s + p.dpp_beli, 0);
+       const totDist = products.reduce((s, p) => s + p.b_distribusi, 0);
+       const totOngkir = products.reduce((s, p) => s + p.ongkir, 0);
        const payload = {
               nama_pekerjaan: document.getElementById('kk-nama-pekerjaan').value.trim(),
               nomor_surat: document.getElementById('kk-nomor-surat').value.trim(),
@@ -1296,9 +1364,11 @@ async function submitKKForm(e) {
               prinsipal: document.getElementById('kk-prinsipal').value.trim(),
               nama_barang: document.getElementById('kk-nama-barang').value.trim(),
               pelanggan: document.getElementById('kk-pelanggan').value.trim(),
-              nilai_kontrak_total: parseFloat(document.getElementById('kk-nilai-kontrak').value) || 0,
-              nilai_pembyr: parseFloat(document.getElementById('kk-nilai-pembyr').value) || 0,
-              b_distribusi_ongkir: parseFloat(document.getElementById('kk-bdo').value) || 0,
+              nilai_kontrak_total: totNkt,
+              dpp_beli: totDpp,
+              b_distribusi: totDist,
+              ongkir: totOngkir,
+              products,
               term_payment_supplier: document.getElementById('kk-tp-supplier').value.trim(),
               term_payment_pelanggan: document.getElementById('kk-tp-pelanggan').value.trim(),
               sumber_anggaran: document.getElementById('kk-sumber-anggaran').value.trim(),
@@ -1326,17 +1396,21 @@ async function submitKKForm(e) {
 function renderKKProgressBadge(r) {
        const lvl = r.kk_approval_level;
        const status = r.status;
-       const short = ['GM', 'MK', 'DO', 'DU'];
-       const steps = [1, 2, 3, 4].map(i => {
+       const short = ['AM', 'MK', 'GM1', 'GM2', 'DO', 'DU'];
+       const steps = [1, 2, 3, 4, 5, 6].map(i => {
               let icon, cls;
+              // GM1 (3) dan GM2 (4) paralel: keduanya aktif saat kk_approval_level == 3
+              const atGmStage = lvl === 3 && (i === 3 || i === 4);
               if (status === 'approved') {
                      icon = '✅'; cls = 'approved';
               } else if (status === 'rejected') {
-                     if (i < lvl) { icon = '✅'; cls = 'approved'; }
+                     if (atGmStage) { icon = '❌'; cls = 'rejected'; }
+                     else if (i < lvl) { icon = '✅'; cls = 'approved'; }
                      else if (i === lvl) { icon = '❌'; cls = 'rejected'; }
                      else { icon = '○'; cls = 'waiting'; }
               } else {
-                     if (i < lvl) { icon = '✅'; cls = 'approved'; }
+                     if (atGmStage) { icon = '⏳'; cls = 'current'; }
+                     else if (i < lvl) { icon = '✅'; cls = 'approved'; }
                      else if (i === lvl) { icon = '⏳'; cls = 'current'; }
                      else { icon = '○'; cls = 'waiting'; }
               }
@@ -1354,11 +1428,16 @@ function refreshKKList() {
 
 function renderKKTable(rows, { showCreator = false, showApproveBtn = false } = {}) {
        if (rows.length === 0) return emptyState('Belum ada Kertas Kerja');
-       const myLvl = { gm: 1, manager_keuangan: 2, direktur_ops: 3, direktur_utama: 4 }[currentUser.role];
+       const myLvl = { area_manager: 1, manager_keuangan: 2, gm: 3, gm2: 4, direktur_ops: 5, direktur_utama: 6 }[currentUser.role];
        const tableRows = rows.map(r => {
               const lvl = r.kk_approval_level;
               const approvalBadge = renderKKProgressBadge(r);
-              const canAct = showApproveBtn && r.status === 'pending' && (myLvl === lvl || currentUser.role === 'admin');
+              // gm2 dapat approve saat kk_approval_level == 3 (paralel dengan gm)
+              const canAct = showApproveBtn && r.status === 'pending' && (
+                     currentUser.role === 'admin' ||
+                     (currentUser.role === 'gm2' && lvl === 3) ||
+                     myLvl === lvl
+              );
               return `<tr>
                    <td><div class="fw-bold">${escHtml(r.nama_pekerjaan)}</div>
                        <div style="font-size:11px;color:var(--text-light)">${escHtml(r.pelanggan)}</div></td>
@@ -1438,18 +1517,20 @@ async function viewKKDetail(id) {
               const res = await api(`/api/kk/${id}`);
               const kk = await res.json();
               if (!res.ok) { showToast(kk.error || 'Gagal memuat', 'error'); return; }
-              const c = kk.calc || calcKKValues(kk.nilai_kontrak_total || 0, kk.nilai_pembyr || 0, kk.b_distribusi_ongkir || 0);
+              let kkProds = []; try { kkProds = JSON.parse(kk.products || '[]'); } catch { }
+              const c = kk.calc || calcKKValues(kk.nilai_kontrak_total || 0, kk.dpp_beli || (kk.nilai_pembyr || 0) / 1.11, kk.b_distribusi || 0, kk.ongkir || 0);
               const fmt = n => 'Rp ' + formatRupiah(Math.round(n));
               const approvals = kk.approvals || [];
 
-              const approvalSteps = [1, 2, 3, 4].map(lvl => {
+              const approvalSteps = [1, 2, 3, 4, 5, 6].map(lvl => {
                      const a = approvals.find(x => x.level === lvl);
                      const icon = !a || a.status === 'pending' ? '⬜' : a.status === 'approved' ? '✅' : '❌';
                      const color = !a || a.status === 'pending' ? 'var(--text-light)' : a.status === 'approved' ? 'var(--green)' : 'var(--red)';
+                     const isGmParallel = lvl === 4 ? ' <small style="color:var(--blue)">(paralel)</small>' : '';
                      return `<div class="kk-step">
                             <div class="kk-step-icon" style="color:${color}">${icon}</div>
                             <div class="kk-step-label">
-                                   <strong>${KK_LEVEL_LABELS[lvl]}</strong>
+                                   <strong>${KK_LEVEL_LABELS[lvl]}</strong>${isGmParallel}
                                    ${a?.approver_name ? `<br><small>${escHtml(a.approver_name)}</small>` : ''}
                                    ${a?.note ? `<br><small style="color:var(--text-light)">${escHtml(a.note)}</small>` : ''}
                                    ${a?.acted_at ? `<br><small style="color:var(--text-light)">${formatDate(a.acted_at)}</small>` : ''}
@@ -1482,17 +1563,32 @@ async function viewKKDetail(id) {
                             </div>
                             <div class="kk-finance-block">
                                    <div class="kk-finance-title">Pembelian</div>
-                                   <div class="kk-finance-row"><span>Nilai Pembyr</span><span class="fw-bold">Rp ${formatRupiah(kk.nilai_pembyr)}</span></div>
-                                   <div class="kk-finance-row"><span>DPP Beli</span><span>${fmt(c.dppBeli)}</span></div>
+                                   ${kkProds.length > 0 ? kkProds.map((p, i) => {
+                     const dK = p.nilai_kontrak / 1.11; const pen = p.nilai_kontrak - dK * 0.11 - dK * 0.015;
+                     const pDist = pen > 0 ? (p.b_distribusi / pen * 100).toFixed(2) + '%' : '0%';
+                     const pOngk = pen > 0 ? (p.ongkir / pen * 100).toFixed(2) + '%' : '0%';
+                     return `<div class="kk-finance-row" style="border-bottom:1px solid var(--gray-border);padding:4px 0;margin-bottom:2px">
+                                       <span style="font-weight:600">${i + 1}. ${escHtml(p.nama || '-')}</span>
+                                       <span style="font-size:11px;color:var(--text-light)">Rp ${formatRupiah(p.nilai_kontrak)}</span>
+                                     </div>
+                                     <div class="kk-finance-row"><span style="padding-left:10px">DPP Beli</span><span>Rp ${formatRupiah(p.dpp_beli || 0)}</span></div>
+                                     <div class="kk-finance-row"><span style="padding-left:10px">B. Distribusi <small style="color:var(--blue)">${pDist}</small></span><span>Rp ${formatRupiah(p.b_distribusi || 0)}</span></div>
+                                     <div class="kk-finance-row" style="margin-bottom:6px"><span style="padding-left:10px">Ongkir <small style="color:var(--blue)">${pOngk}</small></span><span>Rp ${formatRupiah(p.ongkir || 0)}</span></div>`;
+              }).join('') : `
+                                   <div class="kk-finance-row"><span>DPP Beli</span><span class="fw-bold">Rp ${formatRupiah(kk.dpp_beli || 0)}</span></div>
                                    <div class="kk-finance-row"><span>PPN 11%</span><span>${fmt(c.ppnBeli)}</span></div>
-                                   <div class="kk-finance-row"><span>PPh 1,5%</span><span>${fmt(c.pphBeli)}</span></div>
-                                   <div class="kk-finance-row"><span>B. Distribusi &amp; Ongkir</span><span>Rp ${formatRupiah(kk.b_distribusi_ongkir)}</span></div>
+                                   <div class="kk-finance-row"><span>Nilai Pembayaran</span><span>${fmt(c.nilaiPembyr)}</span></div>
+                                   <div class="kk-finance-row"><span>B. Distribusi</span><span>Rp ${formatRupiah(kk.b_distribusi || 0)}</span></div>
+                                   <div class="kk-finance-row"><span>Ongkir</span><span>Rp ${formatRupiah(kk.ongkir || 0)}</span></div>`}
+                                   <div class="kk-finance-row kk-finance-total"><span>Total Pembayaran</span><span>${fmt(c.nilaiPembyr)}</span></div>
                             </div>
                             <div class="kk-finance-block">
                                    <div class="kk-finance-title">Hasil</div>
+                                   <div class="kk-finance-row"><span>% By Distribusi</span><span>${(c.bMargin || 0).toFixed(2)}%</span></div>
+                                   <div class="kk-finance-row"><span>% Ongkir</span><span>${(c.ongkirPct || 0).toFixed(2)}%</span></div>
                                    <div class="kk-finance-row"><span>Surplus / Defisit</span><span style="color:${c.surplusDefisit >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(c.surplusDefisit)}</span></div>
                                    <div class="kk-finance-row kk-finance-total"><span>Laba</span><span style="color:${c.laba >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(c.laba)}</span></div>
-                                   <div class="kk-finance-row kk-finance-total"><span>Net Margin</span><span>${c.netMargin.toFixed(2)}%</span></div>
+                                   <div class="kk-finance-row kk-finance-total"><span>Net Margin (%)</span><span>${c.netMargin.toFixed(2)}%</span></div>
                             </div>
                      </div>
                      <div class="detail-section-title">📋 Term of Payment</div>
@@ -1507,8 +1603,19 @@ async function viewKKDetail(id) {
 
               const lvl = kk.kk_approval_level;
               const myRole = currentUser.role;
-              const myLvl = { gm: 1, manager_keuangan: 2, direktur_ops: 3, direktur_utama: 4 }[myRole];
-              const canAct = kk.status === 'pending' && (myLvl === lvl || currentUser.role === 'admin');
+              const myLvl = { area_manager: 1, manager_keuangan: 2, gm: 3, gm2: 4, direktur_ops: 5, direktur_utama: 6 }[myRole];
+              let canAct = false;
+              if (myRole === 'admin') {
+                     canAct = kk.status === 'pending';
+              } else if (myRole === 'gm') {
+                     const myApproval = approvals.find(a => a.level === 3);
+                     canAct = kk.status === 'pending' && lvl === 3 && (!myApproval || myApproval.status === 'pending');
+              } else if (myRole === 'gm2') {
+                     const myApproval = approvals.find(a => a.level === 4);
+                     canAct = kk.status === 'pending' && lvl === 3 && (!myApproval || myApproval.status === 'pending');
+              } else if (myLvl) {
+                     canAct = kk.status === 'pending' && myLvl === lvl;
+              }
               let footer = '';
               if (canAct) {
                      footer += `<button onclick="closeModal('modal-kk-detail');setTimeout(()=>openKKAction(${id},'approve'),200)" class="btn btn-success">✅ Setujui</button>`;
@@ -1745,23 +1852,40 @@ let laporanBiayaRowCount = 0;
 let currentSppdId = null;
 
 // ── Approval progress badge ───────────────────────────────────────────────────
+// sppd_approval_level: 0=waiting AM, 1=AM done waiting GM1+GM2 parallel, 2=all approved
 function renderSPPDProgressBadge(sppd) {
        const lvl = sppd.sppd_approval_level;
        const status = sppd.status;
-       const short = ['AM', 'GM', 'GM2'];
-       const steps = [1, 2, 3].map(i => {
-              let icon, cls;
-              if (status === 'approved' || status === 'completed') { icon = '✅'; cls = 'approved'; }
-              else if (status === 'rejected') {
-                     if (i < lvl) { icon = '✅'; cls = 'approved'; }
-                     else if (i === lvl) { icon = '❌'; cls = 'rejected'; }
-                     else { icon = '○'; cls = 'waiting'; }
-              } else {
-                     if (i < lvl) { icon = '✅'; cls = 'approved'; }
-                     else if (i === lvl) { icon = '⏳'; cls = 'current'; }
-                     else { icon = '○'; cls = 'waiting'; }
+
+       const stepState = (stepIdx) => {
+              // stepIdx: 0=AM, 1=GM1, 2=GM2
+              if (status === 'approved' || status === 'completed') return 'approved';
+              if (status === 'rejected') {
+                     if (stepIdx === 0 && lvl === 0) return 'rejected';
+                     if (stepIdx > 0 && lvl === 1) return 'rejected';
+                     if (stepIdx === 0 && lvl >= 1) return 'approved';
+                     return 'waiting';
               }
-              return `<span class="kk-ps kk-ps-${cls}" title="${SPPD_LEVEL_LABELS[i]}">${icon} ${short[i - 1]}</span>`;
+              if (stepIdx === 0) return lvl === 0 ? 'current' : 'approved';
+              if (stepIdx === 1) {
+                     if (lvl > 1) return 'approved';
+                     if (lvl === 1) return sppd.gm1_approved ? 'approved' : 'current';
+                     return 'waiting';
+              }
+              if (stepIdx === 2) {
+                     if (lvl > 1) return 'approved';
+                     if (lvl === 1) return sppd.gm2_approved ? 'approved' : 'current';
+                     return 'waiting';
+              }
+              return 'waiting';
+       };
+
+       const iconOf = s => ({ approved: '✅', rejected: '❌', current: '⏳', waiting: '○' }[s]);
+       const short = ['AM', 'GM1', 'GM2'];
+       const labels = ['Area Manager', 'GM 1', 'GM 2'];
+       const steps = [0, 1, 2].map(i => {
+              const s = stepState(i);
+              return `<span class="kk-ps kk-ps-${s}" title="${labels[i]}">${iconOf(s)} ${short[i]}</span>`;
        }).join('<span class="kk-ps-sep">›</span>');
        return `<div class="kk-progress-steps">${steps}</div>`;
 }
@@ -1864,9 +1988,10 @@ async function loadLaporanApprovals() {
               if (!rows.length) { container.innerHTML = emptyState('Tidak ada laporan'); return; }
               const fmtRp = v => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(v || 0);
               const trs = rows.map(r => {
+                     const lvlLabel = LAPORAN_LEVEL_LABELS[r.laporan_approval_level] || `Lv ${r.laporan_approval_level}`;
                      const statusBadge = r.status === 'approved' ? '<span class="badge badge-approved">✅ Disetujui</span>'
                             : r.status === 'rejected' ? '<span class="badge badge-rejected">❌ Ditolak</span>'
-                                   : `<span class="badge badge-pending">⏳ Lv ${r.laporan_approval_level + 1}</span>`;
+                                   : `<span class="badge badge-pending">⏳ ${lvlLabel}</span>`;
                      return `<tr>
                             <td>${escHtml(r.nomor || '-')}</td>
                             <td>${escHtml(r.nama_pegawai)}</td>
@@ -1883,7 +2008,7 @@ async function loadLaporanApprovals() {
        } catch { container.innerHTML = emptyState('Gagal memuat data'); }
 }
 
-// ── Pencairan list (manager_keuangan) ─────────────────────────────────────────
+// ── Pencairan list (all KK-type approvers) ────────────────────────────────────
 async function loadPencairan() {
        const filter = document.getElementById('pencairan-filter')?.value || '';
        const container = document.getElementById('pencairan-container');
@@ -1898,21 +2023,109 @@ async function loadPencairan() {
                      belum_cair: '<span class="badge badge-pending">🔴 Belum Cair</span>',
                      dalam_proses: '<span class="badge badge-info">🟡 Dalam Proses</span>',
                      sudah_cair: '<span class="badge badge-approved">🟢 Sudah Cair</span>',
+                     ditolak: '<span class="badge badge-rejected">❌ Ditolak</span>',
               };
-              const trs = rows.map(r => `<tr>
-                     <td>${escHtml(r.nomor || '-')}</td>
-                     <td>${escHtml(r.nama_pegawai)}</td>
-                     <td>${escHtml(r.tujuan)}</td>
-                     <td>${fmtRp(r.jumlah_usulan)}</td>
-                     <td>${fmtRp(r.jumlah_realisasi)}</td>
-                     <td>${fmtRp(r.jumlah_dicairkan)}</td>
-                     <td>${statusBadgeMap[r.status] || r.status}</td>
-                     <td><button onclick="openUpdatePencairan(${r.sppd_id})" class="btn btn-sm btn-primary">✏️ Update</button></td>
-              </tr>`).join('');
+              const role = currentUser.role;
+              const trs = rows.map(r => {
+                     const lvl = r.pencairan_approval_level;
+                     const lvlLabel = PENCAIRAN_LEVEL_LABELS[lvl] || `Lv ${lvl}`;
+                     const progressBadge = r.status === 'sudah_cair'
+                            ? '<span class="badge badge-approved">✅ Selesai</span>'
+                            : r.status === 'ditolak'
+                                   ? '<span class="badge badge-rejected">❌ Ditolak</span>'
+                                   : `<span class="badge badge-pending">⏳ ${lvlLabel}</span>`;
+
+                     const canAct = r.status !== 'sudah_cair' && r.status !== 'ditolak' && (
+                            (role === 'area_manager' && lvl === 1) ||
+                            (role === 'manager_keuangan' && lvl === 2) ||
+                            (role === 'gm' && lvl === 3) ||
+                            (role === 'gm2' && lvl === 3) ||
+                            (role === 'direktur_ops' && lvl === 5) ||
+                            (role === 'direktur_utama' && lvl === 6) ||
+                            role === 'admin'
+                     );
+                     const editBtn = (role === 'manager_keuangan' || role === 'admin')
+                            ? `<button onclick="openUpdatePencairan(${r.sppd_id})" class="btn btn-sm btn-outline">✏️ Edit</button> `
+                            : '';
+                     const approveBtn = canAct
+                            ? `<button onclick="openPencairanAction(${r.sppd_id},'approve')" class="btn btn-sm btn-success">✅</button> <button onclick="openPencairanAction(${r.sppd_id},'reject')" class="btn btn-sm btn-danger">❌</button>`
+                            : '';
+                     return `<tr>
+                            <td>${escHtml(r.nomor || '-')}</td>
+                            <td>${escHtml(r.nama_pegawai)}</td>
+                            <td>${escHtml(r.tujuan)}</td>
+                            <td>${fmtRp(r.jumlah_usulan)}</td>
+                            <td>${fmtRp(r.jumlah_realisasi)}</td>
+                            <td>${fmtRp(r.jumlah_dicairkan)}</td>
+                            <td>${statusBadgeMap[r.status] || r.status}</td>
+                            <td>${progressBadge}</td>
+                            <td>${editBtn}${approveBtn}</td>
+                     </tr>`;
+              }).join('');
               container.innerHTML = `<div class="table-responsive"><table class="table">
-                     <thead><tr><th>No. SPPD</th><th>Pegawai</th><th>Tujuan</th><th>Uang Muka</th><th>Realisasi</th><th>Dicairkan</th><th>Status</th><th>Aksi</th></tr></thead>
+                     <thead><tr><th>No. SPPD</th><th>Pegawai</th><th>Tujuan</th><th>Uang Muka</th><th>Realisasi</th><th>Dicairkan</th><th>Status</th><th>Progress</th><th>Aksi</th></tr></thead>
                      <tbody>${trs}</tbody></table></div>`;
        } catch { container.innerHTML = emptyState('Gagal memuat data'); }
+}
+
+// ── Approve / Reject Pencairan ────────────────────────────────────────────────
+let pencairanActionSppdId = null;
+let pencairanActionType = null;
+
+function openPencairanAction(sppdId, type) {
+       pencairanActionSppdId = sppdId;
+       pencairanActionType = type;
+       document.getElementById('sppd-action-title').textContent = type === 'approve' ? '✅ Setujui Pencairan' : '❌ Tolak Pencairan';
+       document.getElementById('sppd-action-note').value = '';
+       document.getElementById('sppd-action-error').style.display = 'none';
+       document.getElementById('sppd-action-footer').innerHTML = `
+              <button onclick="confirmPencairanAction()" class="btn btn-${type === 'approve' ? 'success' : 'danger'}">
+                     ${type === 'approve' ? '✅ Ya, Setujui' : '❌ Ya, Tolak'}
+              </button>
+              <button onclick="closeModal('modal-sppd-action')" class="btn btn-outline">Batal</button>`;
+       showModal('modal-sppd-action');
+}
+
+async function confirmPencairanAction() {
+       const errEl = document.getElementById('sppd-action-error');
+       errEl.style.display = 'none';
+       const note = document.getElementById('sppd-action-note').value;
+       try {
+              const res = await api(`/api/sppd/${pencairanActionSppdId}/pencairan/${pencairanActionType}`, 'POST', { note });
+              const data = await res.json();
+              if (!res.ok) { errEl.textContent = data.error || 'Gagal'; errEl.style.display = 'block'; return; }
+              closeModal('modal-sppd-action');
+              showToast(pencairanActionType === 'approve' ? 'Pencairan disetujui!' : 'Pencairan ditolak!', 'success');
+              loadPencairan();
+       } catch { errEl.textContent = 'Koneksi gagal'; errEl.style.display = 'block'; }
+}
+
+function openPencairanActionFromDetail(sppdId, type) {
+       pencairanActionSppdId = sppdId;
+       pencairanActionType = type;
+       document.getElementById('sppd-action-title').textContent = type === 'approve' ? '✅ Setujui Pencairan' : '❌ Tolak Pencairan';
+       document.getElementById('sppd-action-note').value = '';
+       document.getElementById('sppd-action-error').style.display = 'none';
+       document.getElementById('sppd-action-footer').innerHTML = `
+              <button onclick="confirmPencairanActionFromDetail()" class="btn btn-${type === 'approve' ? 'success' : 'danger'}">
+                     ${type === 'approve' ? '✅ Ya, Setujui' : '❌ Ya, Tolak'}
+              </button>
+              <button onclick="closeModal('modal-sppd-action')" class="btn btn-outline">Batal</button>`;
+       showModal('modal-sppd-action');
+}
+
+async function confirmPencairanActionFromDetail() {
+       const errEl = document.getElementById('sppd-action-error');
+       errEl.style.display = 'none';
+       const note = document.getElementById('sppd-action-note').value;
+       try {
+              const res = await api(`/api/sppd/${pencairanActionSppdId}/pencairan/${pencairanActionType}`, 'POST', { note });
+              const data = await res.json();
+              if (!res.ok) { errEl.textContent = data.error || 'Gagal'; errEl.style.display = 'block'; return; }
+              closeModal('modal-sppd-action');
+              showToast(pencairanActionType === 'approve' ? 'Pencairan disetujui!' : 'Pencairan ditolak!', 'success');
+              viewSPPDDetail(pencairanActionSppdId);
+       } catch { errEl.textContent = 'Koneksi gagal'; errEl.style.display = 'block'; }
 }
 
 // ── Update Pencairan (manager_keuangan) ───────────────────────────────────────
@@ -2071,11 +2284,33 @@ async function viewSPPDDetail(id) {
               document.getElementById('sppd-detail-body').innerHTML = renderSPPDDetail(sppd, laporan, pencairan);
 
               const footer = [];
+              const role = currentUser.role;
               const isOwner = currentUser.id === sppd.created_by;
-              const canApprove = (SPPD_APPROVER_ROLES.includes(currentUser.role) || currentUser.role === 'admin') && sppd.status === 'pending';
+              const canApprove = (SPPD_APPROVER_ROLES.includes(role) || role === 'admin') && sppd.status === 'pending';
               const canSubmitLaporan = isOwner && sppd.status === 'approved' && !laporan;
-              const canApproveLaporan = laporan && laporan.status === 'pending' &&
-                     (LAPORAN_APPROVER_ROLES.includes(currentUser.role) || currentUser.role === 'admin');
+
+              // Laporan: check if user's role can act at current laporan level
+              const lLvl = laporan?.laporan_approval_level;
+              const canApproveLaporan = laporan && laporan.status === 'pending' && (
+                     role === 'admin' ||
+                     (role === 'area_manager' && lLvl === 1) ||
+                     (role === 'manager_keuangan' && lLvl === 2) ||
+                     ((role === 'gm' || role === 'gm2') && lLvl === 3) ||
+                     (role === 'direktur_ops' && lLvl === 5) ||
+                     (role === 'direktur_utama' && lLvl === 6)
+              );
+
+              // Pencairan: check if user's role can act at current pencairan level
+              const pLvl = pencairan?.pencairan_approval_level;
+              const pencairanActive = pencairan && pencairan.status !== 'sudah_cair' && pencairan.status !== 'ditolak';
+              const canApprovePencairan = pencairanActive && (
+                     role === 'admin' ||
+                     (role === 'area_manager' && pLvl === 1) ||
+                     (role === 'manager_keuangan' && pLvl === 2) ||
+                     ((role === 'gm' || role === 'gm2') && pLvl === 3) ||
+                     (role === 'direktur_ops' && pLvl === 5) ||
+                     (role === 'direktur_utama' && pLvl === 6)
+              );
 
               if (canApprove) {
                      footer.push(`<button onclick="openSPPDAction(${id},'approve')" class="btn btn-success">✅ Setujui</button>`);
@@ -2088,6 +2323,10 @@ async function viewSPPDDetail(id) {
               if (canApproveLaporan) {
                      footer.push(`<button onclick="openLaporanAction(${id},null,'approve')" class="btn btn-success">✅ Setujui Laporan</button>`);
                      footer.push(`<button onclick="openLaporanAction(${id},null,'reject')" class="btn btn-danger">❌ Tolak Laporan</button>`);
+              }
+              if (canApprovePencairan) {
+                     footer.push(`<button onclick="openPencairanActionFromDetail(${id},'approve')" class="btn btn-success">✅ Setujui Pencairan</button>`);
+                     footer.push(`<button onclick="openPencairanActionFromDetail(${id},'reject')" class="btn btn-danger">❌ Tolak Pencairan</button>`);
               }
               footer.push(`<button onclick="closeModal('modal-sppd-detail')" class="btn btn-outline">Tutup</button>`);
               document.getElementById('sppd-detail-footer').innerHTML = footer.join(' ');
@@ -2137,15 +2376,28 @@ function renderSPPDDetail(sppd, laporan, pencairan) {
        const pencStatusBadge = s => ({ belum_cair: '<span class="badge badge-pending">🔴 Belum Cair</span>', dalam_proses: '<span class="badge badge-info">🟡 Dalam Proses</span>', sudah_cair: '<span class="badge badge-approved">🟢 Sudah Cair</span>' }[s] || s);
        let pencairanHtml = '<p style="color:var(--text-light)">Belum ada data pencairan. Akan dibuat otomatis setelah laporan disetujui penuh.</p>';
        if (pencairan) {
+              const pLvlLabel = PENCAIRAN_LEVEL_LABELS[pencairan.pencairan_approval_level] || `Lv ${pencairan.pencairan_approval_level}`;
+              const pProgressBadge = pencairan.status === 'sudah_cair'
+                     ? '<span class="badge badge-approved">✅ Selesai</span>'
+                     : pencairan.status === 'ditolak'
+                            ? '<span class="badge badge-rejected">❌ Ditolak</span>'
+                            : `<span class="badge badge-pending">⏳ Menunggu ${pLvlLabel}</span>`;
+              const pencApprRows = (pencairan.approvals || []).map(a =>
+                     `<tr><td>${PENCAIRAN_LEVEL_LABELS[a.level] || a.level}</td><td>${escHtml(a.approver_name || '-')}</td>
+                      <td><span class="badge badge-${a.status === 'approved' ? 'approved' : 'rejected'}">${a.status}</span></td>
+                      <td>${escHtml(a.note || '-')}</td><td>${a.acted_at || '-'}</td></tr>`
+              ).join('') || '<tr><td colspan="5" class="text-center">Belum ada</td></tr>';
               pencairanHtml = `
               <div class="form-row" style="gap:16px;flex-wrap:wrap">
                 <div><strong>Uang Muka:</strong> ${fmt(pencairan.jumlah_usulan)}</div>
                 <div><strong>Realisasi Biaya:</strong> ${fmt(pencairan.jumlah_realisasi)}</div>
                 <div><strong>Dicairkan:</strong> ${fmt(pencairan.jumlah_dicairkan)}</div>
                 <div><strong>Status:</strong> ${pencStatusBadge(pencairan.status)}</div>
+                <div><strong>Progress:</strong> ${pProgressBadge}</div>
               </div>
               ${pencairan.catatan ? `<div style="margin-top:6px"><strong>Catatan:</strong> ${escHtml(pencairan.catatan)}</div>` : ''}
-              ${pencairan.updated_by_name ? `<div style="margin-top:4px;font-size:12px;color:var(--text-light)">Diperbarui oleh: ${escHtml(pencairan.updated_by_name)} pada ${pencairan.updated_at}</div>` : ''}`;
+              ${pencairan.updated_by_name ? `<div style="margin-top:4px;font-size:12px;color:var(--text-light)">Diperbarui oleh: ${escHtml(pencairan.updated_by_name)} pada ${pencairan.updated_at}</div>` : ''}
+              <div style="margin-top:12px"><strong>Approval Pencairan:</strong><div class="table-responsive"><table class="table"><thead><tr><th>Level</th><th>Approver</th><th>Status</th><th>Catatan</th><th>Waktu</th></tr></thead><tbody>${pencApprRows}</tbody></table></div></div>`;
        }
 
        return `

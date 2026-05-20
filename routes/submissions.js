@@ -188,7 +188,7 @@ router.get('/bulk-pdf-zip', requireAdminOrKP, async (req, res) => {
     try {
         browser = await puppeteer.launch({
             headless: 'new',
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || (fs.existsSync('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome') ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : (fs.existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined)),
             args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
         });
         const headerHtml = generateHeaderHTML(settings);
@@ -339,7 +339,7 @@ router.get('/:id/download/pdf', requireLogin, async (req, res) => {
       const puppeteer = require('puppeteer');
           const browser = await puppeteer.launch({
                   headless: 'new',
-                  executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+                  executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || (fs.existsSync('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome') ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : (fs.existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined)),
                   args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
           });
           const page = await browser.newPage();

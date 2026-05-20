@@ -214,6 +214,16 @@ if (userTableDef3 && !userTableDef3.sql.includes('gm2')) {
 // ── Add sppd_approval_level to submissions ────────────────────────────────────
 try { db.exec("ALTER TABLE submissions ADD COLUMN sppd_approval_level INTEGER DEFAULT 0"); } catch {}
 
+// ── Add dpp_beli to kertas_kerja ──────────────────────────────────────────────
+try { db.exec("ALTER TABLE kertas_kerja ADD COLUMN dpp_beli REAL DEFAULT 0"); } catch {}
+
+// ── Add b_distribusi / ongkir to kertas_kerja ─────────────────────────────────
+try { db.exec("ALTER TABLE kertas_kerja ADD COLUMN b_distribusi REAL DEFAULT 0"); } catch {}
+try { db.exec("ALTER TABLE kertas_kerja ADD COLUMN ongkir REAL DEFAULT 0"); } catch {}
+
+// ── Add products JSON to kertas_kerja ─────────────────────────────────────────
+try { db.exec("ALTER TABLE kertas_kerja ADD COLUMN products TEXT DEFAULT '[]'"); } catch {}
+
 // ── SPPD tables ───────────────────────────────────────────────────────────────
 db.exec(`
   CREATE TABLE IF NOT EXISTS sppd (
@@ -404,6 +414,129 @@ if (pencairanDef && !pencairanDef.sql.includes('jumlah_usulan')) {
 if (!db.prepare('SELECT id FROM users WHERE username = ?').get('marketing1')) {
   db.prepare('INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)').run('marketing1', 'kirana', 'Marketing 1', 'marketing');
   console.log('✅ Default user marketing1 dibuat');
+}
+
+// ── Pencairan approval table & column ─────────────────────────────────────────
+try { db.exec("ALTER TABLE sppd_pencairan ADD COLUMN pencairan_approval_level INTEGER DEFAULT 1"); } catch {}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sppd_pencairan_approvals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pencairan_id INTEGER NOT NULL,
+    level INTEGER NOT NULL,
+    approver_user_id INTEGER,
+    status TEXT DEFAULT 'pending',
+    note TEXT DEFAULT '',
+    acted_at TEXT,
+    FOREIGN KEY (pencairan_id) REFERENCES sppd_pencairan(id),
+    FOREIGN KEY (approver_user_id) REFERENCES users(id)
+  );
+`);
+
+// ── MIGRATION: pending SPPD approval level remap ──────────────────────────────
+// Old: sppd_approval_level=1 means "AM approved, waiting for GM (sequential)"
+// New: sppd_approval_level=1 means "AM approved, waiting for GM1+GM2 (parallel)"
+// Semantic is the same for level 1, but old level 2 (gm approved, waiting for gm2) is now
+// still level 1 in new semantics — gm2 can approve even if gm already approved.
+// No remap needed: both old and new use sppd_approval_level=1 for "GM stage".
+
+// ── MIGRATION: pending LAPORAN approval remap (4-level → 6-level) ─────────────
+// Old: laporan_approval_level=0 means not started (next=gm), 1=gm done, 2=gm2 done...
+// New: laporan_approval_level=1 means waiting for AM, 2=waiting for MK, 3=GM stage, 5=waiting DO...
+const pendingLaporans = db.prepare(`
+  SELECT l.id, l.laporan_approval_level
+  FROM sppd_laporan l
+  WHERE l.status = 'pending'
+    AND NOT EXISTS (SELECT 1 FROM sppd_laporan_approvals a WHERE a.laporan_id = l.id AND a.level = 5)
+`).all();
+
+for (const laporan of pendingLaporans) {
+  const oldLevel = laporan.laporan_approval_level;
+  if (oldLevel === 0) {
+    // Not yet started: set to 1 (waiting for area_manager)
+    db.prepare('UPDATE sppd_laporan SET laporan_approval_level=1 WHERE id=?').run(laporan.id);
+    continue;
+  }
+  // Old approval records for this laporan
+  const oldApprovals = db.prepare('SELECT * FROM sppd_laporan_approvals WHERE laporan_id=? ORDER BY level').all(laporan.id);
+  const oldToNew = { 1: 3, 2: 4, 3: 5, 4: 6 }; // old level → new level
+  const oldLevelToNewSubmLevel = { 0: 1, 1: 3, 2: 5, 3: 6 };
+
+  // Delete old approval records and reinsert at new levels
+  db.prepare('DELETE FROM sppd_laporan_approvals WHERE laporan_id=?').run(laporan.id);
+
+  for (const a of oldApprovals) {
+    const newLevel = oldToNew[a.level];
+    if (!newLevel) continue;
+    db.prepare('INSERT INTO sppd_laporan_approvals (laporan_id, level, approver_user_id, status, note, acted_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(laporan.id, newLevel, a.approver_user_id, a.status, a.note, a.acted_at);
+  }
+
+  // Auto-insert area_manager (level 1) and manager_keuangan (level 2) as approved for migrated laporans
+  db.prepare("INSERT OR IGNORE INTO sppd_laporan_approvals (laporan_id, level, status, note) VALUES (?, 1, 'approved', 'Auto-migrasi sistem')").run(laporan.id);
+  db.prepare("INSERT OR IGNORE INTO sppd_laporan_approvals (laporan_id, level, status, note) VALUES (?, 2, 'approved', 'Auto-migrasi sistem')").run(laporan.id);
+
+  // If gm was approved (old level 1 → new level 3), also auto-approve gm2 (new level 4)
+  const wasGmApproved = oldApprovals.some(a => a.level === 1 && a.status === 'approved');
+  if (wasGmApproved) {
+    db.prepare("INSERT OR IGNORE INTO sppd_laporan_approvals (laporan_id, level, status, note) VALUES (?, 4, 'approved', 'Auto-migrasi sistem')").run(laporan.id);
+  }
+
+  const newSubmLevel = oldLevelToNewSubmLevel[oldLevel] ?? oldLevel;
+  db.prepare('UPDATE sppd_laporan SET laporan_approval_level=? WHERE id=?').run(newSubmLevel, laporan.id);
+}
+if (pendingLaporans.length > 0) {
+  console.log(`✅ Migrasi Laporan: ${pendingLaporans.length} laporan pending diupgrade ke sistem 6 level`);
+}
+
+// ── MIGRATION: KK 4-level → 6-level approval system ──────────────────────────
+// Level mapping: old(1=MK,2=GM,3=DO,4=DU) → new(1=AM,2=MK,3=GM1,4=GM2,5=DO,6=DU)
+const pendingKKSubs = db.prepare(`
+  SELECT s.id, s.kk_approval_level
+  FROM submissions s
+  WHERE s.submission_type = 'kk' AND s.status = 'pending'
+    AND NOT EXISTS (SELECT 1 FROM kk_approvals a WHERE a.submission_id = s.id AND a.level = 5)
+    AND EXISTS (SELECT 1 FROM kk_approvals a WHERE a.submission_id = s.id AND a.level <= 4)
+`).all();
+
+if (pendingKKSubs.length > 0) {
+  const oldToNewLevel = { 1: 2, 2: 3, 3: 5, 4: 6 };
+  const oldToNewSubmLevel = { 1: 2, 2: 3, 3: 5, 4: 6 };
+
+  for (const sub of pendingKKSubs) {
+    const oldApprovals = db.prepare('SELECT * FROM kk_approvals WHERE submission_id=? ORDER BY level').all(sub.id);
+
+    db.prepare('DELETE FROM kk_approvals WHERE submission_id=?').run(sub.id);
+
+    for (let level = 1; level <= 6; level++) {
+      db.prepare("INSERT INTO kk_approvals (submission_id, level, status) VALUES (?, ?, 'pending')").run(sub.id, level);
+    }
+
+    // Auto-approve level 1 (area_manager) — sistem lama tidak memiliki step ini
+    db.prepare("UPDATE kk_approvals SET status='approved', note='Auto-migrasi sistem' WHERE submission_id=? AND level=1").run(sub.id);
+
+    // Map old approved levels to new levels
+    for (const oldApproval of oldApprovals) {
+      if (oldApproval.status === 'approved') {
+        const newLevel = oldToNewLevel[oldApproval.level];
+        if (newLevel) {
+          db.prepare("UPDATE kk_approvals SET status='approved', approver_user_id=?, note=?, acted_at=? WHERE submission_id=? AND level=?")
+            .run(oldApproval.approver_user_id, oldApproval.note, oldApproval.acted_at, sub.id, newLevel);
+        }
+      }
+    }
+
+    // Auto-approve gm2 (level 4) jika GM lama sudah approved (agar tidak stuck di GM stage)
+    const wasGmApproved = oldApprovals.some(a => a.level === 2 && a.status === 'approved');
+    if (wasGmApproved) {
+      db.prepare("UPDATE kk_approvals SET status='approved', note='Auto-migrasi sistem' WHERE submission_id=? AND level=4").run(sub.id);
+    }
+
+    // Remap kk_approval_level
+    const newSubmLevel = oldToNewSubmLevel[sub.kk_approval_level] || sub.kk_approval_level;
+    db.prepare('UPDATE submissions SET kk_approval_level=? WHERE id=?').run(newSubmLevel, sub.id);
+  }
+  console.log(`✅ Migrasi KK: ${pendingKKSubs.length} KK pending diupgrade ke sistem approval 6 level`);
 }
 
 module.exports = db;
