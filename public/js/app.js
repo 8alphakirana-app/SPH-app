@@ -8,6 +8,39 @@ let productRowCount = 0;
 let editTargetId = null;
 let editProductRowCount = 0;
 
+// ===================== NUMBER FORMATTING =====================
+// Strip thousand-separators and return a plain float
+function parseNum(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  return parseFloat(String(v).replace(/\./g, '').replace(/,/g, '')) || 0;
+}
+
+// Format a number with Indonesian thousand separators (1.000.000)
+function fmtNumStr(n) {
+  const num = parseFloat(String(n).replace(/\./g, '').replace(/,/g, '')) || 0;
+  if (!num) return '0';
+  return num.toLocaleString('id-ID');
+}
+
+// Format input value in-place with thousand separators, preserving cursor
+function formatNumInput(el) {
+  const fromEnd = el.value.length - (el.selectionStart || 0);
+  const raw = el.value.replace(/[^\d]/g, '');
+  const formatted = raw ? Number(raw).toLocaleString('id-ID') : '';
+  el.value = formatted;
+  try {
+    const pos = Math.max(0, formatted.length - fromEnd);
+    el.setSelectionRange(pos, pos);
+  } catch {}
+}
+
+// Capture-phase delegation: format .num-fmt inputs before any other oninput runs
+document.addEventListener('input', function(e) {
+  if (e.target.classList && e.target.classList.contains('num-fmt')) {
+    formatNumInput(e.target);
+  }
+}, true);
+
 // ===================== INIT =====================
 document.addEventListener('DOMContentLoaded', async () => {
        try {
@@ -639,7 +672,7 @@ function addProductRow() {
                      <td><input type="text"   class="table-input"        placeholder="Spesifikasi"  data-field="spesifikasi"></td>
                          <td><input type="number" class="table-input small"  placeholder="0" min="0"   data-field="qty"          oninput="updateTotal()"></td>
                              <td><input type="text"   class="table-input"        placeholder="unit"         data-field="satuan"       style="width:70px"></td>
-                                 <td><input type="number" class="table-input medium" placeholder="0" min="0"   data-field="harga_satuan" oninput="updateTotal()"></td>
+                                 <td><input type="text" inputmode="numeric" class="table-input medium num-fmt" placeholder="0" data-field="harga_satuan" oninput="updateTotal()"></td>
                                      <td class="text-right fw-bold row-total">Rp 0</td>
                                          <td><input type="url"    class="table-input"        placeholder="https://..."  data-field="link"         style="width:180px"></td>
                                              <td><button type="button" onclick="removeRow(${idx})" class="btn-remove-row" title="Hapus baris">×</button></td>
@@ -663,7 +696,7 @@ function updateTotal() {
        let grand = 0;
        document.querySelectorAll('#product-tbody tr').forEach(tr => {
               const qty = parseFloat(tr.querySelector('[data-field="qty"]')?.value) || 0;
-              const harga = parseFloat(tr.querySelector('[data-field="harga_satuan"]')?.value) || 0;
+              const harga = parseNum(tr.querySelector('[data-field="harga_satuan"]')?.value);
               const total = qty * harga;
               grand += total;
               tr.querySelector('.row-total').textContent = 'Rp ' + formatRupiah(total);
@@ -686,7 +719,7 @@ document.getElementById('form-submission').addEventListener('submit', async (e) 
                      spesifikasi: tr.querySelector('[data-field="spesifikasi"]')?.value?.trim() || '',
                      qty: tr.querySelector('[data-field="qty"]')?.value || '0',
                      satuan: tr.querySelector('[data-field="satuan"]')?.value?.trim() || '',
-                     harga_satuan: tr.querySelector('[data-field="harga_satuan"]')?.value || '0',
+                     harga_satuan: String(parseNum(tr.querySelector('[data-field="harga_satuan"]')?.value || '0')),
                      link: tr.querySelector('[data-field="link"]')?.value?.trim() || '',
               };
               if (!item.nama_produk) { valid = false; return; }
@@ -1129,7 +1162,7 @@ function addEditProductRow(data = {}) {
                      <td><input type="text"   class="table-input"        placeholder="Spesifikasi"  data-field="spesifikasi"  value="${escHtml(data.spesifikasi || '')}"></td>
                          <td><input type="number" class="table-input small"  placeholder="0" min="0"   data-field="qty"          oninput="updateEditTotal()" value="${escHtml(String(data.qty || ''))}"></td>
                              <td><input type="text"   class="table-input"        placeholder="unit"         data-field="satuan"       style="width:70px" value="${escHtml(data.satuan || '')}"></td>
-                                 <td><input type="number" class="table-input medium" placeholder="0" min="0"   data-field="harga_satuan" oninput="updateEditTotal()" value="${escHtml(String(data.harga_satuan || ''))}"></td>
+                                 <td><input type="text" inputmode="numeric" class="table-input medium num-fmt" placeholder="0" data-field="harga_satuan" oninput="updateEditTotal()" value="${escHtml(data.harga_satuan ? fmtNumStr(data.harga_satuan) : '')}"></td>
                                      <td class="text-right fw-bold row-total">Rp 0</td>
                                          <td><input type="url" class="table-input" placeholder="https://..." data-field="link" style="width:180px" value="${escHtml(data.link || '')}"></td>
                                              <td><button type="button" onclick="removeEditRow(${idx})" class="btn-remove-row" title="Hapus baris">×</button></td>`;
@@ -1152,7 +1185,7 @@ function updateEditTotal() {
        let grand = 0;
        document.querySelectorAll('#edit-product-tbody tr').forEach(tr => {
               const qty = parseFloat(tr.querySelector('[data-field="qty"]')?.value) || 0;
-              const harga = parseFloat(tr.querySelector('[data-field="harga_satuan"]')?.value) || 0;
+              const harga = parseNum(tr.querySelector('[data-field="harga_satuan"]')?.value);
               const total = qty * harga;
               grand += total;
               tr.querySelector('.row-total').textContent = 'Rp ' + formatRupiah(total);
@@ -1172,7 +1205,7 @@ async function saveEdit() {
                      spesifikasi: tr.querySelector('[data-field="spesifikasi"]')?.value?.trim() || '',
                      qty: tr.querySelector('[data-field="qty"]')?.value || '0',
                      satuan: tr.querySelector('[data-field="satuan"]')?.value?.trim() || '',
-                     harga_satuan: tr.querySelector('[data-field="harga_satuan"]')?.value || '0',
+                     harga_satuan: String(parseNum(tr.querySelector('[data-field="harga_satuan"]')?.value || '0')),
                      link: tr.querySelector('[data-field="link"]')?.value?.trim() || '',
               };
               if (!item.nama_produk) { valid = false; return; }
@@ -1248,11 +1281,11 @@ function renderKKProductRow(idx) {
        return `<tr>
          <td style="text-align:center;font-size:12px;color:var(--text-light);vertical-align:middle">${idx + 1}</td>
          <td><input type="text" class="table-input kk-prod-nama" placeholder="Nama produk..." oninput="updateKKCalc()"></td>
-         <td><input type="number" class="table-input kk-prod-nkt" min="0" placeholder="0" oninput="updateKKCalc()" style="text-align:right"></td>
-         <td><input type="number" class="table-input kk-prod-dpp" min="0" placeholder="0" oninput="updateKKCalc()" style="text-align:right"></td>
-         <td><input type="number" class="table-input kk-prod-dist" min="0" value="0" oninput="updateKKCalc()" style="text-align:right"></td>
+         <td><input type="text" inputmode="numeric" class="table-input kk-prod-nkt num-fmt" placeholder="0" oninput="updateKKCalc()" style="text-align:right"></td>
+         <td><input type="text" inputmode="numeric" class="table-input kk-prod-dpp num-fmt" placeholder="0" oninput="updateKKCalc()" style="text-align:right"></td>
+         <td><input type="text" inputmode="numeric" class="table-input kk-prod-dist num-fmt" value="0" oninput="updateKKCalc()" style="text-align:right"></td>
          <td class="kk-pct-display">0%</td>
-         <td><input type="number" class="table-input kk-prod-ongkir" min="0" value="0" oninput="updateKKCalc()" style="text-align:right"></td>
+         <td><input type="text" inputmode="numeric" class="table-input kk-prod-ongkir num-fmt" value="0" oninput="updateKKCalc()" style="text-align:right"></td>
          <td class="kk-pct-display">0%</td>
          <td style="text-align:center"><button type="button" onclick="removeKKProduct(this)" class="btn-remove-row" title="Hapus">✕</button></td>
        </tr>`;
@@ -1276,10 +1309,10 @@ function removeKKProduct(btn) {
 function getKKProductsFromDOM() {
        return Array.from(document.querySelectorAll('#kk-products-tbody tr')).map(row => ({
               nama: row.querySelector('.kk-prod-nama').value.trim(),
-              nilai_kontrak: parseFloat(row.querySelector('.kk-prod-nkt').value) || 0,
-              dpp_beli: parseFloat(row.querySelector('.kk-prod-dpp').value) || 0,
-              b_distribusi: parseFloat(row.querySelector('.kk-prod-dist').value) || 0,
-              ongkir: parseFloat(row.querySelector('.kk-prod-ongkir').value) || 0,
+              nilai_kontrak: parseNum(row.querySelector('.kk-prod-nkt').value),
+              dpp_beli: parseNum(row.querySelector('.kk-prod-dpp').value),
+              b_distribusi: parseNum(row.querySelector('.kk-prod-dist').value),
+              ongkir: parseNum(row.querySelector('.kk-prod-ongkir').value),
        }));
 }
 
@@ -1358,7 +1391,6 @@ async function submitKKForm(e) {
        const totOngkir = products.reduce((s, p) => s + p.ongkir, 0);
        const payload = {
               nama_pekerjaan: document.getElementById('kk-nama-pekerjaan').value.trim(),
-              nomor_surat: document.getElementById('kk-nomor-surat').value.trim(),
               perihal: document.getElementById('kk-perihal').value.trim(),
               satker: document.getElementById('kk-satker').value.trim(),
               prinsipal: document.getElementById('kk-prinsipal').value.trim(),
@@ -1453,6 +1485,7 @@ function renderKKTable(rows, { showCreator = false, showApproveBtn = false } = {
                                <button onclick="openKKAction(${r.id},'reject')"  class="btn btn-danger btn-sm">❌ Tolak</button>` : ''}
                            ${r.status === 'approved' ? `<button onclick="downloadKKExcel(${r.id})" class="btn btn-success btn-sm">📊 Excel</button>` : ''}
                            ${r.status === 'pending' && (currentUser.role === 'admin' || r.created_by === currentUser.id) ? `
+                               <button onclick="openEditKK(${r.id})" class="btn btn-secondary btn-sm">✏️ Edit</button>
                                <button onclick="deleteKK(${r.id})" class="btn btn-danger btn-sm">🗑️</button>` : ''}
                        </div>
                    </td>
@@ -1624,6 +1657,7 @@ async function viewKKDetail(id) {
               if (kk.status === 'approved') footer += `<button onclick="downloadKKExcel(${id})" class="btn btn-success">📊 Unduh Excel</button>`;
               footer += `<button onclick="downloadKKPDF(${id})" class="btn btn-pdf">📄 Unduh PDF</button>`;
               if (kk.status === 'pending' && (currentUser.role === 'admin' || kk.created_by === currentUser.id)) {
+                     footer += `<button onclick="closeModal('modal-kk-detail');setTimeout(()=>openEditKK(${id}),200)" class="btn btn-secondary">✏️ Edit</button>`;
                      footer += `<button onclick="deleteKK(${id})" class="btn btn-danger">🗑️ Hapus</button>`;
               }
               footer += `<button onclick="closeModal('modal-kk-detail')" class="btn btn-outline">Tutup</button>`;
@@ -1935,6 +1969,9 @@ function renderSPPDTable(rows, { showCreator = false, showApproveBtn = false } =
               const pdfBtn = ['approved', 'completed'].includes(r.status)
                      ? `<a href="/api/sppd/${r.id}/download/pdf" target="_blank" class="btn btn-sm btn-pdf" title="Unduh PDF">🖨️</a> `
                      : '';
+              const editBtn = r.status === 'pending' && r.sppd_approval_level === 0 && (currentUser.role === 'admin' || r.created_by === currentUser.id)
+                     ? `<button onclick="openEditSPPD(${r.id})" class="btn btn-sm btn-secondary">✏️ Edit</button> `
+                     : '';
               return `<tr>
               <td><span style="font-family:monospace;font-size:12px">${escHtml(r.nomor)}</span></td>
               <td>${escHtml(r.nama_pegawai)}</td>
@@ -1944,7 +1981,7 @@ function renderSPPDTable(rows, { showCreator = false, showApproveBtn = false } =
               <td>${sppdStatusBadge(r)}</td>
               <td>${renderSPPDProgressBadge(r)}</td>
               <td style="white-space:nowrap">
-                ${approveBtn}${pdfBtn}
+                ${approveBtn}${editBtn}${pdfBtn}
                 <button onclick="viewSPPDDetail(${r.id})" class="btn btn-sm btn-outline">🔍 Detail</button>
               </td>
             </tr>`;
@@ -2158,7 +2195,7 @@ async function openUpdatePencairan(sppdId) {
                      <strong>SPPD:</strong> ${escHtml(sppd.nomor)} &nbsp;|&nbsp; <strong>Pegawai:</strong> ${escHtml(sppd.nama_pegawai)}<br>
                      <strong>Uang Muka:</strong> ${fmtRp(pencairan.jumlah_usulan)} &nbsp;|&nbsp; <strong>Realisasi Biaya:</strong> ${fmtRp(pencairan.jumlah_realisasi)}`;
               document.getElementById('pencairan-update-status').value = pencairan.status || 'belum_cair';
-              document.getElementById('pencairan-update-jumlah').value = pencairan.jumlah_dicairkan || 0;
+              document.getElementById('pencairan-update-jumlah').value = fmtNumStr(pencairan.jumlah_dicairkan || 0);
               document.getElementById('pencairan-update-catatan').value = pencairan.catatan || '';
               document.getElementById('pencairan-update-error').style.display = 'none';
               showModal('modal-update-pencairan');
@@ -2170,7 +2207,7 @@ async function submitUpdatePencairan() {
        errEl.style.display = 'none';
        const body = {
               status: document.getElementById('pencairan-update-status').value,
-              jumlah_dicairkan: Number(document.getElementById('pencairan-update-jumlah').value) || 0,
+              jumlah_dicairkan: parseNum(document.getElementById('pencairan-update-jumlah').value),
               catatan: document.getElementById('pencairan-update-catatan').value,
        };
        try {
@@ -2220,7 +2257,7 @@ function addSPPDKunjunganRow() {
               <td><input type="text" class="sppd-itin-lokasi" placeholder="Lokasi" style="width:100%"></td>
               <td><input type="text" class="sppd-itin-pelanggan" placeholder="Nama pelanggan/instansi" style="width:100%"></td>
               <td><input type="text" class="sppd-itin-aktivitas" placeholder="Rencana aktivitas" style="width:100%"></td>
-              <td><input type="number" class="sppd-itin-nilai" min="0" value="0" style="width:100%"></td>
+              <td><input type="text" inputmode="numeric" class="sppd-itin-nilai num-fmt" value="0" style="width:100%"></td>
               <td><input type="text" class="sppd-itin-produk" placeholder="Produk" style="width:100%"></td>
               <td><button type="button" onclick="document.getElementById('sppd-itin-row-${n}').remove()" class="btn btn-sm btn-danger">✕</button></td>`;
        tbody.appendChild(tr);
@@ -2229,7 +2266,7 @@ function addSPPDKunjunganRow() {
 function updateSPPDBiayaTotal() {
        const fields = document.querySelectorAll('.sppd-biaya-field');
        let total = 0;
-       fields.forEach(f => { total += Number(f.value) || 0; });
+       fields.forEach(f => { total += parseNum(f.value); });
        const fmt = v => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(v);
        document.getElementById('sppd-biaya-total').textContent = fmt(total);
 }
@@ -2245,17 +2282,17 @@ async function submitSPPDForm(e) {
                      lokasi: tr.querySelector('.sppd-itin-lokasi')?.value || '',
                      pelanggan: tr.querySelector('.sppd-itin-pelanggan')?.value || '',
                      aktivitas: tr.querySelector('.sppd-itin-aktivitas')?.value || '',
-                     sasaran_nilai_project: Number(tr.querySelector('.sppd-itin-nilai')?.value) || 0,
+                     sasaran_nilai_project: parseNum(tr.querySelector('.sppd-itin-nilai')?.value),
                      produk: tr.querySelector('.sppd-itin-produk')?.value || '',
               });
        });
        const biaya = {
-              akomodasi: Number(document.getElementById('biaya-akomodasi').value) || 0,
-              konsumsi: Number(document.getElementById('biaya-konsumsi').value) || 0,
-              transportasi: Number(document.getElementById('biaya-transportasi').value) || 0,
-              entertain: Number(document.getElementById('biaya-entertain').value) || 0,
-              uang_saku: Number(document.getElementById('biaya-uang-saku').value) || 0,
-              biaya_lain: Number(document.getElementById('biaya-lain').value) || 0,
+              akomodasi: parseNum(document.getElementById('biaya-akomodasi').value),
+              konsumsi: parseNum(document.getElementById('biaya-konsumsi').value),
+              transportasi: parseNum(document.getElementById('biaya-transportasi').value),
+              entertain: parseNum(document.getElementById('biaya-entertain').value),
+              uang_saku: parseNum(document.getElementById('biaya-uang-saku').value),
+              biaya_lain: parseNum(document.getElementById('biaya-lain').value),
               biaya_lain_ket: document.getElementById('biaya-lain-ket').value,
        };
        const body = {
@@ -2267,7 +2304,7 @@ async function submitSPPDForm(e) {
               tanggal_berangkat: document.getElementById('sppd-tgl-berangkat').value,
               tanggal_kembali: document.getElementById('sppd-tgl-kembali').value,
               transport: document.getElementById('sppd-transport').value,
-              uang_muka: Number(document.getElementById('sppd-uang-muka').value) || 0,
+              uang_muka: parseNum(document.getElementById('sppd-uang-muka').value),
               itinerary, biaya,
        };
        try {
@@ -2330,6 +2367,9 @@ async function viewSPPDDetail(id) {
               if (canApprove) {
                      footer.push(`<button onclick="openSPPDAction(${id},'approve')" class="btn btn-success">✅ Setujui</button>`);
                      footer.push(`<button onclick="openSPPDAction(${id},'reject')" class="btn btn-danger">❌ Tolak</button>`);
+              }
+              if (sppd.status === 'pending' && sppd.sppd_approval_level === 0 && (currentUser.role === 'admin' || sppd.created_by === currentUser.id)) {
+                     footer.push(`<button onclick="closeModal('modal-sppd-detail');setTimeout(()=>openEditSPPD(${id}),200)" class="btn btn-secondary">✏️ Edit</button>`);
               }
               if (['approved', 'completed'].includes(sppd.status)) {
                      footer.push(`<a href="/api/sppd/${id}/download/pdf" target="_blank" class="btn btn-pdf">🖨️ Cetak PDF</a>`);
@@ -2560,14 +2600,14 @@ function addLaporanBiayaRow() {
        tr.id = `lb-row-${n}`;
        tr.innerHTML = `
               <td><input type="text" class="lb-ket" placeholder="Keterangan biaya" style="width:100%"></td>
-              <td><input type="number" class="lb-jml" min="0" value="0" style="width:100%" oninput="updateLaporanTotal()"></td>
+              <td><input type="text" inputmode="numeric" class="lb-jml num-fmt" value="0" style="width:100%" oninput="updateLaporanTotal()"></td>
               <td><button type="button" onclick="document.getElementById('lb-row-${n}').remove();updateLaporanTotal();" class="btn btn-sm btn-danger">✕</button></td>`;
        tbody.appendChild(tr);
 }
 
 function updateLaporanTotal() {
        let total = 0;
-       document.querySelectorAll('#laporan-biaya-tbody .lb-jml').forEach(inp => { total += Number(inp.value) || 0; });
+       document.querySelectorAll('#laporan-biaya-tbody .lb-jml').forEach(inp => { total += parseNum(inp.value); });
        const fmt = v => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(v);
        document.getElementById('laporan-total-biaya').textContent = fmt(total);
 }
@@ -2587,7 +2627,7 @@ async function submitLaporanSPPD() {
        });
        const biaya = [];
        document.querySelectorAll('#laporan-biaya-tbody tr').forEach(tr => {
-              biaya.push({ keterangan: tr.querySelector('.lb-ket')?.value || '', jumlah: Number(tr.querySelector('.lb-jml')?.value) || 0 });
+              biaya.push({ keterangan: tr.querySelector('.lb-ket')?.value || '', jumlah: parseNum(tr.querySelector('.lb-jml')?.value) });
        });
        const body = {
               tanggal_laporan: document.getElementById('laporan-tanggal').value,
@@ -2745,5 +2785,245 @@ async function uploadMyTTD(input) {
               msgEl.className = 'alert alert-error';
               msgEl.textContent = 'Koneksi gagal';
               msgEl.style.display = 'block';
+       }
+}
+
+// ===================== EDIT KK =====================
+let editKKTargetId = null;
+let editKKProductRowCount = 0;
+
+async function openEditKK(id) {
+       try {
+              const res = await api(`/api/kk/${id}`);
+              const kk = await res.json();
+              if (!res.ok) { showToast(kk.error || 'Gagal memuat', 'error'); return; }
+              editKKTargetId = id;
+              editKKProductRowCount = 0;
+              document.getElementById('ekk-nama-pekerjaan').value = kk.nama_pekerjaan || '';
+              document.getElementById('ekk-nomor-surat').value = kk.nomor_surat || '';
+              document.getElementById('ekk-perihal').value = kk.perihal || '';
+              document.getElementById('ekk-satker').value = kk.satker || '';
+              document.getElementById('ekk-prinsipal').value = kk.prinsipal || '';
+              document.getElementById('ekk-nama-barang').value = kk.nama_barang || '';
+              document.getElementById('ekk-pelanggan').value = kk.pelanggan || '';
+              document.getElementById('ekk-sumber-anggaran').value = kk.sumber_anggaran || '';
+              document.getElementById('ekk-tp-supplier').value = kk.term_payment_supplier || '';
+              document.getElementById('ekk-tp-pelanggan').value = kk.term_payment_pelanggan || '';
+              document.getElementById('ekk-notes').value = kk.notes || '';
+              document.getElementById('kk-edit-error').style.display = 'none';
+              const tbody = document.getElementById('ekk-products-tbody');
+              tbody.innerHTML = '';
+              let products = [];
+              try { products = JSON.parse(kk.products || '[]'); } catch {}
+              if (products.length === 0) {
+                     addEKKProduct({ nilai_kontrak: kk.nilai_kontrak_total || 0, dpp_beli: kk.dpp_beli || 0, b_distribusi: kk.b_distribusi || 0, ongkir: kk.ongkir || 0 });
+              } else {
+                     products.forEach(p => addEKKProduct(p));
+              }
+              showModal('modal-kk-edit');
+       } catch { showToast('Gagal memuat data KK', 'error'); }
+}
+
+function addEKKProduct(data = {}) {
+       editKKProductRowCount++;
+       const idx = editKKProductRowCount;
+       const tbody = document.getElementById('ekk-products-tbody');
+       const tr = document.createElement('tr');
+       tr.id = `ekk-row-${idx}`;
+       tr.innerHTML = `
+              <td style="text-align:center;font-size:12px">${idx}</td>
+              <td><input type="text" class="table-input" placeholder="Nama produk" data-field="nama" value="${escHtml(data.nama || '')}"></td>
+              <td><input type="text" inputmode="numeric" class="table-input num-fmt" data-field="nilai_kontrak" value="${data.nilai_kontrak ? fmtNumStr(data.nilai_kontrak) : '0'}"></td>
+              <td><input type="text" inputmode="numeric" class="table-input num-fmt" data-field="dpp_beli" value="${data.dpp_beli ? fmtNumStr(data.dpp_beli) : '0'}"></td>
+              <td><input type="text" inputmode="numeric" class="table-input num-fmt" data-field="b_distribusi" value="${data.b_distribusi ? fmtNumStr(data.b_distribusi) : '0'}"></td>
+              <td><input type="text" inputmode="numeric" class="table-input num-fmt" data-field="ongkir" value="${data.ongkir ? fmtNumStr(data.ongkir) : '0'}"></td>
+              <td><button type="button" onclick="document.getElementById('ekk-row-${idx}').remove()" class="btn btn-sm btn-danger">✕</button></td>`;
+       tbody.appendChild(tr);
+}
+
+function getEKKProductsFromDOM() {
+       const products = [];
+       document.querySelectorAll('#ekk-products-tbody tr').forEach(row => {
+              products.push({
+                     nama: row.querySelector('[data-field="nama"]')?.value || '',
+                     nilai_kontrak: parseNum(row.querySelector('[data-field="nilai_kontrak"]')?.value),
+                     dpp_beli: parseNum(row.querySelector('[data-field="dpp_beli"]')?.value),
+                     b_distribusi: parseNum(row.querySelector('[data-field="b_distribusi"]')?.value),
+                     ongkir: parseNum(row.querySelector('[data-field="ongkir"]')?.value),
+              });
+       });
+       return products;
+}
+
+async function submitEditKK() {
+       const errEl = document.getElementById('kk-edit-error');
+       errEl.style.display = 'none';
+       const nama_pekerjaan = document.getElementById('ekk-nama-pekerjaan').value.trim();
+       const pelanggan = document.getElementById('ekk-pelanggan').value.trim();
+       if (!nama_pekerjaan || !pelanggan) {
+              errEl.textContent = 'Nama pekerjaan dan pelanggan wajib diisi';
+              errEl.style.display = 'block'; return;
+       }
+       const products = getEKKProductsFromDOM();
+       const totNkt = products.reduce((s, p) => s + p.nilai_kontrak, 0);
+       if (totNkt === 0) {
+              errEl.textContent = 'Minimal 1 produk dengan Nilai Kontrak harus diisi';
+              errEl.style.display = 'block'; return;
+       }
+       const payload = {
+              nama_pekerjaan,
+              perihal: document.getElementById('ekk-perihal').value.trim(),
+              satker: document.getElementById('ekk-satker').value.trim(),
+              prinsipal: document.getElementById('ekk-prinsipal').value.trim(),
+              nama_barang: document.getElementById('ekk-nama-barang').value.trim(),
+              pelanggan,
+              nilai_kontrak_total: totNkt,
+              dpp_beli: products.reduce((s, p) => s + p.dpp_beli, 0),
+              b_distribusi: products.reduce((s, p) => s + p.b_distribusi, 0),
+              ongkir: products.reduce((s, p) => s + p.ongkir, 0),
+              products,
+              term_payment_supplier: document.getElementById('ekk-tp-supplier').value.trim(),
+              term_payment_pelanggan: document.getElementById('ekk-tp-pelanggan').value.trim(),
+              sumber_anggaran: document.getElementById('ekk-sumber-anggaran').value.trim(),
+              notes: document.getElementById('ekk-notes').value.trim(),
+       };
+       try {
+              const res = await api(`/api/kk/${editKKTargetId}`, 'PUT', payload);
+              const data = await res.json();
+              if (res.ok) {
+                     showToast('✅ Kertas Kerja berhasil diperbarui!', 'success');
+                     closeModal('modal-kk-edit');
+                     refreshKKList();
+              } else {
+                     errEl.textContent = data.error || 'Gagal menyimpan';
+                     errEl.style.display = 'block';
+              }
+       } catch {
+              errEl.textContent = 'Koneksi gagal';
+              errEl.style.display = 'block';
+       }
+}
+
+// ===================== EDIT SPPD =====================
+let editSPPDTargetId = null;
+let editSPPDItinRowCount = 0;
+
+async function openEditSPPD(id) {
+       try {
+              const res = await api(`/api/sppd/${id}`);
+              const sppd = await res.json();
+              if (!res.ok) { showToast(sppd.error || 'Gagal memuat', 'error'); return; }
+              editSPPDTargetId = id;
+              editSPPDItinRowCount = 0;
+              document.getElementById('esppd-nama-pegawai').value = sppd.nama_pegawai || '';
+              document.getElementById('esppd-jabatan').value = sppd.jabatan || '';
+              document.getElementById('esppd-area-kerja').value = sppd.area_kerja || '';
+              document.getElementById('esppd-tujuan').value = sppd.tujuan || '';
+              document.getElementById('esppd-keperluan').value = sppd.keperluan || '';
+              document.getElementById('esppd-tgl-berangkat').value = sppd.tanggal_berangkat || '';
+              document.getElementById('esppd-tgl-kembali').value = sppd.tanggal_kembali || '';
+              document.getElementById('esppd-transport').value = sppd.transport || '';
+              document.getElementById('esppd-uang-muka').value = fmtNumStr(sppd.uang_muka || 0);
+              document.getElementById('sppd-edit-error').style.display = 'none';
+              const itinTbody = document.getElementById('esppd-itinerary-tbody');
+              itinTbody.innerHTML = '';
+              const itinerary = sppd.itinerary || [];
+              if (itinerary.length === 0) {
+                     addESPPDKunjunganRow();
+              } else {
+                     itinerary.forEach(r => addESPPDKunjunganRow(r));
+              }
+              const biaya = sppd.biaya || {};
+              document.getElementById('ebiaya-akomodasi').value = fmtNumStr(biaya.akomodasi || 0);
+              document.getElementById('ebiaya-konsumsi').value = fmtNumStr(biaya.konsumsi || 0);
+              document.getElementById('ebiaya-transportasi').value = fmtNumStr(biaya.transportasi || 0);
+              document.getElementById('ebiaya-entertain').value = fmtNumStr(biaya.entertain || 0);
+              document.getElementById('ebiaya-uang-saku').value = fmtNumStr(biaya.uang_saku || 0);
+              document.getElementById('ebiaya-lain').value = fmtNumStr(biaya.biaya_lain || 0);
+              document.getElementById('ebiaya-lain-ket').value = biaya.biaya_lain_ket || '';
+              updateESPPDBiayaTotal();
+              showModal('modal-sppd-edit');
+       } catch { showToast('Gagal memuat data SPPD', 'error'); }
+}
+
+function addESPPDKunjunganRow(data = {}) {
+       editSPPDItinRowCount++;
+       const n = editSPPDItinRowCount;
+       const tbody = document.getElementById('esppd-itinerary-tbody');
+       const tr = document.createElement('tr');
+       tr.id = `esppd-itin-row-${n}`;
+       tr.innerHTML = `
+              <td><input type="date" class="esppd-itin-tgl" style="width:100%" value="${escHtml(data.tanggal || '')}"></td>
+              <td><input type="text" class="esppd-itin-lokasi" placeholder="Lokasi" style="width:100%" value="${escHtml(data.lokasi || '')}"></td>
+              <td><input type="text" class="esppd-itin-pelanggan" placeholder="Nama pelanggan/instansi" style="width:100%" value="${escHtml(data.pelanggan || '')}"></td>
+              <td><input type="text" class="esppd-itin-aktivitas" placeholder="Rencana aktivitas" style="width:100%" value="${escHtml(data.aktivitas || '')}"></td>
+              <td><input type="text" inputmode="numeric" class="esppd-itin-nilai num-fmt" value="${data.sasaran_nilai_project ? fmtNumStr(data.sasaran_nilai_project) : '0'}" style="width:100%"></td>
+              <td><input type="text" class="esppd-itin-produk" placeholder="Produk" style="width:100%" value="${escHtml(data.produk || '')}"></td>
+              <td><button type="button" onclick="document.getElementById('esppd-itin-row-${n}').remove()" class="btn btn-sm btn-danger">✕</button></td>`;
+       tbody.appendChild(tr);
+}
+
+function updateESPPDBiayaTotal() {
+       const fields = document.querySelectorAll('.esppd-biaya-field');
+       let total = 0;
+       fields.forEach(f => { total += parseNum(f.value); });
+       const fmt = v => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(v);
+       document.getElementById('esppd-biaya-total').textContent = fmt(total);
+}
+
+async function submitEditSPPD() {
+       const errEl = document.getElementById('sppd-edit-error');
+       errEl.style.display = 'none';
+       const tujuan = document.getElementById('esppd-tujuan').value.trim();
+       const keperluan = document.getElementById('esppd-keperluan').value.trim();
+       const tgl_berangkat = document.getElementById('esppd-tgl-berangkat').value;
+       const tgl_kembali = document.getElementById('esppd-tgl-kembali').value;
+       if (!tujuan || !keperluan || !tgl_berangkat || !tgl_kembali) {
+              errEl.textContent = 'Tujuan, keperluan, dan tanggal wajib diisi';
+              errEl.style.display = 'block'; return;
+       }
+       const itinerary = [];
+       document.querySelectorAll('#esppd-itinerary-tbody tr').forEach(tr => {
+              itinerary.push({
+                     tanggal: tr.querySelector('.esppd-itin-tgl')?.value || '',
+                     lokasi: tr.querySelector('.esppd-itin-lokasi')?.value || '',
+                     pelanggan: tr.querySelector('.esppd-itin-pelanggan')?.value || '',
+                     aktivitas: tr.querySelector('.esppd-itin-aktivitas')?.value || '',
+                     sasaran_nilai_project: parseNum(tr.querySelector('.esppd-itin-nilai')?.value),
+                     produk: tr.querySelector('.esppd-itin-produk')?.value || '',
+              });
+       });
+       const biaya = {
+              akomodasi: parseNum(document.getElementById('ebiaya-akomodasi').value),
+              konsumsi: parseNum(document.getElementById('ebiaya-konsumsi').value),
+              transportasi: parseNum(document.getElementById('ebiaya-transportasi').value),
+              entertain: parseNum(document.getElementById('ebiaya-entertain').value),
+              uang_saku: parseNum(document.getElementById('ebiaya-uang-saku').value),
+              biaya_lain: parseNum(document.getElementById('ebiaya-lain').value),
+              biaya_lain_ket: document.getElementById('ebiaya-lain-ket').value,
+       };
+       const body = {
+              tujuan,
+              keperluan,
+              tanggal_berangkat: tgl_berangkat,
+              tanggal_kembali: tgl_kembali,
+              transport: document.getElementById('esppd-transport').value,
+              uang_muka: parseNum(document.getElementById('esppd-uang-muka').value),
+              itinerary, biaya,
+       };
+       try {
+              const res = await api(`/api/sppd/${editSPPDTargetId}`, 'PUT', body);
+              const data = await res.json();
+              if (res.ok) {
+                     showToast('✅ SPPD berhasil diperbarui!', 'success');
+                     closeModal('modal-sppd-edit');
+                     refreshSPPDList();
+              } else {
+                     errEl.textContent = data.error || 'Gagal menyimpan';
+                     errEl.style.display = 'block';
+              }
+       } catch {
+              errEl.textContent = 'Koneksi gagal';
+              errEl.style.display = 'block';
        }
 }

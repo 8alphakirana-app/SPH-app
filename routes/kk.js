@@ -51,11 +51,19 @@ function calcKK(kk) {
   return { dppKontrak, ppnKontrak, pphKontrak, penerimaanUang, dppBeli, ppnBeli, nilaiPembyr, bDistribusi, ongkir, surplusDefisit, laba, bMargin, ongkirPct, netMargin, products };
 }
 
+function generateNomorKK() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const romanMonth = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'][now.getMonth()];
+  const count = db.prepare("SELECT COUNT(*) as cnt FROM kertas_kerja WHERE nomor_surat LIKE ?").get(`%/KK/${romanMonth}/${year}`).cnt;
+  return `${String(count + 1).padStart(3, '0')}/KK/${romanMonth}/${year}`;
+}
+
 // ── POST /api/kk ─────────────────────────────────────────────────────────────
 router.post('/', requireLogin, (req, res) => {
   const {
-    nama_pekerjaan, nomor_surat, perihal, satker, prinsipal, nama_barang,
-    pelanggan, nilai_kontrak_total, dpp_beli, b_distribusi, ongkir,
+    perihal, satker, prinsipal, nama_barang,
+    nama_pekerjaan, pelanggan, nilai_kontrak_total, dpp_beli, b_distribusi, ongkir,
     term_payment_supplier, term_payment_pelanggan, sumber_anggaran, notes,
     products
   } = req.body;
@@ -66,11 +74,21 @@ router.post('/', requireLogin, (req, res) => {
 
   const productsArr    = Array.isArray(products) ? products : [];
   const productsJson   = JSON.stringify(productsArr);
-  const dppBeliVal     = parseFloat(dpp_beli) || 0;
+  const totNkt         = productsArr.length > 0
+    ? productsArr.reduce((s, p) => s + (parseFloat(p.nilai_kontrak) || 0), 0)
+    : parseFloat(nilai_kontrak_total) || 0;
+  const dppBeliVal     = productsArr.length > 0
+    ? productsArr.reduce((s, p) => s + (parseFloat(p.dpp_beli) || 0), 0)
+    : parseFloat(dpp_beli) || 0;
   const nilaiPembyrVal = dppBeliVal * 1.11;
-  const bDistribusiVal = parseFloat(b_distribusi) || 0;
-  const ongkirVal      = parseFloat(ongkir) || 0;
+  const bDistribusiVal = productsArr.length > 0
+    ? productsArr.reduce((s, p) => s + (parseFloat(p.b_distribusi) || 0), 0)
+    : parseFloat(b_distribusi) || 0;
+  const ongkirVal      = productsArr.length > 0
+    ? productsArr.reduce((s, p) => s + (parseFloat(p.ongkir) || 0), 0)
+    : parseFloat(ongkir) || 0;
   const bdoVal         = bDistribusiVal + ongkirVal;
+  const nomorSurat     = generateNomorKK();
 
   const subResult = db.prepare(`
     INSERT INTO submissions
@@ -89,9 +107,9 @@ router.post('/', requireLogin, (req, res) => {
        b_distribusi, ongkir, b_distribusi_ongkir, term_payment_supplier, term_payment_pelanggan, sumber_anggaran, products)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `).run(
-    submissionId, nama_pekerjaan, nomor_surat || '', perihal || '',
+    submissionId, nama_pekerjaan, nomorSurat, perihal || '',
     satker || '', prinsipal || '', nama_barang || '', pelanggan,
-    parseFloat(nilai_kontrak_total) || 0, dppBeliVal, nilaiPembyrVal,
+    totNkt, dppBeliVal, nilaiPembyrVal,
     bDistribusiVal, ongkirVal, bdoVal,
     term_payment_supplier || '', term_payment_pelanggan || '', sumber_anggaran || '',
     productsJson
@@ -198,7 +216,7 @@ router.put('/:id', requireLogin, (req, res) => {
   if (user.role !== 'admin' && sub.created_by !== user.id) return res.status(403).json({ error: 'Akses ditolak' });
 
   const {
-    nama_pekerjaan, nomor_surat, perihal, satker, prinsipal, nama_barang,
+    nama_pekerjaan, perihal, satker, prinsipal, nama_barang,
     pelanggan, nilai_kontrak_total, dpp_beli, b_distribusi, ongkir,
     term_payment_supplier, term_payment_pelanggan, sumber_anggaran, notes,
     products
@@ -206,6 +224,7 @@ router.put('/:id', requireLogin, (req, res) => {
 
   if (!nama_pekerjaan || !pelanggan) return res.status(400).json({ error: 'Nama pekerjaan dan pelanggan wajib diisi' });
 
+  const existingKK     = db.prepare('SELECT nomor_surat FROM kertas_kerja WHERE submission_id=?').get(req.params.id);
   const productsArr    = Array.isArray(products) ? products : [];
   const productsJson   = JSON.stringify(productsArr);
   const dppBeliVal     = parseFloat(dpp_beli) || 0;
@@ -213,6 +232,9 @@ router.put('/:id', requireLogin, (req, res) => {
   const bDistribusiVal = parseFloat(b_distribusi) || 0;
   const ongkirVal      = parseFloat(ongkir) || 0;
   const bdoVal         = bDistribusiVal + ongkirVal;
+  const totNkt         = productsArr.length > 0
+    ? productsArr.reduce((s, p) => s + (parseFloat(p.nilai_kontrak) || 0), 0)
+    : parseFloat(nilai_kontrak_total) || 0;
 
   db.prepare('UPDATE submissions SET client_name=?, notes=? WHERE id=?').run(pelanggan, notes || '', req.params.id);
   db.prepare(`
@@ -222,8 +244,8 @@ router.put('/:id', requireLogin, (req, res) => {
       term_payment_supplier=?, term_payment_pelanggan=?, sumber_anggaran=?, products=?
     WHERE submission_id=?
   `).run(
-    nama_pekerjaan, nomor_surat || '', perihal || '', satker || '', prinsipal || '', nama_barang || '',
-    pelanggan, parseFloat(nilai_kontrak_total)||0, dppBeliVal, nilaiPembyrVal, bDistribusiVal, ongkirVal, bdoVal,
+    nama_pekerjaan, existingKK?.nomor_surat || '', perihal || '', satker || '', prinsipal || '', nama_barang || '',
+    pelanggan, totNkt, dppBeliVal, nilaiPembyrVal, bDistribusiVal, ongkirVal, bdoVal,
     term_payment_supplier||'', term_payment_pelanggan||'', sumber_anggaran||'', productsJson, req.params.id
   );
 

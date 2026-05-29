@@ -35,15 +35,13 @@ function checkGmParallel(table, idCol, id) {
   return (gm1?.status === 'approved' && gm2?.status === 'approved') ? 5 : 3;
 }
 
-function generateNomorSppd() {
-  const settings = {};
-  db.prepare('SELECT key, value FROM settings').all().forEach(s => { settings[s.key] = s.value; });
-  const prefix = settings.sppd_nomor_prefix || 'SPPD-LAK';
+function generateNomorSppd(area) {
   const now = new Date();
   const year = now.getFullYear();
   const romanMonth = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'][now.getMonth()];
-  const count = db.prepare(`SELECT COUNT(*) as cnt FROM sppd WHERE nomor LIKE ?`).get(`%/${prefix}/%/${year}`).cnt;
-  return `${String(count + 1).padStart(3, '0')}/${prefix}/${romanMonth}/${year}`;
+  const areaStr = (area || 'Pusat').trim();
+  const count = db.prepare(`SELECT COUNT(*) as cnt FROM sppd WHERE nomor LIKE ? AND nomor NOT LIKE 'DRAFT-%'`).get(`%/SPPD/%/${year}`).cnt;
+  return `${String(count + 1).padStart(3, '0')}/SPPD/${areaStr}/${romanMonth}/${year}`;
 }
 
 // ── TTD upload setup ──────────────────────────────────────────────────────────
@@ -827,7 +825,8 @@ router.post('/:id/approve', (req, res) => {
       .run(sppd.id, level, user.id, note || '');
 
   const finalize = () => {
-    const nomor = generateNomorSppd();
+    const creatorArea = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sppd.created_by)?.area_kerja || sppd.area_kerja || '';
+    const nomor = generateNomorSppd(creatorArea);
     db.prepare("UPDATE sppd SET status='approved', sppd_approval_level=2, nomor=? WHERE id=?").run(nomor, sppd.id);
   };
 

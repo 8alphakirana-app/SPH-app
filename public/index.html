@@ -196,7 +196,7 @@
               <div class="card-body">
                 <div class="form-row">
                   <div class="form-group"><label>Nama Pekerjaan <span class="required">*</span></label><input type="text" id="kk-nama-pekerjaan" required></div>
-                  <div class="form-group"><label>Nomor Surat</label><input type="text" id="kk-nomor-surat"></div>
+                  <div class="form-group"><label>Nomor Surat</label><input type="text" id="kk-nomor-surat" readonly placeholder="Otomatis: xxx/KK/bulan/tahun" style="background:var(--bg-alt);color:var(--text-light)"></div>
                 </div>
                 <div class="form-row">
                   <div class="form-group"><label>Perihal</label><input type="text" id="kk-perihal"></div>
@@ -330,7 +330,7 @@
                 </div>
                 <div class="form-row">
                   <div class="form-group"><label>Moda Transportasi</label><input type="text" id="sppd-transport" placeholder="Cth: Pesawat, Mobil Dinas"></div>
-                  <div class="form-group"><label>Uang Muka (Rp)</label><input type="number" id="sppd-uang-muka" min="0" value="0"></div>
+                  <div class="form-group"><label>Uang Muka (Rp)</label><input type="text" inputmode="numeric" id="sppd-uang-muka" class="num-fmt" value="0"></div>
                 </div>
               </div>
             </div>
@@ -349,16 +349,16 @@
               <div class="card-header"><h3>💰 Usulan Biaya</h3></div>
               <div class="card-body">
                 <div class="form-row">
-                  <div class="form-group"><label>Akomodasi (Rp)</label><input type="number" class="sppd-biaya-field" id="biaya-akomodasi" min="0" value="0" oninput="updateSPPDBiayaTotal()"></div>
-                  <div class="form-group"><label>Konsumsi (Rp)</label><input type="number" class="sppd-biaya-field" id="biaya-konsumsi" min="0" value="0" oninput="updateSPPDBiayaTotal()"></div>
+                  <div class="form-group"><label>Akomodasi (Rp)</label><input type="text" inputmode="numeric" class="sppd-biaya-field num-fmt" id="biaya-akomodasi" value="0" oninput="updateSPPDBiayaTotal()"></div>
+                  <div class="form-group"><label>Konsumsi (Rp)</label><input type="text" inputmode="numeric" class="sppd-biaya-field num-fmt" id="biaya-konsumsi" value="0" oninput="updateSPPDBiayaTotal()"></div>
                 </div>
                 <div class="form-row">
-                  <div class="form-group"><label>Transportasi (Rp)</label><input type="number" class="sppd-biaya-field" id="biaya-transportasi" min="0" value="0" oninput="updateSPPDBiayaTotal()"></div>
-                  <div class="form-group"><label>Entertain (Rp)</label><input type="number" class="sppd-biaya-field" id="biaya-entertain" min="0" value="0" oninput="updateSPPDBiayaTotal()"></div>
+                  <div class="form-group"><label>Transportasi (Rp)</label><input type="text" inputmode="numeric" class="sppd-biaya-field num-fmt" id="biaya-transportasi" value="0" oninput="updateSPPDBiayaTotal()"></div>
+                  <div class="form-group"><label>Entertain (Rp)</label><input type="text" inputmode="numeric" class="sppd-biaya-field num-fmt" id="biaya-entertain" value="0" oninput="updateSPPDBiayaTotal()"></div>
                 </div>
                 <div class="form-row">
-                  <div class="form-group"><label>Uang Saku (Rp)</label><input type="number" class="sppd-biaya-field" id="biaya-uang-saku" min="0" value="0" oninput="updateSPPDBiayaTotal()"></div>
-                  <div class="form-group"><label>Biaya Lain-lain (Rp)</label><input type="number" class="sppd-biaya-field" id="biaya-lain" min="0" value="0" oninput="updateSPPDBiayaTotal()"></div>
+                  <div class="form-group"><label>Uang Saku (Rp)</label><input type="text" inputmode="numeric" class="sppd-biaya-field num-fmt" id="biaya-uang-saku" value="0" oninput="updateSPPDBiayaTotal()"></div>
+                  <div class="form-group"><label>Biaya Lain-lain (Rp)</label><input type="text" inputmode="numeric" class="sppd-biaya-field num-fmt" id="biaya-lain" value="0" oninput="updateSPPDBiayaTotal()"></div>
                 </div>
                 <div class="form-group"><label>Keterangan Biaya Lain-lain</label><input type="text" id="biaya-lain-ket" placeholder="Opsional..."></div>
                 <div style="background:var(--bg-alt);border-radius:8px;padding:12px 16px;margin-top:8px;display:flex;align-items:center;justify-content:space-between">
@@ -638,7 +638,7 @@
   <div class="modal-dialog">
     <div class="modal-header"><h3 id="pencairan-sppd-title">Pengajuan Pencairan Dana SPPD</h3><button onclick="closeModal('modal-pencairan-sppd')" class="btn-close">✕</button></div>
     <div class="modal-body" id="pencairan-sppd-body">
-      <div class="form-group"><label>Jumlah Diajukan (Rp) <span class="required">*</span></label><input type="number" id="pencairan-jumlah" min="0" placeholder="0"></div>
+      <div class="form-group"><label>Jumlah Diajukan (Rp) <span class="required">*</span></label><input type="text" inputmode="numeric" id="pencairan-jumlah" class="num-fmt" placeholder="0"></div>
       <div class="form-group"><label>Catatan</label><textarea id="pencairan-catatan" rows="2" placeholder="Opsional..."></textarea></div>
       <div id="pencairan-error" class="alert alert-error" style="display:none"></div>
     </div>
@@ -655,7 +655,7 @@
     <div class="modal-header"><h3 id="laporan-action-title">Konfirmasi</h3><button onclick="closeModal('modal-laporan-action')" class="btn-close">✕</button></div>
     <div class="modal-body">
       <div id="laporan-action-pencairan-fields" style="display:none">
-        <div class="form-group"><label>Jumlah Disetujui (Rp)</label><input type="number" id="pencairan-jumlah-disetujui" min="0" placeholder="Kosongkan = sama dengan diajukan"></div>
+        <div class="form-group"><label>Jumlah Disetujui (Rp)</label><input type="text" inputmode="numeric" id="pencairan-jumlah-disetujui" class="num-fmt" placeholder="Kosongkan = sama dengan diajukan"></div>
       </div>
       <div class="form-group"><label>Catatan</label><textarea id="laporan-action-note" rows="3" placeholder="Opsional..."></textarea></div>
       <div id="laporan-action-error" class="alert alert-error" style="display:none"></div>
@@ -677,7 +677,7 @@
           <option value="sudah_cair">Sudah Cair</option>
         </select>
       </div>
-      <div class="form-group"><label>Jumlah Dicairkan (Rp)</label><input type="number" id="pencairan-update-jumlah" min="0" placeholder="0"></div>
+      <div class="form-group"><label>Jumlah Dicairkan (Rp)</label><input type="text" inputmode="numeric" id="pencairan-update-jumlah" class="num-fmt" placeholder="0"></div>
       <div class="form-group"><label>Catatan</label><textarea id="pencairan-update-catatan" rows="2" placeholder="Opsional..."></textarea></div>
       <div id="pencairan-update-error" class="alert alert-error" style="display:none"></div>
     </div>
@@ -687,6 +687,122 @@
     </div>
   </div>
 </div>
+<!-- ═══════════ MODAL EDIT KK ═══════════ -->
+<div id="modal-kk-edit" class="modal" style="display:none">
+  <div class="modal-backdrop" onclick="closeModal('modal-kk-edit')"></div>
+  <div class="modal-dialog modal-lg">
+    <div class="modal-header"><h3>✏️ Edit Kertas Kerja</h3><button onclick="closeModal('modal-kk-edit')" class="btn-close">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label>Nama Pekerjaan <span class="required">*</span></label><input type="text" id="ekk-nama-pekerjaan"></div>
+        <div class="form-group"><label>Nomor Surat</label><input type="text" id="ekk-nomor-surat" readonly style="background:var(--bg-alt);color:var(--text-light)"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Perihal</label><input type="text" id="ekk-perihal"></div>
+        <div class="form-group"><label>Satker</label><input type="text" id="ekk-satker"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Prinsipal</label><input type="text" id="ekk-prinsipal"></div>
+        <div class="form-group"><label>Nama Barang</label><input type="text" id="ekk-nama-barang"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Nama Pelanggan <span class="required">*</span></label><input type="text" id="ekk-pelanggan"></div>
+        <div class="form-group"><label>Sumber Anggaran</label><input type="text" id="ekk-sumber-anggaran"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Term of Payment Supplier</label><input type="text" id="ekk-tp-supplier"></div>
+        <div class="form-group"><label>Term of Payment Pelanggan</label><input type="text" id="ekk-tp-pelanggan"></div>
+      </div>
+      <div class="form-group"><label>Catatan</label><textarea id="ekk-notes" rows="2"></textarea></div>
+      <div class="card" style="margin-top:12px">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+          <h3 style="margin:0">💰 Produk &amp; Kalkulasi</h3>
+          <button type="button" onclick="addEKKProduct()" class="btn btn-secondary btn-sm">+ Tambah Produk</button>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive" style="margin-bottom:12px">
+            <table class="table kk-product-table" style="min-width:740px">
+              <thead><tr><th style="width:30px">No</th><th>Nama Produk</th><th style="width:140px">Nilai Kontrak</th><th style="width:140px">DPP Beli</th><th style="width:120px">B. Distribusi</th><th style="width:120px">Ongkir</th><th style="width:32px"></th></tr></thead>
+              <tbody id="ekk-products-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div id="kk-edit-error" class="alert alert-error" style="display:none;margin-top:8px"></div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="submitEditKK()" class="btn btn-primary">💾 Simpan Perubahan</button>
+      <button onclick="closeModal('modal-kk-edit')" class="btn btn-outline">Batal</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ MODAL EDIT SPPD ═══════════ -->
+<div id="modal-sppd-edit" class="modal" style="display:none">
+  <div class="modal-backdrop" onclick="closeModal('modal-sppd-edit')"></div>
+  <div class="modal-dialog modal-lg">
+    <div class="modal-header"><h3>✏️ Edit SPPD</h3><button onclick="closeModal('modal-sppd-edit')" class="btn-close">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label>Nama Pegawai</label><input type="text" id="esppd-nama-pegawai" disabled></div>
+        <div class="form-group"><label>Jabatan</label><input type="text" id="esppd-jabatan" disabled></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Area Kerja</label><input type="text" id="esppd-area-kerja" disabled></div>
+        <div class="form-group"><label>Tujuan Kota <span class="required">*</span></label><input type="text" id="esppd-tujuan" placeholder="Cth: Surabaya"></div>
+      </div>
+      <div class="form-group"><label>Keperluan / Tujuan Kunjungan <span class="required">*</span></label><textarea id="esppd-keperluan" rows="2"></textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label>Tanggal Berangkat <span class="required">*</span></label><input type="date" id="esppd-tgl-berangkat"></div>
+        <div class="form-group"><label>Tanggal Kembali <span class="required">*</span></label><input type="date" id="esppd-tgl-kembali"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Moda Transportasi</label><input type="text" id="esppd-transport"></div>
+        <div class="form-group"><label>Uang Muka (Rp)</label><input type="text" inputmode="numeric" id="esppd-uang-muka" class="num-fmt" value="0"></div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+          <h3 style="margin:0">📍 Rencana Kunjungan</h3>
+          <button type="button" onclick="addESPPDKunjunganRow()" class="btn btn-secondary btn-sm">+ Tambah</button>
+        </div>
+        <div class="card-body no-padding">
+          <div class="table-responsive">
+            <table class="table"><thead><tr><th>Tanggal</th><th>Lokasi</th><th>Pelanggan / Instansi</th><th>Aktivitas</th><th>Target Nilai (Rp)</th><th>Produk</th><th width="40"></th></tr></thead>
+            <tbody id="esppd-itinerary-tbody"></tbody></table>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div class="card-header"><h3 style="margin:0">💰 Usulan Biaya</h3></div>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group"><label>Akomodasi (Rp)</label><input type="text" inputmode="numeric" class="esppd-biaya-field num-fmt" id="ebiaya-akomodasi" value="0" oninput="updateESPPDBiayaTotal()"></div>
+            <div class="form-group"><label>Konsumsi (Rp)</label><input type="text" inputmode="numeric" class="esppd-biaya-field num-fmt" id="ebiaya-konsumsi" value="0" oninput="updateESPPDBiayaTotal()"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Transportasi (Rp)</label><input type="text" inputmode="numeric" class="esppd-biaya-field num-fmt" id="ebiaya-transportasi" value="0" oninput="updateESPPDBiayaTotal()"></div>
+            <div class="form-group"><label>Entertain (Rp)</label><input type="text" inputmode="numeric" class="esppd-biaya-field num-fmt" id="ebiaya-entertain" value="0" oninput="updateESPPDBiayaTotal()"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Uang Saku (Rp)</label><input type="text" inputmode="numeric" class="esppd-biaya-field num-fmt" id="ebiaya-uang-saku" value="0" oninput="updateESPPDBiayaTotal()"></div>
+            <div class="form-group"><label>Biaya Lain-lain (Rp)</label><input type="text" inputmode="numeric" class="esppd-biaya-field num-fmt" id="ebiaya-lain" value="0" oninput="updateESPPDBiayaTotal()"></div>
+          </div>
+          <div class="form-group"><label>Keterangan Biaya Lain-lain</label><input type="text" id="ebiaya-lain-ket"></div>
+          <div style="background:var(--bg-alt);border-radius:8px;padding:12px 16px;margin-top:8px;display:flex;align-items:center;justify-content:space-between">
+            <span class="fw-bold">Total Usulan Biaya:</span>
+            <span class="fw-bold" id="esppd-biaya-total" style="font-size:15px;color:var(--primary)">Rp 0</span>
+          </div>
+        </div>
+      </div>
+      <div id="sppd-edit-error" class="alert alert-error" style="display:none;margin-top:8px"></div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="submitEditSPPD()" class="btn btn-primary">💾 Simpan Perubahan</button>
+      <button onclick="closeModal('modal-sppd-edit')" class="btn btn-outline">Batal</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast" style="display:none"></div>
 <script src="/js/app.js"></script>
 </body>
