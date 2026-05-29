@@ -330,7 +330,7 @@
                 </div>
                 <div class="form-row">
                   <div class="form-group"><label>Moda Transportasi</label><input type="text" id="sppd-transport" placeholder="Cth: Pesawat, Mobil Dinas"></div>
-                  <div class="form-group"><label>Uang Muka (Rp)</label><input type="text" inputmode="numeric" id="sppd-uang-muka" class="num-fmt" value="0"></div>
+                  <div class="form-group"><label>Uang Muka (Rp)</label><input type="text" inputmode="numeric" id="sppd-uang-muka" class="num-fmt" value="0" oninput="formatNumInput(this)" onfocus="if(this.value==='0')this.value=''"></div>
                 </div>
               </div>
             </div>
@@ -349,16 +349,16 @@
               <div class="card-header"><h3>💰 Usulan Biaya</h3></div>
               <div class="card-body">
                 <div class="form-row">
-                  <div class="form-group"><label>Akomodasi (Rp)</label><input type="text" inputmode="numeric" class="sppd-biaya-field num-fmt" id="biaya-akomodasi" value="0" oninput="updateSPPDBiayaTotal()"></div>
-                  <div class="form-group"><label>Konsumsi (Rp)</label><input type="text" inputmode="numeric" class="sppd-biaya-field num-fmt" id="biaya-konsumsi" value="0" oninput="updateSPPDBiayaTotal()"></div>
+                  <div class="form-group"><label>Akomodasi (Rp)</label><input type="text" inputmode="numeric" class="sppd-biaya-field num-fmt" id="biaya-akomodasi" value="0" oninput="formatNumInput(this);updateSPPDBiayaTotal()" onfocus="if(this.value==='0')this.value=''"></div>
+                  <div class="form-group"><label>Konsumsi (Rp)</label><input type="text" inputmode="numeric" class="sppd-biaya-field num-fmt" id="biaya-konsumsi" value="0" oninput="formatNumInput(this);updateSPPDBiayaTotal()" onfocus="if(this.value==='0')this.value=''"></div>
                 </div>
                 <div class="form-row">
-                  <div class="form-group"><label>Transportasi (Rp)</label><input type="text" inputmode="numeric" class="sppd-biaya-field num-fmt" id="biaya-transportasi" value="0" oninput="updateSPPDBiayaTotal()"></div>
-                  <div class="form-group"><label>Entertain (Rp)</label><input type="text" inputmode="numeric" class="sppd-biaya-field num-fmt" id="biaya-entertain" value="0" oninput="updateSPPDBiayaTotal()"></div>
+                  <div class="form-group"><label>Transportasi (Rp)</label><input type="text" inputmode="numeric" class="sppd-biaya-field num-fmt" id="biaya-transportasi" value="0" oninput="formatNumInput(this);updateSPPDBiayaTotal()" onfocus="if(this.value==='0')this.value=''"></div>
+                  <div class="form-group"><label>Entertain (Rp)</label><input type="text" inputmode="numeric" class="sppd-biaya-field num-fmt" id="biaya-entertain" value="0" oninput="formatNumInput(this);updateSPPDBiayaTotal()" onfocus="if(this.value==='0')this.value=''"></div>
                 </div>
                 <div class="form-row">
-                  <div class="form-group"><label>Uang Saku (Rp)</label><input type="text" inputmode="numeric" class="sppd-biaya-field num-fmt" id="biaya-uang-saku" value="0" oninput="updateSPPDBiayaTotal()"></div>
-                  <div class="form-group"><label>Biaya Lain-lain (Rp)</label><input type="text" inputmode="numeric" class="sppd-biaya-field num-fmt" id="biaya-lain" value="0" oninput="updateSPPDBiayaTotal()"></div>
+                  <div class="form-group"><label>Uang Saku (Rp)</label><input type="text" inputmode="numeric" class="sppd-biaya-field num-fmt" id="biaya-uang-saku" value="0" oninput="formatNumInput(this);updateSPPDBiayaTotal()" onfocus="if(this.value==='0')this.value=''"></div>
+                  <div class="form-group"><label>Biaya Lain-lain (Rp)</label><input type="text" inputmode="numeric" class="sppd-biaya-field num-fmt" id="biaya-lain" value="0" oninput="formatNumInput(this);updateSPPDBiayaTotal()" onfocus="if(this.value==='0')this.value=''"></div>
                 </div>
                 <div class="form-group"><label>Keterangan Biaya Lain-lain</label><input type="text" id="biaya-lain-ket" placeholder="Opsional..."></div>
                 <div style="background:var(--bg-alt);border-radius:8px;padding:12px 16px;margin-top:8px;display:flex;align-items:center;justify-content:space-between">
@@ -638,7 +638,7 @@
   <div class="modal-dialog">
     <div class="modal-header"><h3 id="pencairan-sppd-title">Pengajuan Pencairan Dana SPPD</h3><button onclick="closeModal('modal-pencairan-sppd')" class="btn-close">✕</button></div>
     <div class="modal-body" id="pencairan-sppd-body">
-      <div class="form-group"><label>Jumlah Diajukan (Rp) <span class="required">*</span></label><input type="text" inputmode="numeric" id="pencairan-jumlah" class="num-fmt" placeholder="0"></div>
+      <div class="form-group"><label>Jumlah Diajukan (Rp) <span class="required">*</span></label><input type="text" inputmode="numeric" id="pencairan-jumlah" class="num-fmt" placeholder="0" oninput="formatNumInput(this)"></div>
       <div class="form-group"><label>Catatan</label><textarea id="pencairan-catatan" rows="2" placeholder="Opsional..."></textarea></div>
       <div id="pencairan-error" class="alert alert-error" style="display:none"></div>
     </div>
@@ -655,7 +655,7 @@
     <div class="modal-header"><h3 id="laporan-action-title">Konfirmasi</h3><button onclick="closeModal('modal-laporan-action')" class="btn-close">✕</button></div>
     <div class="modal-body">
       <div id="laporan-action-pencairan-fields" style="display:none">
-        <div class="form-group"><label>Jumlah Disetujui (Rp)</label><input type="text" inputmode="numeric" id="pencairan-jumlah-disetujui" class="num-fmt" placeholder="Kosongkan = sama dengan diajukan"></div>
+        <div class="form-group"><label>Jumlah Disetujui (Rp)</label><input type="text" inputmode="numeric" id="pencairan-jumlah-disetujui" class="num-fmt" placeholder="Kosongkan = sama dengan diajukan" oninput="formatNumInput(this)"></div>
       </div>
       <div class="form-group"><label>Catatan</label><textarea id="laporan-action-note" rows="3" placeholder="Opsional..."></textarea></div>
       <div id="laporan-action-error" class="alert alert-error" style="display:none"></div>
@@ -677,7 +677,7 @@
           <option value="sudah_cair">Sudah Cair</option>
         </select>
       </div>
-      <div class="form-group"><label>Jumlah Dicairkan (Rp)</label><input type="text" inputmode="numeric" id="pencairan-update-jumlah" class="num-fmt" placeholder="0"></div>
+      <div class="form-group"><label>Jumlah Dicairkan (Rp)</label><input type="text" inputmode="numeric" id="pencairan-update-jumlah" class="num-fmt" placeholder="0" oninput="formatNumInput(this)"></div>
       <div class="form-group"><label>Catatan</label><textarea id="pencairan-update-catatan" rows="2" placeholder="Opsional..."></textarea></div>
       <div id="pencairan-update-error" class="alert alert-error" style="display:none"></div>
     </div>
@@ -758,7 +758,7 @@
       </div>
       <div class="form-row">
         <div class="form-group"><label>Moda Transportasi</label><input type="text" id="esppd-transport"></div>
-        <div class="form-group"><label>Uang Muka (Rp)</label><input type="text" inputmode="numeric" id="esppd-uang-muka" class="num-fmt" value="0"></div>
+        <div class="form-group"><label>Uang Muka (Rp)</label><input type="text" inputmode="numeric" id="esppd-uang-muka" class="num-fmt" value="0" oninput="formatNumInput(this)" onfocus="if(this.value==='0')this.value=''"></div>
       </div>
       <div class="card" style="margin-top:12px">
         <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
@@ -776,16 +776,16 @@
         <div class="card-header"><h3 style="margin:0">💰 Usulan Biaya</h3></div>
         <div class="card-body">
           <div class="form-row">
-            <div class="form-group"><label>Akomodasi (Rp)</label><input type="text" inputmode="numeric" class="esppd-biaya-field num-fmt" id="ebiaya-akomodasi" value="0" oninput="updateESPPDBiayaTotal()"></div>
-            <div class="form-group"><label>Konsumsi (Rp)</label><input type="text" inputmode="numeric" class="esppd-biaya-field num-fmt" id="ebiaya-konsumsi" value="0" oninput="updateESPPDBiayaTotal()"></div>
+            <div class="form-group"><label>Akomodasi (Rp)</label><input type="text" inputmode="numeric" class="esppd-biaya-field num-fmt" id="ebiaya-akomodasi" value="0" oninput="formatNumInput(this);updateESPPDBiayaTotal()" onfocus="if(this.value==='0')this.value=''"></div>
+            <div class="form-group"><label>Konsumsi (Rp)</label><input type="text" inputmode="numeric" class="esppd-biaya-field num-fmt" id="ebiaya-konsumsi" value="0" oninput="formatNumInput(this);updateESPPDBiayaTotal()" onfocus="if(this.value==='0')this.value=''"></div>
           </div>
           <div class="form-row">
-            <div class="form-group"><label>Transportasi (Rp)</label><input type="text" inputmode="numeric" class="esppd-biaya-field num-fmt" id="ebiaya-transportasi" value="0" oninput="updateESPPDBiayaTotal()"></div>
-            <div class="form-group"><label>Entertain (Rp)</label><input type="text" inputmode="numeric" class="esppd-biaya-field num-fmt" id="ebiaya-entertain" value="0" oninput="updateESPPDBiayaTotal()"></div>
+            <div class="form-group"><label>Transportasi (Rp)</label><input type="text" inputmode="numeric" class="esppd-biaya-field num-fmt" id="ebiaya-transportasi" value="0" oninput="formatNumInput(this);updateESPPDBiayaTotal()" onfocus="if(this.value==='0')this.value=''"></div>
+            <div class="form-group"><label>Entertain (Rp)</label><input type="text" inputmode="numeric" class="esppd-biaya-field num-fmt" id="ebiaya-entertain" value="0" oninput="formatNumInput(this);updateESPPDBiayaTotal()" onfocus="if(this.value==='0')this.value=''"></div>
           </div>
           <div class="form-row">
-            <div class="form-group"><label>Uang Saku (Rp)</label><input type="text" inputmode="numeric" class="esppd-biaya-field num-fmt" id="ebiaya-uang-saku" value="0" oninput="updateESPPDBiayaTotal()"></div>
-            <div class="form-group"><label>Biaya Lain-lain (Rp)</label><input type="text" inputmode="numeric" class="esppd-biaya-field num-fmt" id="ebiaya-lain" value="0" oninput="updateESPPDBiayaTotal()"></div>
+            <div class="form-group"><label>Uang Saku (Rp)</label><input type="text" inputmode="numeric" class="esppd-biaya-field num-fmt" id="ebiaya-uang-saku" value="0" oninput="formatNumInput(this);updateESPPDBiayaTotal()" onfocus="if(this.value==='0')this.value=''"></div>
+            <div class="form-group"><label>Biaya Lain-lain (Rp)</label><input type="text" inputmode="numeric" class="esppd-biaya-field num-fmt" id="ebiaya-lain" value="0" oninput="formatNumInput(this);updateESPPDBiayaTotal()" onfocus="if(this.value==='0')this.value=''"></div>
           </div>
           <div class="form-group"><label>Keterangan Biaya Lain-lain</label><input type="text" id="ebiaya-lain-ket"></div>
           <div style="background:var(--bg-alt);border-radius:8px;padding:12px 16px;margin-top:8px;display:flex;align-items:center;justify-content:space-between">

@@ -34,13 +34,6 @@ function formatNumInput(el) {
   } catch {}
 }
 
-// Capture-phase delegation: format .num-fmt inputs before any other oninput runs
-document.addEventListener('input', function(e) {
-  if (e.target.classList && e.target.classList.contains('num-fmt')) {
-    formatNumInput(e.target);
-  }
-}, true);
-
 // ===================== INIT =====================
 document.addEventListener('DOMContentLoaded', async () => {
        try {
@@ -672,7 +665,7 @@ function addProductRow() {
                      <td><input type="text"   class="table-input"        placeholder="Spesifikasi"  data-field="spesifikasi"></td>
                          <td><input type="number" class="table-input small"  placeholder="0" min="0"   data-field="qty"          oninput="updateTotal()"></td>
                              <td><input type="text"   class="table-input"        placeholder="unit"         data-field="satuan"       style="width:70px"></td>
-                                 <td><input type="text" inputmode="numeric" class="table-input medium num-fmt" placeholder="0" data-field="harga_satuan" oninput="updateTotal()"></td>
+                                 <td><input type="text" inputmode="numeric" class="table-input medium num-fmt" placeholder="0" data-field="harga_satuan" oninput="formatNumInput(this);updateTotal()" onfocus="if(this.value==='0')this.value=''"></td>
                                      <td class="text-right fw-bold row-total">Rp 0</td>
                                          <td><input type="url"    class="table-input"        placeholder="https://..."  data-field="link"         style="width:180px"></td>
                                              <td><button type="button" onclick="removeRow(${idx})" class="btn-remove-row" title="Hapus baris">×</button></td>
@@ -1162,7 +1155,7 @@ function addEditProductRow(data = {}) {
                      <td><input type="text"   class="table-input"        placeholder="Spesifikasi"  data-field="spesifikasi"  value="${escHtml(data.spesifikasi || '')}"></td>
                          <td><input type="number" class="table-input small"  placeholder="0" min="0"   data-field="qty"          oninput="updateEditTotal()" value="${escHtml(String(data.qty || ''))}"></td>
                              <td><input type="text"   class="table-input"        placeholder="unit"         data-field="satuan"       style="width:70px" value="${escHtml(data.satuan || '')}"></td>
-                                 <td><input type="text" inputmode="numeric" class="table-input medium num-fmt" placeholder="0" data-field="harga_satuan" oninput="updateEditTotal()" value="${escHtml(data.harga_satuan ? fmtNumStr(data.harga_satuan) : '')}"></td>
+                                 <td><input type="text" inputmode="numeric" class="table-input medium num-fmt" placeholder="0" data-field="harga_satuan" oninput="formatNumInput(this);updateEditTotal()" onfocus="if(this.value==='0')this.value=''" value="${escHtml(data.harga_satuan ? fmtNumStr(data.harga_satuan) : '')}"></td>
                                      <td class="text-right fw-bold row-total">Rp 0</td>
                                          <td><input type="url" class="table-input" placeholder="https://..." data-field="link" style="width:180px" value="${escHtml(data.link || '')}"></td>
                                              <td><button type="button" onclick="removeEditRow(${idx})" class="btn-remove-row" title="Hapus baris">×</button></td>`;
@@ -1281,11 +1274,11 @@ function renderKKProductRow(idx) {
        return `<tr>
          <td style="text-align:center;font-size:12px;color:var(--text-light);vertical-align:middle">${idx + 1}</td>
          <td><input type="text" class="table-input kk-prod-nama" placeholder="Nama produk..." oninput="updateKKCalc()"></td>
-         <td><input type="text" inputmode="numeric" class="table-input kk-prod-nkt num-fmt" placeholder="0" oninput="updateKKCalc()" style="text-align:right"></td>
-         <td><input type="text" inputmode="numeric" class="table-input kk-prod-dpp num-fmt" placeholder="0" oninput="updateKKCalc()" style="text-align:right"></td>
-         <td><input type="text" inputmode="numeric" class="table-input kk-prod-dist num-fmt" value="0" oninput="updateKKCalc()" style="text-align:right"></td>
+         <td><input type="text" inputmode="numeric" class="table-input kk-prod-nkt num-fmt" placeholder="0" oninput="formatNumInput(this);updateKKCalc()" style="text-align:right" onfocus="if(this.value==='0')this.value=''"></td>
+         <td><input type="text" inputmode="numeric" class="table-input kk-prod-dpp num-fmt" placeholder="0" oninput="formatNumInput(this);updateKKCalc()" style="text-align:right" onfocus="if(this.value==='0')this.value=''"></td>
+         <td><input type="text" inputmode="numeric" class="table-input kk-prod-dist num-fmt" value="0" oninput="formatNumInput(this);updateKKCalc()" style="text-align:right" onfocus="if(this.value==='0')this.value=''"></td>
          <td class="kk-pct-display">0%</td>
-         <td><input type="text" inputmode="numeric" class="table-input kk-prod-ongkir num-fmt" value="0" oninput="updateKKCalc()" style="text-align:right"></td>
+         <td><input type="text" inputmode="numeric" class="table-input kk-prod-ongkir num-fmt" value="0" oninput="formatNumInput(this);updateKKCalc()" style="text-align:right" onfocus="if(this.value==='0')this.value=''"></td>
          <td class="kk-pct-display">0%</td>
          <td style="text-align:center"><button type="button" onclick="removeKKProduct(this)" class="btn-remove-row" title="Hapus">✕</button></td>
        </tr>`;
@@ -2257,7 +2250,7 @@ function addSPPDKunjunganRow() {
               <td><input type="text" class="sppd-itin-lokasi" placeholder="Lokasi" style="width:100%"></td>
               <td><input type="text" class="sppd-itin-pelanggan" placeholder="Nama pelanggan/instansi" style="width:100%"></td>
               <td><input type="text" class="sppd-itin-aktivitas" placeholder="Rencana aktivitas" style="width:100%"></td>
-              <td><input type="text" inputmode="numeric" class="sppd-itin-nilai num-fmt" value="0" style="width:100%"></td>
+              <td><input type="text" inputmode="numeric" class="sppd-itin-nilai num-fmt" value="0" style="width:100%" oninput="formatNumInput(this)" onfocus="if(this.value==='0')this.value=''"></td>
               <td><input type="text" class="sppd-itin-produk" placeholder="Produk" style="width:100%"></td>
               <td><button type="button" onclick="document.getElementById('sppd-itin-row-${n}').remove()" class="btn btn-sm btn-danger">✕</button></td>`;
        tbody.appendChild(tr);
@@ -2600,7 +2593,7 @@ function addLaporanBiayaRow() {
        tr.id = `lb-row-${n}`;
        tr.innerHTML = `
               <td><input type="text" class="lb-ket" placeholder="Keterangan biaya" style="width:100%"></td>
-              <td><input type="text" inputmode="numeric" class="lb-jml num-fmt" value="0" style="width:100%" oninput="updateLaporanTotal()"></td>
+              <td><input type="text" inputmode="numeric" class="lb-jml num-fmt" value="0" style="width:100%" oninput="formatNumInput(this);updateLaporanTotal()" onfocus="if(this.value==='0')this.value=''"></td>
               <td><button type="button" onclick="document.getElementById('lb-row-${n}').remove();updateLaporanTotal();" class="btn btn-sm btn-danger">✕</button></td>`;
        tbody.appendChild(tr);
 }
@@ -2833,10 +2826,10 @@ function addEKKProduct(data = {}) {
        tr.innerHTML = `
               <td style="text-align:center;font-size:12px">${idx}</td>
               <td><input type="text" class="table-input" placeholder="Nama produk" data-field="nama" value="${escHtml(data.nama || '')}"></td>
-              <td><input type="text" inputmode="numeric" class="table-input num-fmt" data-field="nilai_kontrak" value="${data.nilai_kontrak ? fmtNumStr(data.nilai_kontrak) : '0'}"></td>
-              <td><input type="text" inputmode="numeric" class="table-input num-fmt" data-field="dpp_beli" value="${data.dpp_beli ? fmtNumStr(data.dpp_beli) : '0'}"></td>
-              <td><input type="text" inputmode="numeric" class="table-input num-fmt" data-field="b_distribusi" value="${data.b_distribusi ? fmtNumStr(data.b_distribusi) : '0'}"></td>
-              <td><input type="text" inputmode="numeric" class="table-input num-fmt" data-field="ongkir" value="${data.ongkir ? fmtNumStr(data.ongkir) : '0'}"></td>
+              <td><input type="text" inputmode="numeric" class="table-input num-fmt" data-field="nilai_kontrak" value="${data.nilai_kontrak ? fmtNumStr(data.nilai_kontrak) : '0'}" oninput="formatNumInput(this)" onfocus="if(this.value==='0')this.value=''"></td>
+              <td><input type="text" inputmode="numeric" class="table-input num-fmt" data-field="dpp_beli" value="${data.dpp_beli ? fmtNumStr(data.dpp_beli) : '0'}" oninput="formatNumInput(this)" onfocus="if(this.value==='0')this.value=''"></td>
+              <td><input type="text" inputmode="numeric" class="table-input num-fmt" data-field="b_distribusi" value="${data.b_distribusi ? fmtNumStr(data.b_distribusi) : '0'}" oninput="formatNumInput(this)" onfocus="if(this.value==='0')this.value=''"></td>
+              <td><input type="text" inputmode="numeric" class="table-input num-fmt" data-field="ongkir" value="${data.ongkir ? fmtNumStr(data.ongkir) : '0'}" oninput="formatNumInput(this)" onfocus="if(this.value==='0')this.value=''"></td>
               <td><button type="button" onclick="document.getElementById('ekk-row-${idx}').remove()" class="btn btn-sm btn-danger">✕</button></td>`;
        tbody.appendChild(tr);
 }
@@ -2957,7 +2950,7 @@ function addESPPDKunjunganRow(data = {}) {
               <td><input type="text" class="esppd-itin-lokasi" placeholder="Lokasi" style="width:100%" value="${escHtml(data.lokasi || '')}"></td>
               <td><input type="text" class="esppd-itin-pelanggan" placeholder="Nama pelanggan/instansi" style="width:100%" value="${escHtml(data.pelanggan || '')}"></td>
               <td><input type="text" class="esppd-itin-aktivitas" placeholder="Rencana aktivitas" style="width:100%" value="${escHtml(data.aktivitas || '')}"></td>
-              <td><input type="text" inputmode="numeric" class="esppd-itin-nilai num-fmt" value="${data.sasaran_nilai_project ? fmtNumStr(data.sasaran_nilai_project) : '0'}" style="width:100%"></td>
+              <td><input type="text" inputmode="numeric" class="esppd-itin-nilai num-fmt" value="${data.sasaran_nilai_project ? fmtNumStr(data.sasaran_nilai_project) : '0'}" style="width:100%" oninput="formatNumInput(this)" onfocus="if(this.value==='0')this.value=''"></td>
               <td><input type="text" class="esppd-itin-produk" placeholder="Produk" style="width:100%" value="${escHtml(data.produk || '')}"></td>
               <td><button type="button" onclick="document.getElementById('esppd-itin-row-${n}').remove()" class="btn btn-sm btn-danger">✕</button></td>`;
        tbody.appendChild(tr);
