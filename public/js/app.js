@@ -64,7 +64,7 @@ const ROLE_LABELS = {
 };
 const APPROVER_ROLES = ['area_manager', 'gm', 'gm2', 'manager_keuangan', 'direktur_ops', 'direktur_utama'];
 const KK_LEVEL_LABELS = { 1: 'Area Manager', 2: 'Manager Keuangan', 3: 'GM 1', 4: 'GM 2', 5: 'Direktur Operasional', 6: 'Direktur Utama' };
-const AREA_KERJA_LIST = ['Banten', 'Jakarta', 'Jawa Barat', 'Sumatera', 'Kalimantan', 'Jawa Tengah', 'Jawa Timur', 'Nusa Tenggara', 'Sulawesi', 'Papua'];
+const AREA_KERJA_LIST = ['Banten', 'Jakarta', 'Jawa Barat', 'Sumatera', 'Kalimantan', 'Jawa Tengah', 'Jawa Timur', 'Nusa Tenggara', 'Sulawesi', 'Papua', 'Kantor Pusat'];
 const SPPD_LEVEL_LABELS = { 1: 'Area Manager', 2: 'GM 1', 3: 'GM 2' };
 const LAPORAN_LEVEL_LABELS = { 1: 'Area Manager', 2: 'Manager Keuangan', 3: 'GM 1', 4: 'GM 2', 5: 'Direktur Operasional', 6: 'Direktur Utama' };
 const PENCAIRAN_LEVEL_LABELS = { 1: 'Area Manager', 2: 'Manager Keuangan', 3: 'GM 1', 4: 'GM 2', 5: 'Direktur Operasional', 6: 'Direktur Utama' };
@@ -107,7 +107,7 @@ function setUser(user) {
        // SPPD menu visibility
        const isSppdCreator = SPPD_CREATE_ROLES.includes(user.role);
        const isSppdApprover = SPPD_APPROVER_ROLES.includes(user.role) || user.role === 'admin';
-       const isLaporanApprover = LAPORAN_APPROVER_ROLES.includes(user.role) || user.role === 'admin';
+       const isLaporanApprover = LAPORAN_APPROVER_ROLES.includes(user.role) || user.role === 'admin' || user.role === 'kantor_pusat';
        const isPencairanMgr = PENCAIRAN_APPROVER_ROLES.includes(user.role) || user.role === 'admin';
        const isSppdAll = SPPD_ALL_ROLES.includes(user.role);
        if (isSppdCreator || isSppdApprover || isLaporanApprover || isPencairanMgr || isSppdAll) {
