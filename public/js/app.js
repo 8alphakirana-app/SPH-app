@@ -1622,6 +1622,7 @@ async function viewKKDetail(id) {
                      footer += `<button onclick="closeModal('modal-kk-detail');setTimeout(()=>openKKAction(${id},'reject'),200)" class="btn btn-danger">❌ Tolak</button>`;
               }
               if (kk.status === 'approved') footer += `<button onclick="downloadKKExcel(${id})" class="btn btn-success">📊 Unduh Excel</button>`;
+              footer += `<button onclick="downloadKKPDF(${id})" class="btn btn-pdf">📄 Unduh PDF</button>`;
               if (kk.status === 'pending' && (currentUser.role === 'admin' || kk.created_by === currentUser.id)) {
                      footer += `<button onclick="deleteKK(${id})" class="btn btn-danger">🗑️ Hapus</button>`;
               }
@@ -1682,6 +1683,20 @@ async function downloadKKExcel(id) {
               URL.revokeObjectURL(url);
               showToast('✅ Excel berhasil diunduh!', 'success');
        } catch { showToast('Gagal mengunduh Excel', 'error'); }
+}
+
+async function downloadKKPDF(id) {
+       showToast('⏳ Menyiapkan PDF...', '');
+       try {
+              const res = await fetch(`/api/kk/${id}/export-pdf`);
+              if (!res.ok) { const d = await res.json(); showToast(d.error || 'Gagal', 'error'); return; }
+              const blob = await res.blob();
+              const url = URL.createObjectURL(blob);
+              const filename = res.headers.get('content-disposition')?.match(/filename="([^"]+)"/)?.[1] || `KK_${id}.pdf`;
+              const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+              URL.revokeObjectURL(url);
+              showToast('✅ PDF berhasil diunduh!', 'success');
+       } catch { showToast('Gagal mengunduh PDF', 'error'); }
 }
 
 async function deleteKK(id) {

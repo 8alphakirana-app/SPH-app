@@ -396,6 +396,246 @@ router.get('/:id/export-excel', requireLogin, async (req, res) => {
   }
 });
 
+// ── GET /api/kk/:id/export-pdf ────────────────────────────────────────────────
+router.get('/:id/export-pdf', requireLogin, async (req, res) => {
+  const row = db.prepare(`
+    SELECT s.*, kk.*, u.full_name as creator_name
+    FROM submissions s
+    JOIN kertas_kerja kk ON kk.submission_id = s.id
+    LEFT JOIN users u ON s.created_by = u.id
+    WHERE s.id = ? AND s.submission_type = 'kk'
+  `).get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'KK tidak ditemukan' });
+
+  const user = req.session.user;
+  if (user.role === 'staff' && row.created_by !== user.id) return res.status(403).json({ error: 'Akses ditolak' });
+
+  const approvals = db.prepare(`
+    SELECT a.*, u.full_name as approver_name
+    FROM kk_approvals a LEFT JOIN users u ON a.approver_user_id = u.id
+    WHERE a.submission_id = ? ORDER BY a.level ASC
+  `).all(req.params.id);
+
+  const settings = {};
+  db.prepare('SELECT key, value FROM settings').all().forEach(s => { settings[s.key] = s.value; });
+
+  try {
+    const html = generateKKHTML(row, calcKK(row), approvals, settings);
+    const puppeteer = require('puppeteer');
+    const browser = await puppeteer.launch({
+      headless: 'new',
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH ||
+        (fs.existsSync('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
+          ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+          : (fs.existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined)),
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    });
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '15mm', bottom: '15mm', left: '15mm', right: '15mm' }
+    });
+    await browser.close();
+    const safeName = (row.nama_pekerjaan || 'KK').replace(/[^a-zA-Z0-9]/g, '_');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="KK_${safeName}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error('PDF error:', err);
+    res.status(500).json({ error: 'Gagal generate PDF: ' + err.message });
+  }
+});
+
+function fmtRp(n) {
+  return 'Rp ' + Math.round(n || 0).toLocaleString('id-ID');
+}
+
+function generateKKHTML(row, calc, approvals, settings) {
+  const companyName = settings.company_name || 'PT. Lapan Alpha Kirana';
+  const city = settings.kk_kota || settings.company_city || 'Jakarta';
+
+  const approvalLevel6 = approvals.find(a => a.level === 6 && a.status === 'approved');
+  const dateStr = (approvalLevel6 ? new Date(approvalLevel6.acted_at) : new Date())
+    .toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  let products = [];
+  try { products = JSON.parse(row.products || '[]'); } catch {}
+
+  const statusMap = { approved: 'Disetujui', pending: 'Menunggu', rejected: 'Ditolak' };
+  const statusColor = { approved: '#16a34a', pending: '#d97706', rejected: '#dc2626' };
+
+  const infoRows = [
+    ['Nama Pekerjaan', row.nama_pekerjaan],
+    ['Nomor Surat', row.nomor_surat],
+    ['Perihal', row.perihal],
+    ['Satker', row.satker],
+    ['Prinsipal', row.prinsipal],
+    ['Nama Barang', row.nama_barang],
+    ['Pelanggan', row.pelanggan],
+    ['Status', `<span style="color:${statusColor[row.status] || '#555'};font-weight:600">${statusMap[row.status] || row.status}</span>`],
+    ['Sumber Anggaran', row.sumber_anggaran],
+    ['Term Payment Supplier', row.term_payment_supplier],
+    ['Term Payment Pelanggan', row.term_payment_pelanggan],
+  ].filter(([, v]) => v).map(([k, v]) => `
+    <tr>
+      <td style="padding:5px 8px;font-weight:600;width:200px;color:#374151">${k}</td>
+      <td style="padding:5px 8px;width:10px;color:#374151">:</td>
+      <td style="padding:5px 8px;color:#111827">${v || '-'}</td>
+    </tr>`).join('');
+
+  let financeRows = '';
+  if (products.length > 0) {
+    products.forEach((p, i) => {
+      const pDppK = (p.nilai_kontrak || 0) / 1.11;
+      const pPpnK = pDppK * 0.11;
+      const pPphK = pDppK * 0.015;
+      const pPen  = (p.nilai_kontrak || 0) - pPpnK - pPphK;
+      const pDppB = p.dpp_beli || 0;
+      const pPpnB = pDppB * 0.11;
+      const pNPay = pDppB * 1.11;
+      const pBdo  = (p.b_distribusi || 0) + (p.ongkir || 0);
+      const pSurp = pPen - (pDppB + pPpnB + pBdo);
+      const pLaba = pDppK - pDppB - pBdo;
+      const pNM   = pDppK > 0 ? (pLaba / pDppK * 100).toFixed(2) : '0.00';
+      financeRows += `<tr style="background:${i % 2 === 0 ? '#f9fafb' : '#fff'}">
+        <td style="padding:5px 8px;text-align:center">${i + 1}</td>
+        <td style="padding:5px 8px">${p.nama || '-'}</td>
+        <td style="padding:5px 8px;text-align:right">${fmtRp(p.nilai_kontrak)}</td>
+        <td style="padding:5px 8px;text-align:right">${fmtRp(pDppK)}</td>
+        <td style="padding:5px 8px;text-align:right">${fmtRp(pPpnK)}</td>
+        <td style="padding:5px 8px;text-align:right">${fmtRp(pPphK)}</td>
+        <td style="padding:5px 8px;text-align:right">${fmtRp(pPen)}</td>
+        <td style="padding:5px 8px;text-align:right">${fmtRp(pDppB)}</td>
+        <td style="padding:5px 8px;text-align:right">${fmtRp(p.b_distribusi)}</td>
+        <td style="padding:5px 8px;text-align:right">${fmtRp(p.ongkir)}</td>
+        <td style="padding:5px 8px;text-align:right;color:${pSurp >= 0 ? '#16a34a' : '#dc2626'}">${fmtRp(pSurp)}</td>
+        <td style="padding:5px 8px;text-align:right;color:${pLaba >= 0 ? '#16a34a' : '#dc2626'}">${fmtRp(pLaba)}</td>
+        <td style="padding:5px 8px;text-align:right">${pNM}%</td>
+      </tr>`;
+    });
+    financeRows += `<tr style="background:#dbeafe;font-weight:700">
+      <td colspan="2" style="padding:5px 8px;text-align:center">TOTAL</td>
+      <td style="padding:5px 8px;text-align:right">${fmtRp(products.reduce((s, p) => s + (p.nilai_kontrak || 0), 0))}</td>
+      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.dppKontrak)}</td>
+      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.ppnKontrak)}</td>
+      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.pphKontrak)}</td>
+      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.penerimaanUang)}</td>
+      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.dppBeli)}</td>
+      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.bDistribusi)}</td>
+      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.ongkir)}</td>
+      <td style="padding:5px 8px;text-align:right;color:${calc.surplusDefisit >= 0 ? '#16a34a' : '#dc2626'}">${fmtRp(calc.surplusDefisit)}</td>
+      <td style="padding:5px 8px;text-align:right;color:${calc.laba >= 0 ? '#16a34a' : '#dc2626'}">${fmtRp(calc.laba)}</td>
+      <td style="padding:5px 8px;text-align:right">${calc.netMargin.toFixed(2)}%</td>
+    </tr>`;
+  } else {
+    financeRows = `<tr style="background:#f9fafb">
+      <td style="padding:5px 8px;text-align:center">1</td>
+      <td style="padding:5px 8px">${row.pelanggan || '-'}</td>
+      <td style="padding:5px 8px;text-align:right">${fmtRp(row.nilai_kontrak_total)}</td>
+      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.dppKontrak)}</td>
+      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.ppnKontrak)}</td>
+      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.pphKontrak)}</td>
+      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.penerimaanUang)}</td>
+      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.dppBeli)}</td>
+      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.bDistribusi)}</td>
+      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.ongkir)}</td>
+      <td style="padding:5px 8px;text-align:right;color:${calc.surplusDefisit >= 0 ? '#16a34a' : '#dc2626'}">${fmtRp(calc.surplusDefisit)}</td>
+      <td style="padding:5px 8px;text-align:right;color:${calc.laba >= 0 ? '#16a34a' : '#dc2626'}">${fmtRp(calc.laba)}</td>
+      <td style="padding:5px 8px;text-align:right">${calc.netMargin.toFixed(2)}%</td>
+    </tr>`;
+  }
+
+  const sigBlocks = [
+    { title: 'Yang Mengajukan', role: '', name: row.creator_name || '-', userId: row.created_by },
+    { title: 'Mengetahui', role: 'Area Manager', ...approvals.find(a => a.level === 1) || {}, name: approvals.find(a => a.level === 1)?.approver_name || '( _____________ )', userId: approvals.find(a => a.level === 1)?.approver_user_id },
+    { title: 'Mengetahui', role: 'Manager Keuangan', name: approvals.find(a => a.level === 2)?.approver_name || '( _____________ )', userId: approvals.find(a => a.level === 2)?.approver_user_id },
+    { title: 'Mengetahui', role: 'GM 1', name: approvals.find(a => a.level === 3)?.approver_name || '( _____________ )', userId: approvals.find(a => a.level === 3)?.approver_user_id },
+    { title: 'Mengetahui', role: 'GM 2', name: approvals.find(a => a.level === 4)?.approver_name || '( _____________ )', userId: approvals.find(a => a.level === 4)?.approver_user_id },
+    { title: 'Mengetahui', role: 'Dir. Operasional', name: approvals.find(a => a.level === 5)?.approver_name || '( _____________ )', userId: approvals.find(a => a.level === 5)?.approver_user_id },
+    { title: 'Menyetujui', role: 'Direktur Utama', name: approvals.find(a => a.level === 6)?.approver_name || '( _____________ )', userId: approvals.find(a => a.level === 6)?.approver_user_id },
+  ];
+
+  const sigHTML = sigBlocks.map(sig => {
+    const imgPath = sig.userId ? path.join(__dirname, '..', 'public', 'img', `ttd_u${sig.userId}.png`) : null;
+    let imgTag = '';
+    if (imgPath && fs.existsSync(imgPath)) {
+      try {
+        const b64 = fs.readFileSync(imgPath).toString('base64');
+        imgTag = `<img src="data:image/png;base64,${b64}" style="max-height:60px;max-width:100px;display:block;margin:4px auto">`;
+      } catch {}
+    }
+    return `<td style="text-align:center;vertical-align:top;padding:6px 4px;border:1px solid #d1d5db">
+      <div style="font-weight:600;font-size:11px;margin-bottom:4px">${sig.title}</div>
+      <div style="min-height:70px;display:flex;align-items:center;justify-content:center">${imgTag}</div>
+      <div style="font-weight:700;font-size:11px;border-top:1px solid #374151;padding-top:4px;margin-top:4px">${sig.name}</div>
+      <div style="font-style:italic;font-size:10px;color:#6b7280">${sig.role}</div>
+    </td>`;
+  }).join('');
+
+  return `<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; font-size: 11px; color: #111827; }
+  h1 { font-size: 18px; }
+  h2 { font-size: 13px; }
+  table { border-collapse: collapse; width: 100%; }
+  .section-title { font-weight: 700; font-size: 12px; color: #1e40af; border-left: 4px solid #1e40af; padding-left: 8px; margin: 14px 0 6px; }
+</style>
+</head>
+<body>
+  <div style="background:#1f4e79;color:#fff;text-align:center;padding:12px 0 6px">
+    <h1>KERTAS KERJA</h1>
+    <h2>${companyName}</h2>
+  </div>
+
+  <div class="section-title">Informasi Pekerjaan</div>
+  <table style="border:1px solid #e5e7eb">
+    <tbody>${infoRows}</tbody>
+  </table>
+
+  <div class="section-title">Perhitungan Keuangan</div>
+  <div style="overflow-x:auto">
+  <table style="font-size:10px;border:1px solid #e5e7eb">
+    <thead>
+      <tr style="background:#1f4e79;color:#fff">
+        <th style="padding:6px 4px;text-align:center" rowspan="2">No</th>
+        <th style="padding:6px 4px;text-align:center" rowspan="2">Pelanggan / Produk</th>
+        <th style="padding:6px 4px;text-align:center" colspan="5">Nilai Kontrak</th>
+        <th style="padding:6px 4px;text-align:center" rowspan="2">DPP Beli</th>
+        <th style="padding:6px 4px;text-align:center" rowspan="2">B. Distribusi</th>
+        <th style="padding:6px 4px;text-align:center" rowspan="2">Ongkir</th>
+        <th style="padding:6px 4px;text-align:center" rowspan="2">Surplus/Defisit</th>
+        <th style="padding:6px 4px;text-align:center" rowspan="2">Laba</th>
+        <th style="padding:6px 4px;text-align:center" rowspan="2">Net Margin%</th>
+      </tr>
+      <tr style="background:#2e75b6;color:#fff">
+        <th style="padding:4px;text-align:center">Total</th>
+        <th style="padding:4px;text-align:center">DPP</th>
+        <th style="padding:4px;text-align:center">PPN 11%</th>
+        <th style="padding:4px;text-align:center">PPh 1,5%</th>
+        <th style="padding:4px;text-align:center">Penerimaan Uang</th>
+      </tr>
+    </thead>
+    <tbody>${financeRows}</tbody>
+  </table>
+  </div>
+
+  <div style="margin-top:20px;text-align:right;font-size:11px;color:#374151">
+    ${city}, ${dateStr}
+  </div>
+  <div class="section-title">Tanda Tangan</div>
+  <table style="width:100%;border-collapse:collapse;margin-top:8px">
+    <tbody><tr>${sigHTML}</tr></tbody>
+  </table>
+</body>
+</html>`;
+}
+
 // ── Excel generator ───────────────────────────────────────────────────────────
 async function generateExcel(row, calc, approvals, settings) {
   const ExcelJS = require('exceljs');

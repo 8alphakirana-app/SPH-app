@@ -3,6 +3,7 @@ data/
 uploads/
 public/img/logo.png
 public/img/ttd.png
+public/img/ttd_u*.png
 *.db
 *.db-shm
 *.db-wal
