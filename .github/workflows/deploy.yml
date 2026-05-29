@@ -16,7 +16,11 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           port: ${{ secrets.SSH_PORT }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 5m
           script: |
+            set -e
             cd /opt/sph-app
             git pull origin master
+            docker compose down
             docker compose up -d --build
+            docker image prune -f
