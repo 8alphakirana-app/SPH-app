@@ -9,17 +9,10 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Debug SSH key structure
-        run: |
-          echo "Jumlah baris  : $(printf '%s' "${{ secrets.SSH_PRIVATE_KEY }}" | wc -l)"
-          echo "Jumlah karakter: $(printf '%s' "${{ secrets.SSH_PRIVATE_KEY }}" | wc -c)"
-          echo "Ada BEGIN     : $(printf '%s' "${{ secrets.SSH_PRIVATE_KEY }}" | grep -c 'BEGIN OPENSSH')"
-          echo "Ada END       : $(printf '%s' "${{ secrets.SSH_PRIVATE_KEY }}" | grep -c 'END OPENSSH')"
-
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
-          printf '%s' "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/deploy_key
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" | base64 -d > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
 
