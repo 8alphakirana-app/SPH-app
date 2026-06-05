@@ -1476,7 +1476,9 @@ function renderKKTable(rows, { showCreator = false, showApproveBtn = false } = {
                            ${canAct ? `
                                <button onclick="openKKAction(${r.id},'approve')" class="btn btn-success btn-sm">✅ Setuju</button>
                                <button onclick="openKKAction(${r.id},'reject')"  class="btn btn-danger btn-sm">❌ Tolak</button>` : ''}
-                           ${r.status === 'approved' ? `<button onclick="downloadKKExcel(${r.id})" class="btn btn-success btn-sm">📊 Excel</button>` : ''}
+                           ${r.status === 'approved' ? `
+                               <button onclick="downloadKKExcel(${r.id})" class="btn btn-success btn-sm">📊 Excel</button>
+                               <button onclick="downloadKKPDF(${r.id})" class="btn btn-pdf btn-sm">📄 PDF</button>` : ''}
                            ${r.status === 'pending' && (currentUser.role === 'admin' || r.created_by === currentUser.id) ? `
                                <button onclick="openEditKK(${r.id})" class="btn btn-secondary btn-sm">✏️ Edit</button>
                                <button onclick="deleteKK(${r.id})" class="btn btn-danger btn-sm">🗑️</button>` : ''}
@@ -1647,8 +1649,10 @@ async function viewKKDetail(id) {
                      footer += `<button onclick="closeModal('modal-kk-detail');setTimeout(()=>openKKAction(${id},'approve'),200)" class="btn btn-success">✅ Setujui</button>`;
                      footer += `<button onclick="closeModal('modal-kk-detail');setTimeout(()=>openKKAction(${id},'reject'),200)" class="btn btn-danger">❌ Tolak</button>`;
               }
-              if (kk.status === 'approved') footer += `<button onclick="downloadKKExcel(${id})" class="btn btn-success">📊 Unduh Excel</button>`;
-              footer += `<button onclick="downloadKKPDF(${id})" class="btn btn-pdf">📄 Unduh PDF</button>`;
+              if (kk.status === 'approved') {
+                     footer += `<button onclick="downloadKKExcel(${id})" class="btn btn-success">📊 Unduh Excel</button>`;
+                     footer += `<button onclick="downloadKKPDF(${id})" class="btn btn-pdf">📄 Unduh PDF</button>`;
+              }
               if (kk.status === 'pending' && (currentUser.role === 'admin' || kk.created_by === currentUser.id)) {
                      footer += `<button onclick="closeModal('modal-kk-detail');setTimeout(()=>openEditKK(${id}),200)" class="btn btn-secondary">✏️ Edit</button>`;
                      footer += `<button onclick="deleteKK(${id})" class="btn btn-danger">🗑️ Hapus</button>`;

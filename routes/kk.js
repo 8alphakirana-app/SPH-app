@@ -428,6 +428,7 @@ router.get('/:id/export-pdf', requireLogin, async (req, res) => {
     WHERE s.id = ? AND s.submission_type = 'kk'
   `).get(req.params.id);
   if (!row) return res.status(404).json({ error: 'KK tidak ditemukan' });
+  if (row.status !== 'approved') return res.status(403).json({ error: 'PDF hanya tersedia untuk KK yang sudah disetujui' });
 
   const user = req.session.user;
   if (user.role === 'staff' && row.created_by !== user.id) return res.status(403).json({ error: 'Akses ditolak' });
