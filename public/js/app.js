@@ -810,10 +810,11 @@ async function downloadDoc(id, format = 'docx') {
               const url = format === 'pdf'
                      ? `/api/submissions/${id}/download/pdf`
                      : `/api/submissions/${id}/download`;
-              const res = await fetch(url);
+              const res = await fetch(url, { credentials: 'same-origin' });
               if (!res.ok) {
-                     const data = await res.json();
-                     showToast(data.error || 'Gagal mengunduh', 'error');
+                     let errMsg = 'Gagal mengunduh';
+                     try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
+                     showToast(errMsg, 'error');
                      return;
               }
               const blob = await res.blob();
@@ -821,13 +822,10 @@ async function downloadDoc(id, format = 'docx') {
               const ext = format === 'pdf' ? '.pdf' : '.docx';
               const filename = res.headers.get('content-disposition')?.match(/filename="([^"]+)"/)?.[1]
                      || `SPH_${id}${ext}`;
-              const a = document.createElement('a');
-              a.href = objUrl;
-              a.download = filename;
-              a.click();
-              URL.revokeObjectURL(objUrl);
+              triggerDownload(objUrl, filename);
               showToast(`✅ ${label} berhasil diunduh!`, 'success');
        } catch (e) {
+              console.error('downloadDoc error:', e);
               showToast('Gagal mengunduh dokumen', 'error');
        }
 }
@@ -1702,16 +1700,25 @@ async function submitKKAction() {
        }
 }
 
+function triggerDownload(objUrl, filename) {
+       const a = document.createElement('a');
+       a.href = objUrl;
+       a.download = filename;
+       a.style.display = 'none';
+       document.body.appendChild(a);
+       a.click();
+       document.body.removeChild(a);
+       setTimeout(() => URL.revokeObjectURL(objUrl), 3000);
+}
+
 async function downloadKKExcel(id) {
        showToast('⏳ Menyiapkan Excel...', '');
        try {
-              const res = await fetch(`/api/kk/${id}/export-excel`);
-              if (!res.ok) { const d = await res.json(); showToast(d.error || 'Gagal', 'error'); return; }
+              const res = await fetch(`/api/kk/${id}/export-excel`, { credentials: 'same-origin' });
+              if (!res.ok) { let d; try { d = await res.json(); } catch {} showToast(d?.error || 'Gagal', 'error'); return; }
               const blob = await res.blob();
-              const url = URL.createObjectURL(blob);
               const filename = res.headers.get('content-disposition')?.match(/filename="([^"]+)"/)?.[1] || `KK_${id}.xlsx`;
-              const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
-              URL.revokeObjectURL(url);
+              triggerDownload(URL.createObjectURL(blob), filename);
               showToast('✅ Excel berhasil diunduh!', 'success');
        } catch { showToast('Gagal mengunduh Excel', 'error'); }
 }
@@ -1719,13 +1726,11 @@ async function downloadKKExcel(id) {
 async function downloadKKPDF(id) {
        showToast('⏳ Menyiapkan PDF...', '');
        try {
-              const res = await fetch(`/api/kk/${id}/export-pdf`);
-              if (!res.ok) { const d = await res.json(); showToast(d.error || 'Gagal', 'error'); return; }
+              const res = await fetch(`/api/kk/${id}/export-pdf`, { credentials: 'same-origin' });
+              if (!res.ok) { let d; try { d = await res.json(); } catch {} showToast(d?.error || 'Gagal', 'error'); return; }
               const blob = await res.blob();
-              const url = URL.createObjectURL(blob);
               const filename = res.headers.get('content-disposition')?.match(/filename="([^"]+)"/)?.[1] || `KK_${id}.pdf`;
-              const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
-              URL.revokeObjectURL(url);
+              triggerDownload(URL.createObjectURL(blob), filename);
               showToast('✅ PDF berhasil diunduh!', 'success');
        } catch { showToast('Gagal mengunduh PDF', 'error'); }
 }
