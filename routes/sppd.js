@@ -1289,4 +1289,169 @@ router.put('/:id/pencairan', (req, res) => {
   res.json({ success: true });
 });
 
+// ── GET /api/sppd/:id/pengembalian ────────────────────────────────────────────
+router.get('/:id/pengembalian', (req, res) => {
+  const user = req.session.user;
+  const sppd = db.prepare('SELECT * FROM sppd WHERE id=?').get(req.params.id);
+  if (!sppd) return res.status(404).json({ error: 'SPPD tidak ditemukan' });
+  const creator = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sppd.created_by);
+  const isSameArea = user.role === 'area_manager' && (creator?.area_kerja||'').trim().toLowerCase() === (user.area_kerja||'').trim().toLowerCase();
+  if (!canSeeAll(user.role) && sppd.created_by !== user.id && !isSameArea) return res.status(403).json({ error: 'Forbidden' });
+  const row = db.prepare('SELECT * FROM sppd_pengembalian WHERE sppd_id=?').get(req.params.id);
+  res.json(row || null);
+});
+
+// ── POST /api/sppd/:id/pengembalian ───────────────────────────────────────────
+router.post('/:id/pengembalian', (req, res) => {
+  const user = req.session.user;
+  if (!['admin','manager_keuangan'].includes(user.role)) return res.status(403).json({ error: 'Hanya admin/manager keuangan' });
+  const sppd = db.prepare('SELECT * FROM sppd WHERE id=?').get(req.params.id);
+  if (!sppd) return res.status(404).json({ error: 'SPPD tidak ditemukan' });
+  if (!['approved','completed'].includes(sppd.status)) return res.status(400).json({ error: 'SPPD belum disetujui' });
+
+  const { realisasi_biaya, catatan } = req.body;
+  const realisasi  = parseFloat(realisasi_biaya) || 0;
+  const uangMuka   = parseFloat(sppd.uang_muka)  || 0;
+  const selisih    = uangMuka - realisasi;
+  let   status;
+  if      (selisih >  0) status = 'lebih_bayar';
+  else if (selisih <  0) status = 'kurang_bayar';
+  else                   status = 'sesuai';
+
+  const existing = db.prepare('SELECT id FROM sppd_pengembalian WHERE sppd_id=?').get(req.params.id);
+  if (existing) {
+    db.prepare('UPDATE sppd_pengembalian SET realisasi_biaya=?,uang_muka=?,selisih=?,status=?,catatan=? WHERE sppd_id=?')
+      .run(realisasi, uangMuka, selisih, status, catatan||'', req.params.id);
+  } else {
+    const nomor = generateNomorPengembalian();
+    db.prepare('INSERT INTO sppd_pengembalian (sppd_id,nomor,realisasi_biaya,uang_muka,selisih,status,catatan,created_by) VALUES (?,?,?,?,?,?,?,?)')
+      .run(req.params.id, nomor, realisasi, uangMuka, selisih, status, catatan||'', user.id);
+  }
+  const row = db.prepare('SELECT * FROM sppd_pengembalian WHERE sppd_id=?').get(req.params.id);
+  res.json({ success: true, data: row });
+});
+
+function generateNomorPengembalian() {
+  const now   = new Date();
+  const year  = now.getFullYear();
+  const roman = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'][now.getMonth()];
+  const count = db.prepare("SELECT COUNT(*) as cnt FROM sppd_pengembalian WHERE nomor LIKE ?").get(`%/SKUM/${roman}/${year}`).cnt;
+  return `${String(count + 1).padStart(3,'0')}/SKUM/${roman}/${year}`;
+}
+
+// ── GET /api/sppd/:id/pengembalian/docx ───────────────────────────────────────
+router.get('/:id/pengembalian/docx', async (req, res) => {
+  const user = req.session.user;
+  const sppd = db.prepare(`SELECT s.*,u.full_name AS creator_name FROM sppd s JOIN users u ON s.created_by=u.id WHERE s.id=?`).get(req.params.id);
+  if (!sppd) return res.status(404).json({ error: 'SPPD tidak ditemukan' });
+  const creator = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sppd.created_by);
+  const isSameArea = user.role === 'area_manager' && (creator?.area_kerja||'').trim().toLowerCase() === (user.area_kerja||'').trim().toLowerCase();
+  if (!canSeeAll(user.role) && !['admin','manager_keuangan'].includes(user.role) && sppd.created_by !== user.id && !isSameArea)
+    return res.status(403).json({ error: 'Forbidden' });
+
+  const peng = db.prepare('SELECT * FROM sppd_pengembalian WHERE sppd_id=?').get(req.params.id);
+  if (!peng) return res.status(404).json({ error: 'Data pengembalian belum dibuat' });
+
+  const settings = {};
+  db.prepare('SELECT key,value FROM settings').all().forEach(s => { settings[s.key] = s.value; });
+
+  try {
+    const buf = await generatePengembalianDocx(sppd, peng, settings);
+    const fname = `Pengembalian_${(peng.nomor||'').replace(/[^a-zA-Z0-9]/g,'_')}.docx`;
+    res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition',`attachment; filename="${fname}"`);
+    res.send(buf);
+  } catch(err) {
+    console.error('DOCX error:', err);
+    res.status(500).json({ error: 'Gagal generate DOCX: ' + err.message });
+  }
+});
+
+async function generatePengembalianDocx(sppd, peng, settings) {
+  const { Document, Paragraph, TextRun, Table, TableRow, TableCell,
+          WidthType, AlignmentType, BorderStyle, Packer, HeadingLevel } = require('docx');
+
+  const companyName = settings.company_name || 'PT. Lapan Alpha Kirana';
+  const kota        = settings.kk_kota || 'Jakarta';
+  const now         = new Date();
+  const bulan = ['Januari','Februari','Maret','April','Mei','Juni',
+                 'Juli','Agustus','September','Oktober','November','Desember'][now.getMonth()];
+  const tglStr = `${now.getDate()} ${bulan} ${now.getFullYear()}`;
+
+  const fmt  = n => 'Rp ' + Math.round(n||0).toLocaleString('id-ID');
+  const sel  = peng.selisih;
+  const statusLabel = sel > 0 ? 'LEBIH BAYAR (Harus Dikembalikan)' : sel < 0 ? 'KURANG BAYAR (Perlu Ditambahkan)' : 'SESUAI';
+  const absSelisih  = Math.abs(sel);
+
+  const noBorder = { top:{style:BorderStyle.NONE}, bottom:{style:BorderStyle.NONE}, left:{style:BorderStyle.NONE}, right:{style:BorderStyle.NONE} };
+  const thinBorder = { top:{style:BorderStyle.SINGLE,size:1}, bottom:{style:BorderStyle.SINGLE,size:1}, left:{style:BorderStyle.SINGLE,size:1}, right:{style:BorderStyle.SINGLE,size:1} };
+
+  const infoRows = [
+    ['Nomor Surat',     peng.nomor || '-'],
+    ['Tanggal',         tglStr],
+    ['Nama Pegawai',    sppd.nama_pegawai || '-'],
+    ['Jabatan',         sppd.jabatan || '-'],
+    ['No. SPPD',        sppd.nomor || '-'],
+    ['Tujuan',          sppd.tujuan || '-'],
+    ['Tgl Berangkat',   sppd.tanggal_berangkat || '-'],
+    ['Tgl Kembali',     sppd.tanggal_kembali || '-'],
+  ].map(([label, val]) => new TableRow({ children: [
+    new TableCell({ width:{size:30,type:WidthType.PERCENTAGE}, borders:noBorder, children:[new Paragraph({ children:[new TextRun({text:label,bold:true,size:22})] })] }),
+    new TableCell({ width:{size:2, type:WidthType.PERCENTAGE}, borders:noBorder, children:[new Paragraph({ children:[new TextRun({text:':',size:22})] })] }),
+    new TableCell({ width:{size:68,type:WidthType.PERCENTAGE}, borders:noBorder, children:[new Paragraph({ children:[new TextRun({text:val,size:22})] })] }),
+  ]}));
+
+  const keuRows = [
+    ['Uang Muka Diterima',    fmt(peng.uang_muka),    false],
+    ['Realisasi Biaya',       fmt(peng.realisasi_biaya), false],
+    ['Selisih',               fmt(absSelisih),          true ],
+    ['Status',                statusLabel,              true ],
+  ].map(([label, val, bold]) => new TableRow({ children: [
+    new TableCell({ width:{size:40,type:WidthType.PERCENTAGE}, borders:thinBorder, children:[new Paragraph({ children:[new TextRun({text:label,bold:true,size:22})] })] }),
+    new TableCell({ width:{size:60,type:WidthType.PERCENTAGE}, borders:thinBorder, children:[new Paragraph({ alignment:AlignmentType.RIGHT, children:[new TextRun({text:val,bold,size:22})] })] }),
+  ]}));
+
+  const doc = new Document({ sections: [{ properties:{}, children: [
+    // Header perusahaan
+    new Paragraph({ alignment:AlignmentType.CENTER, children:[new TextRun({text:companyName,bold:true,size:28})] }),
+    new Paragraph({ alignment:AlignmentType.CENTER, children:[new TextRun({text:'SURAT KETERANGAN UANG MUKA PERJALANAN DINAS',bold:true,size:24})] }),
+    new Paragraph({ alignment:AlignmentType.CENTER, children:[new TextRun({text:'─'.repeat(60),size:18,color:'888888'})] }),
+    new Paragraph({ children:[] }),
+
+    // Info tabel
+    new Table({ width:{size:100,type:WidthType.PERCENTAGE}, borders:{top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.NONE},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE},insideH:{style:BorderStyle.NONE},insideV:{style:BorderStyle.NONE}}, rows: infoRows }),
+    new Paragraph({ children:[] }),
+
+    // Tabel keuangan
+    new Paragraph({ children:[new TextRun({text:'Rincian Perhitungan:',bold:true,size:22})] }),
+    new Paragraph({ children:[] }),
+    new Table({ width:{size:100,type:WidthType.PERCENTAGE}, rows: keuRows }),
+    new Paragraph({ children:[] }),
+
+    ...(peng.catatan ? [
+      new Paragraph({ children:[new TextRun({text:'Catatan: ',bold:true,size:22}), new TextRun({text:peng.catatan,size:22})] }),
+      new Paragraph({ children:[] }),
+    ] : []),
+
+    ...(sel > 0 ? [
+      new Paragraph({ children:[new TextRun({text:`Dengan ini dinyatakan bahwa ${sppd.nama_pegawai || 'pegawai yang bersangkutan'} wajib mengembalikan uang muka sebesar ${fmt(absSelisih)} ke Bagian Keuangan.`,size:22})] }),
+      new Paragraph({ children:[] }),
+    ] : sel < 0 ? [
+      new Paragraph({ children:[new TextRun({text:`Dengan ini dinyatakan bahwa ${sppd.nama_pegawai || 'pegawai yang bersangkutan'} berhak menerima kekurangan pembayaran sebesar ${fmt(absSelisih)} dari Bagian Keuangan.`,size:22})] }),
+      new Paragraph({ children:[] }),
+    ] : []),
+
+    // Tanda tangan
+    new Paragraph({ alignment:AlignmentType.RIGHT, children:[new TextRun({text:`${kota}, ${tglStr}`,size:22})] }),
+    new Paragraph({ children:[] }),
+    new Paragraph({ children:[] }),
+    new Paragraph({ children:[] }),
+    new Paragraph({ children:[] }),
+    new Paragraph({ alignment:AlignmentType.RIGHT, children:[new TextRun({text:'( _________________________ )',size:22})] }),
+    new Paragraph({ alignment:AlignmentType.RIGHT, children:[new TextRun({text:'Manager Keuangan',size:22,italic:true})] }),
+  ]}]});
+
+  return Packer.toBuffer(doc);
+}
+
 module.exports = router;

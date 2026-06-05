@@ -83,10 +83,10 @@ async function logout() {
 
 const ROLE_LABELS = {
        admin: '👑 Admin', staff: '👤 Staff', kantor_pusat: '🏢 Kantor Pusat',
-       gm: '⭐ GM', manager_keuangan: '💼 Mgr. Keuangan',
+       gm: '⭐ GM 1', gm2: '⭐ GM 2', manager_keuangan: '💼 Mgr. Keuangan',
        direktur_ops: '🏭 Dir. Ops', direktur_utama: '🎯 Dir. Utama',
        marketing: '📣 Marketing', supervisor: '🔍 Supervisor',
-       area_manager: '🗺️ Area Manager', gm2: '⭐ GM 2'
+       area_manager: '🗺️ Area Manager',
 };
 const APPROVER_ROLES = ['area_manager', 'gm', 'gm2', 'manager_keuangan', 'direktur_ops', 'direktur_utama'];
 const KK_LEVEL_LABELS = { 1: 'Area Manager', 2: 'Manager Keuangan', 3: 'GM 1', 4: 'GM 2', 5: 'Direktur Operasional', 6: 'Direktur Utama' };
@@ -1925,11 +1925,19 @@ function renderSPPDProgressBadge(sppd) {
        const iconOf = s => ({ approved: '✅', rejected: '❌', current: '⏳', waiting: '○' }[s]);
        const short = ['AM', 'GM1', 'GM2'];
        const labels = ['Area Manager', 'GM 1', 'GM 2'];
+
+       // Hitung berapa GM sudah approve di level 1
+       const gmApproved = (sppd.gm1_approved ? 1 : 0) + (sppd.gm2_approved ? 1 : 0);
+       const gmLabel = lvl === 1
+              ? `<span style="font-size:10px;color:var(--primary);margin-left:4px">(${gmApproved}/2 GM)</span>`
+              : (lvl > 1 || status === 'approved' || status === 'completed')
+                     ? `<span style="font-size:10px;color:var(--green);margin-left:4px">(2/2 GM)</span>` : '';
+
        const steps = [0, 1, 2].map(i => {
               const s = stepState(i);
               return `<span class="kk-ps kk-ps-${s}" title="${labels[i]}">${iconOf(s)} ${short[i]}</span>`;
        }).join('<span class="kk-ps-sep">›</span>');
-       return `<div class="kk-progress-steps">${steps}</div>`;
+       return `<div class="kk-progress-steps">${steps}${gmLabel}</div>`;
 }
 
 function sppdStatusBadge(sppd) {
@@ -2316,17 +2324,19 @@ async function viewSPPDDetail(id) {
        document.getElementById('sppd-detail-footer').innerHTML = '';
        showModal('modal-sppd-detail');
        try {
-              const [sppdRes, laporanRes, pencairanRes] = await Promise.all([
+              const [sppdRes, laporanRes, pencairanRes, pengembRes] = await Promise.all([
                      api(`/api/sppd/${id}`),
                      api(`/api/sppd/${id}/laporan`),
                      api(`/api/sppd/${id}/pencairan`),
+                     api(`/api/sppd/${id}/pengembalian`),
               ]);
-              const sppd = await sppdRes.json();
-              const laporan = laporanRes.ok ? await laporanRes.json() : null;
-              const pencairan = pencairanRes.ok ? await pencairanRes.json() : null;
+              const sppd       = await sppdRes.json();
+              const laporan    = laporanRes.ok  ? await laporanRes.json()   : null;
+              const pencairan  = pencairanRes.ok ? await pencairanRes.json() : null;
+              const pengembalian = pengembRes.ok ? await pengembRes.json()  : null;
 
               document.getElementById('sppd-detail-title').textContent = `SPPD: ${sppd.nomor}`;
-              document.getElementById('sppd-detail-body').innerHTML = renderSPPDDetail(sppd, laporan, pencairan);
+              document.getElementById('sppd-detail-body').innerHTML = renderSPPDDetail(sppd, laporan, pencairan, pengembalian);
 
               const footer = [];
               const role = currentUser.role;
@@ -2376,6 +2386,13 @@ async function viewSPPDDetail(id) {
                      footer.push(`<button onclick="openPencairanActionFromDetail(${id},'approve')" class="btn btn-success">✅ Setujui Pencairan</button>`);
                      footer.push(`<button onclick="openPencairanActionFromDetail(${id},'reject')" class="btn btn-danger">❌ Tolak Pencairan</button>`);
               }
+              // Pengembalian: admin/manager_keuangan saat laporan sudah approved
+              if (['admin','manager_keuangan'].includes(role) && laporan?.status === 'approved') {
+                     footer.push(`<button onclick="openPengembalianModal(${id})" class="btn btn-secondary">💰 Pengembalian UM</button>`);
+              }
+              if (pengembalian) {
+                     footer.push(`<a href="/api/sppd/${id}/pengembalian/docx" class="btn btn-pdf">📄 Unduh SKUM</a>`);
+              }
               footer.push(`<button onclick="closeModal('modal-sppd-detail')" class="btn btn-outline">Tutup</button>`);
               document.getElementById('sppd-detail-footer').innerHTML = footer.join(' ');
        } catch (err) {
@@ -2384,7 +2401,7 @@ async function viewSPPDDetail(id) {
        }
 }
 
-function renderSPPDDetail(sppd, laporan, pencairan) {
+function renderSPPDDetail(sppd, laporan, pencairan, pengembalian) {
        const fmt = v => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(v || 0);
        const itinRows = (sppd.itinerary || []).map(r =>
               `<tr><td>${r.tanggal}</td><td>${escHtml(r.lokasi || r.dari || '')}</td><td>${escHtml(r.pelanggan || r.ke || '')}</td><td>${escHtml(r.aktivitas || r.transport || '')}</td><td>${r.sasaran_nilai_project ? fmt(r.sasaran_nilai_project) : '-'}</td><td>${escHtml(r.produk || '')}</td></tr>`
@@ -2514,10 +2531,83 @@ function renderSPPDDetail(sppd, laporan, pencairan) {
          <div class="card-body">${laporanHtml}</div>
        </div>
 
-       <div class="card">
+       <div class="card" style="margin-bottom:16px">
          <div class="card-header"><h4>💰 Pencairan Dana</h4></div>
          <div class="card-body">${pencairanHtml}</div>
+       </div>
+
+       <div class="card">
+         <div class="card-header"><h4>🔄 Pengembalian Uang Muka</h4></div>
+         <div class="card-body">${renderPengembalianHtml(pengembalian, sppd, fmt)}</div>
        </div>`;
+}
+
+function renderPengembalianHtml(p, sppd, fmt) {
+       if (!p) return `<p style="color:var(--text-light)">Belum ada data pengembalian. Admin/Manager Keuangan dapat menginput realisasi biaya setelah laporan disetujui.</p>`;
+       const statusColor = { lebih_bayar:'#dc2626', kurang_bayar:'#d97706', sesuai:'#16a34a' };
+       const statusLabel = { lebih_bayar:'🔴 Lebih Bayar — Harus Dikembalikan', kurang_bayar:'🟡 Kurang Bayar — Perlu Tambahan', sesuai:'🟢 Sesuai' };
+       const sel = p.selisih;
+       const color = statusColor[p.status] || '#555';
+       return `
+       <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:12px">
+         <div><strong>Nomor:</strong> <span style="font-family:monospace">${escHtml(p.nomor||'-')}</span></div>
+         <div><strong>Uang Muka:</strong> ${fmt(p.uang_muka)}</div>
+         <div><strong>Realisasi Biaya:</strong> ${fmt(p.realisasi_biaya)}</div>
+       </div>
+       <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:8px">
+         <div><strong>Selisih:</strong> <span style="font-weight:700;color:${color}">${fmt(Math.abs(sel))} ${sel > 0 ? '(dikembalikan)' : sel < 0 ? '(ditambahkan)' : ''}</span></div>
+         <div><strong>Status:</strong> <span style="font-weight:700;color:${color}">${statusLabel[p.status]||p.status}</span></div>
+       </div>
+       ${p.catatan ? `<div style="font-size:12px;color:var(--text-light)">Catatan: ${escHtml(p.catatan)}</div>` : ''}`;
+}
+
+// ── Modal Pengembalian Uang Muka ──────────────────────────────────────────────
+let pengembalianSppdId = null;
+
+async function openPengembalianModal(sppdId) {
+       pengembalianSppdId = sppdId;
+       try {
+              const [sppdRes, pengRes] = await Promise.all([api(`/api/sppd/${sppdId}`), api(`/api/sppd/${sppdId}/pengembalian`)]);
+              const sppd = await sppdRes.json();
+              const peng = pengRes.ok ? await pengRes.json() : null;
+              const fmt  = v => new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(v||0);
+
+              document.getElementById('peng-uang-muka-info').textContent = fmt(sppd.uang_muka);
+              document.getElementById('peng-realisasi').value = peng ? fmtNumStr(peng.realisasi_biaya) : '';
+              document.getElementById('peng-catatan').value  = peng?.catatan || '';
+              document.getElementById('peng-error').style.display = 'none';
+              document.getElementById('peng-result').style.display = 'none';
+              showModal('modal-pengembalian');
+       } catch { showToast('Gagal memuat data', 'error'); }
+}
+
+function hitungPengembalian() {
+       const uangMuka  = parseNum(document.getElementById('peng-uang-muka-info').dataset.raw || document.getElementById('peng-uang-muka-info').textContent);
+       // re-fetch uang muka from SPPD detail
+       const realisasi = parseNum(document.getElementById('peng-realisasi').value);
+       const fmt = v => new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(v||0);
+       const resultEl = document.getElementById('peng-result');
+       resultEl.style.display = 'block';
+       // We'll just show info here - actual calc done on backend
+       document.getElementById('peng-realisasi-display').textContent = fmt(realisasi);
+}
+
+async function submitPengembalian() {
+       const errEl = document.getElementById('peng-error');
+       errEl.style.display = 'none';
+       const realisasi = parseNum(document.getElementById('peng-realisasi').value);
+       const catatan   = document.getElementById('peng-catatan').value.trim();
+       if (!realisasi && realisasi !== 0) {
+              errEl.textContent = 'Realisasi biaya wajib diisi'; errEl.style.display = 'block'; return;
+       }
+       try {
+              const res  = await api(`/api/sppd/${pengembalianSppdId}/pengembalian`, 'POST', { realisasi_biaya: realisasi, catatan });
+              const data = await res.json();
+              if (!res.ok) { errEl.textContent = data.error||'Gagal'; errEl.style.display='block'; return; }
+              showToast('✅ Data pengembalian tersimpan!', 'success');
+              closeModal('modal-pengembalian');
+              viewSPPDDetail(pengembalianSppdId);
+       } catch { errEl.textContent = 'Koneksi gagal'; errEl.style.display = 'block'; }
 }
 
 // ── Approve / Reject SPPD ─────────────────────────────────────────────────────

@@ -546,7 +546,7 @@
   </div>
 </div>
 <div id="modal-reject" class="modal" style="display:none"><div class="modal-backdrop" onclick="closeModal('modal-reject')"></div><div class="modal-dialog"><div class="modal-header"><h3>Tolak Pengajuan</h3><button onclick="closeModal('modal-reject')" class="btn-close">✕</button></div><div class="modal-body"><div class="form-group"><label>Alasan Penolakan</label><textarea id="reject-reason" rows="3" placeholder="Masukkan alasan penolakan..."></textarea></div></div><div class="modal-footer"><button onclick="confirmReject()" class="btn btn-danger">❌ Tolak Pengajuan</button><button onclick="closeModal('modal-reject')" class="btn btn-outline">Batal</button></div></div></div>
-<div id="modal-add-user" class="modal" style="display:none"><div class="modal-backdrop" onclick="closeModal('modal-add-user')"></div><div class="modal-dialog"><div class="modal-header"><h3 id="add-user-modal-title">Tambah Pengguna Baru</h3><button onclick="closeModal('modal-add-user')" class="btn-close">✕</button></div><div class="modal-body"><div class="form-row"><div class="form-group"><label>Username <span class="required">*</span></label><input type="text" id="new-username" placeholder="username"></div><div class="form-group"><label>Password <span class="required">*</span></label><input type="password" id="new-password" placeholder="password (kosongkan = tidak diubah jika edit)"></div></div><div class="form-row"><div class="form-group"><label>Nama Lengkap <span class="required">*</span></label><input type="text" id="new-fullname" placeholder="Nama lengkap"></div><div class="form-group"><label>Role <span class="required">*</span></label><select id="new-role"><option value="staff">Staff</option><option value="marketing">Marketing</option><option value="supervisor">Supervisor</option><option value="area_manager">Area Manager</option><option value="gm">GM</option><option value="gm2">GM 2</option><option value="manager_keuangan">Manager Keuangan</option><option value="direktur_ops">Direktur Operasional</option><option value="direktur_utama">Direktur Utama</option><option value="kantor_pusat">Kantor Pusat</option><option value="admin">Admin</option></select></div></div><div class="form-row"><div class="form-group"><label>Area Kerja</label><select id="new-area-kerja"><option value="">-- Pilih Area --</option><option value="Banten">Banten</option><option value="Jakarta">Jakarta</option><option value="Jawa Barat">Jawa Barat</option><option value="Sumatera">Sumatera</option><option value="Kalimantan">Kalimantan</option><option value="Jawa Tengah">Jawa Tengah</option><option value="Jawa Timur">Jawa Timur</option><option value="Nusa Tenggara">Nusa Tenggara</option><option value="Sulawesi">Sulawesi</option><option value="Papua">Papua</option><option value="Kantor Pusat">Kantor Pusat</option></select></div><div class="form-group"><label>Jabatan Detail</label><input type="text" id="new-jabatan-detail" placeholder="Cth: Sales Executive"></div></div><input type="hidden" id="edit-user-id"><div id="add-user-error" class="alert alert-error" style="display:none"></div></div><div class="modal-footer"><button onclick="saveUser()" class="btn btn-primary" id="btn-save-user">✅ Simpan</button><button onclick="closeModal('modal-add-user')" class="btn btn-outline">Batal</button></div></div></div>
+<div id="modal-add-user" class="modal" style="display:none"><div class="modal-backdrop" onclick="closeModal('modal-add-user')"></div><div class="modal-dialog"><div class="modal-header"><h3 id="add-user-modal-title">Tambah Pengguna Baru</h3><button onclick="closeModal('modal-add-user')" class="btn-close">✕</button></div><div class="modal-body"><div class="form-row"><div class="form-group"><label>Username <span class="required">*</span></label><input type="text" id="new-username" placeholder="username"></div><div class="form-group"><label>Password <span class="required">*</span></label><input type="password" id="new-password" placeholder="password (kosongkan = tidak diubah jika edit)"></div></div><div class="form-row"><div class="form-group"><label>Nama Lengkap <span class="required">*</span></label><input type="text" id="new-fullname" placeholder="Nama lengkap"></div><div class="form-group"><label>Role <span class="required">*</span></label><select id="new-role"><option value="staff">Staff</option><option value="marketing">Marketing</option><option value="supervisor">Supervisor</option><option value="area_manager">Area Manager</option><option value="gm">GM 1</option><option value="gm2">GM 2</option><option value="manager_keuangan">Manager Keuangan</option><option value="direktur_ops">Direktur Operasional</option><option value="direktur_utama">Direktur Utama</option><option value="kantor_pusat">Kantor Pusat</option><option value="admin">Admin</option></select></div></div><div class="form-row"><div class="form-group"><label>Area Kerja</label><select id="new-area-kerja"><option value="">-- Pilih Area --</option><option value="Banten">Banten</option><option value="Jakarta">Jakarta</option><option value="Jawa Barat">Jawa Barat</option><option value="Sumatera">Sumatera</option><option value="Kalimantan">Kalimantan</option><option value="Jawa Tengah">Jawa Tengah</option><option value="Jawa Timur">Jawa Timur</option><option value="Nusa Tenggara">Nusa Tenggara</option><option value="Sulawesi">Sulawesi</option><option value="Papua">Papua</option><option value="Kantor Pusat">Kantor Pusat</option></select></div><div class="form-group"><label>Jabatan Detail</label><input type="text" id="new-jabatan-detail" placeholder="Cth: Sales Executive"></div></div><input type="hidden" id="edit-user-id"><div id="add-user-error" class="alert alert-error" style="display:none"></div></div><div class="modal-footer"><button onclick="saveUser()" class="btn btn-primary" id="btn-save-user">✅ Simpan</button><button onclick="closeModal('modal-add-user')" class="btn btn-outline">Batal</button></div></div></div>
 <div id="modal-change-password" class="modal" style="display:none">
   <div class="modal-backdrop" onclick="closeModal('modal-change-password')"></div>
   <div class="modal-dialog">
@@ -800,6 +800,40 @@
     <div class="modal-footer">
       <button onclick="submitEditSPPD()" class="btn btn-primary">💾 Simpan Perubahan</button>
       <button onclick="closeModal('modal-sppd-edit')" class="btn btn-outline">Batal</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ MODAL PENGEMBALIAN UANG MUKA ═══════════ -->
+<div id="modal-pengembalian" class="modal" style="display:none">
+  <div class="modal-backdrop" onclick="closeModal('modal-pengembalian')"></div>
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3>🔄 Input Realisasi Biaya & Pengembalian UM</h3>
+      <button onclick="closeModal('modal-pengembalian')" class="btn-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-grid" style="grid-template-columns:1fr 1fr;margin-bottom:16px;background:var(--bg-alt);padding:12px;border-radius:8px">
+        <div class="detail-item"><label>Uang Muka Diterima</label><div class="value fw-bold" id="peng-uang-muka-info">-</div></div>
+      </div>
+      <div class="form-group">
+        <label>Realisasi Biaya Aktual (Rp) <span class="required">*</span></label>
+        <input type="text" inputmode="numeric" id="peng-realisasi" class="num-fmt" placeholder="0"
+               oninput="formatNumInput(this)" onfocus="if(this.value==='0')this.value=''">
+        <small style="color:var(--text-light)">Total biaya yang benar-benar dikeluarkan selama perjalanan dinas</small>
+      </div>
+      <div class="form-group">
+        <label>Catatan</label>
+        <textarea id="peng-catatan" rows="2" placeholder="Opsional..."></textarea>
+      </div>
+      <div id="peng-result" class="detail-grid" style="grid-template-columns:1fr 1fr;margin-top:12px;background:var(--bg-alt);padding:12px;border-radius:8px;display:none">
+        <div class="detail-item"><label>Realisasi</label><div class="value" id="peng-realisasi-display">-</div></div>
+      </div>
+      <div id="peng-error" class="alert alert-error" style="display:none;margin-top:8px"></div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="submitPengembalian()" class="btn btn-primary">💾 Simpan & Hitung</button>
+      <button onclick="closeModal('modal-pengembalian')" class="btn btn-outline">Batal</button>
     </div>
   </div>
 </div>
