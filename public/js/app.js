@@ -2402,8 +2402,14 @@ function renderSPPDDetail(sppd, laporan, pencairan) {
                      `<tr><td>${k.tanggal}</td><td>${escHtml(k.nama_instansi)}</td><td>${escHtml(k.nama_kontak)}</td><td>${escHtml(k.nama_pelanggan || '')}</td><td style="white-space:pre-wrap">${escHtml(k.laporan_kunjungan || k.hasil || '')}</td></tr>`
               ).join('') || '<tr><td colspan="5" class="text-center">-</td></tr>';
               const biayaRows = (laporan.biaya || []).map(b =>
-                     `<tr><td>${escHtml(b.keterangan)}</td><td>${fmt(b.jumlah)}</td></tr>`
-              ).join('') || '<tr><td colspan="2" class="text-center">-</td></tr>';
+                     `<tr>
+                       <td>${escHtml(b.keterangan)}</td>
+                       <td>${fmt(b.jumlah)}</td>
+                       <td style="text-align:center">
+                         ${b.bukti ? `<img src="${b.bukti}" style="max-width:100px;max-height:72px;object-fit:contain;border:1px solid #ddd;border-radius:4px;cursor:pointer" onclick="window.open(this.src,'_blank')">` : '<span style="color:var(--text-light);font-size:12px">-</span>'}
+                       </td>
+                     </tr>`
+              ).join('') || '<tr><td colspan="3" class="text-center">-</td></tr>';
               const laporanApprRows = (laporan.approvals || []).map(a =>
                      `<tr><td>${LAPORAN_LEVEL_LABELS[a.level] || a.level}</td><td>${escHtml(a.approver_name || '-')}</td>
                       <td><span class="badge badge-${a.status === 'approved' ? 'approved' : 'rejected'}">${a.status}</span></td>
@@ -2417,7 +2423,7 @@ function renderSPPDDetail(sppd, laporan, pencairan) {
               </div>
               <div style="margin-top:8px"><strong>Isi:</strong><br><div style="white-space:pre-wrap;background:var(--bg);padding:8px;border-radius:6px;margin-top:4px">${escHtml(laporan.isi_laporan)}</div></div>
               <div style="margin-top:12px"><strong>Kunjungan:</strong><div class="table-responsive"><table class="table"><thead><tr><th>Tanggal</th><th>Instansi</th><th>Kontak</th><th>Nama Pelanggan</th><th>Laporan Kunjungan</th></tr></thead><tbody>${kunjRows}</tbody></table></div></div>
-              <div style="margin-top:12px"><strong>Biaya:</strong><div class="table-responsive"><table class="table"><thead><tr><th>Keterangan</th><th>Jumlah</th></tr></thead><tbody>${biayaRows}</tbody><tfoot><tr><td class="fw-bold">Total</td><td class="fw-bold">${fmt(laporan.total_biaya)}</td></tr></tfoot></table></div></div>
+              <div style="margin-top:12px"><strong>Biaya:</strong><div class="table-responsive"><table class="table"><thead><tr><th>Keterangan</th><th>Jumlah</th><th>Bukti</th></tr></thead><tbody>${biayaRows}</tbody><tfoot><tr><td class="fw-bold">Total</td><td class="fw-bold">${fmt(laporan.total_biaya)}</td><td></td></tr></tfoot></table></div></div>
               <div style="margin-top:12px"><strong>Approval Laporan:</strong><div class="table-responsive"><table class="table"><thead><tr><th>Level</th><th>Approver</th><th>Status</th><th>Catatan</th><th>Waktu</th></tr></thead><tbody>${laporanApprRows}</tbody></table></div></div>`;
        }
 
@@ -2594,8 +2600,63 @@ function addLaporanBiayaRow() {
        tr.innerHTML = `
               <td><input type="text" class="lb-ket" placeholder="Keterangan biaya" style="width:100%"></td>
               <td><input type="text" inputmode="numeric" class="lb-jml num-fmt" value="0" style="width:100%" oninput="formatNumInput(this);updateLaporanTotal()" onfocus="if(this.value==='0')this.value=''"></td>
+              <td>
+                <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">
+                  <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--primary);border:1px dashed var(--primary);padding:4px 8px;border-radius:6px;white-space:nowrap">
+                    📎 Pilih Foto
+                    <input type="file" accept="image/*" class="lb-bukti-input" style="display:none" onchange="previewBukti(this,'lb-preview-${n}')">
+                  </label>
+                  <div id="lb-preview-${n}" style="display:none;position:relative">
+                    <img class="lb-bukti-img" style="max-width:120px;max-height:80px;object-fit:contain;border:1px solid #ddd;border-radius:4px;display:block">
+                    <button type="button" onclick="clearBukti(this,'lb-preview-${n}')" style="position:absolute;top:-6px;right:-6px;background:#dc2626;color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:18px;padding:0">✕</button>
+                  </div>
+                </div>
+              </td>
               <td><button type="button" onclick="document.getElementById('lb-row-${n}').remove();updateLaporanTotal();" class="btn btn-sm btn-danger">✕</button></td>`;
        tbody.appendChild(tr);
+}
+
+async function previewBukti(input, previewId) {
+       if (!input.files || !input.files[0]) return;
+       const base64 = await compressImage(input.files[0]);
+       const preview = document.getElementById(previewId);
+       if (!preview) return;
+       preview.style.display = 'block';
+       preview.querySelector('.lb-bukti-img').src = base64;
+       preview.dataset.bukti = base64;
+}
+
+function clearBukti(btn, previewId) {
+       const preview = document.getElementById(previewId);
+       if (!preview) return;
+       preview.style.display = 'none';
+       preview.querySelector('.lb-bukti-img').src = '';
+       preview.dataset.bukti = '';
+       const row = btn.closest('tr');
+       if (row) { const inp = row.querySelector('.lb-bukti-input'); if (inp) inp.value = ''; }
+}
+
+async function compressImage(file) {
+       return new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                     const img = new Image();
+                     img.onload = () => {
+                            const maxSize = 900;
+                            let w = img.width, h = img.height;
+                            if (w > maxSize || h > maxSize) {
+                                   if (w > h) { h = Math.round((h / w) * maxSize); w = maxSize; }
+                                   else { w = Math.round((w / h) * maxSize); h = maxSize; }
+                            }
+                            const canvas = document.createElement('canvas');
+                            canvas.width = w; canvas.height = h;
+                            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                            resolve(canvas.toDataURL('image/jpeg', 0.75));
+                     };
+                     img.src = e.target.result;
+              };
+              reader.readAsDataURL(file);
+       });
 }
 
 function updateLaporanTotal() {
@@ -2620,7 +2681,9 @@ async function submitLaporanSPPD() {
        });
        const biaya = [];
        document.querySelectorAll('#laporan-biaya-tbody tr').forEach(tr => {
-              biaya.push({ keterangan: tr.querySelector('.lb-ket')?.value || '', jumlah: parseNum(tr.querySelector('.lb-jml')?.value) });
+              const previewEl = tr.querySelector('[id^="lb-preview-"]');
+              const bukti = (previewEl?.style.display !== 'none' && previewEl?.dataset.bukti) ? previewEl.dataset.bukti : null;
+              biaya.push({ keterangan: tr.querySelector('.lb-ket')?.value || '', jumlah: parseNum(tr.querySelector('.lb-jml')?.value), bukti });
        });
        const body = {
               tanggal_laporan: document.getElementById('laporan-tanggal').value,

@@ -530,10 +530,13 @@ function generateLaporanHtml(sppd, laporan, kunjungan, biaya, approvals, setting
 
   const biayaRows = biaya.map((b, i) => `
     <tr style="background:${i%2===0?'#fff':'#f5f8fc'}">
-      <td style="text-align:center">${i+1}</td>
-      <td>${esc(b.keterangan)}</td>
-      <td style="text-align:right">Rp ${fmtRp(b.jumlah)}</td>
-    </tr>`).join('') || `<tr><td colspan="3" style="text-align:center;color:#aaa;padding:8px">Tidak ada data biaya</td></tr>`;
+      <td style="text-align:center;vertical-align:top">${i+1}</td>
+      <td style="vertical-align:top">${esc(b.keterangan)}</td>
+      <td style="text-align:right;vertical-align:top">Rp ${fmtRp(b.jumlah)}</td>
+      <td style="text-align:center;vertical-align:top">
+        ${b.bukti ? `<img src="${b.bukti}" style="max-width:120px;max-height:90px;object-fit:contain;border:1px solid #ddd;border-radius:4px">` : '<span style="color:#ccc;font-size:9pt">-</span>'}
+      </td>
+    </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:#aaa;padding:8px">Tidak ada data biaya</td></tr>`;
 
   const totalBiaya = biaya.reduce((s, b) => s + (b.jumlah || 0), 0);
 
@@ -615,9 +618,9 @@ function generateLaporanHtml(sppd, laporan, kunjungan, biaya, approvals, setting
 
 <p class="section-title">Rincian Biaya</p>
 <table class="data-table">
-  <thead><tr><th width="36">No</th><th>Keterangan</th><th width="140">Jumlah (Rp)</th></tr></thead>
+  <thead><tr><th width="36">No</th><th>Keterangan</th><th width="140">Jumlah (Rp)</th><th width="130">Bukti</th></tr></thead>
   <tbody>${biayaRows}</tbody>
-  <tfoot><tr><td colspan="2" style="text-align:right">Total Biaya</td><td style="text-align:right">Rp ${fmtRp(totalBiaya)}</td></tr></tfoot>
+  <tfoot><tr><td colspan="2" style="text-align:right">Total Biaya</td><td style="text-align:right">Rp ${fmtRp(totalBiaya)}</td><td></td></tr></tfoot>
 </table>
 
 <p class="section-title">Riwayat Persetujuan Laporan</p>
@@ -950,8 +953,8 @@ router.post('/:id/laporan', (req, res) => {
   }
 
   if (Array.isArray(biaya) && biaya.length) {
-    const ins = db.prepare('INSERT INTO sppd_laporan_biaya (laporan_id, keterangan, jumlah) VALUES (?, ?, ?)');
-    biaya.forEach(b => ins.run(laporanId, b.keterangan || '', Number(b.jumlah) || 0));
+    const ins = db.prepare('INSERT INTO sppd_laporan_biaya (laporan_id, keterangan, jumlah, bukti) VALUES (?, ?, ?, ?)');
+    biaya.forEach(b => ins.run(laporanId, b.keterangan || '', Number(b.jumlah) || 0, b.bukti || null));
   }
 
   res.json({ success: true, id: laporanId });
@@ -983,8 +986,8 @@ router.put('/:id/laporan', (req, res) => {
 
   if (Array.isArray(biaya)) {
     db.prepare('DELETE FROM sppd_laporan_biaya WHERE laporan_id = ?').run(laporan.id);
-    const ins = db.prepare('INSERT INTO sppd_laporan_biaya (laporan_id, keterangan, jumlah) VALUES (?, ?, ?)');
-    biaya.forEach(b => ins.run(laporan.id, b.keterangan || '', Number(b.jumlah) || 0));
+    const ins = db.prepare('INSERT INTO sppd_laporan_biaya (laporan_id, keterangan, jumlah, bukti) VALUES (?, ?, ?, ?)');
+    biaya.forEach(b => ins.run(laporan.id, b.keterangan || '', Number(b.jumlah) || 0, b.bukti || null));
   }
 
   res.json({ success: true });
