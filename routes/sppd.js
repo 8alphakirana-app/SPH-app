@@ -203,7 +203,8 @@ router.get('/', (req, res) => {
     rows = db.prepare(`
       SELECT s.*, u.full_name AS creator_name,
        (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 2 AND sa.status = 'approved') as gm1_approved,
-       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 3 AND sa.status = 'approved') as gm2_approved
+       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 3 AND sa.status = 'approved') as gm2_approved,
+       (SELECT CASE WHEN s.sppd_approval_level >= 1 AND NOT EXISTS (SELECT 1 FROM sppd_approvals sa2 WHERE sa2.sppd_id = s.id AND sa2.level = 1) THEN 1 ELSE 0 END) as am_skipped
       FROM sppd s JOIN users u ON s.created_by = u.id
       ORDER BY s.created_at DESC
     `).all();
@@ -211,7 +212,8 @@ router.get('/', (req, res) => {
     rows = db.prepare(`
       SELECT s.*, u.full_name AS creator_name,
        (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 2 AND sa.status = 'approved') as gm1_approved,
-       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 3 AND sa.status = 'approved') as gm2_approved
+       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 3 AND sa.status = 'approved') as gm2_approved,
+       (SELECT CASE WHEN s.sppd_approval_level >= 1 AND NOT EXISTS (SELECT 1 FROM sppd_approvals sa2 WHERE sa2.sppd_id = s.id AND sa2.level = 1) THEN 1 ELSE 0 END) as am_skipped
       FROM sppd s JOIN users u ON s.created_by = u.id
       WHERE LOWER(TRIM(u.area_kerja)) = LOWER(TRIM(?)) OR s.created_by = ?
       ORDER BY s.created_at DESC
@@ -220,7 +222,8 @@ router.get('/', (req, res) => {
     rows = db.prepare(`
       SELECT s.*, u.full_name AS creator_name,
        (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 2 AND sa.status = 'approved') as gm1_approved,
-       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 3 AND sa.status = 'approved') as gm2_approved
+       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 3 AND sa.status = 'approved') as gm2_approved,
+       (SELECT CASE WHEN s.sppd_approval_level >= 1 AND NOT EXISTS (SELECT 1 FROM sppd_approvals sa2 WHERE sa2.sppd_id = s.id AND sa2.level = 1) THEN 1 ELSE 0 END) as am_skipped
       FROM sppd s JOIN users u ON s.created_by = u.id
       WHERE s.created_by = ?
       ORDER BY s.created_at DESC
@@ -243,14 +246,17 @@ router.post('/', (req, res) => {
     itinerary, biaya
   } = req.body;
 
+  // Jika pembuat adalah Area Manager, lewati step AM → langsung ke GM stage
+  const initialLevel = creatorUser.role === 'area_manager' ? 1 : 0;
+
   const nomor = `DRAFT-${Date.now()}`;
   const result = db.prepare(`
     INSERT INTO sppd (nomor, created_by, nama_pegawai, jabatan, area_kerja, tujuan, keperluan,
-      tanggal_berangkat, tanggal_kembali, transport, uang_muka)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      tanggal_berangkat, tanggal_kembali, transport, uang_muka, sppd_approval_level)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(nomor, userId, nama_pegawai || '', jabatan || '', area_kerja || '', tujuan || '',
     keperluan || '', tanggal_berangkat || '', tanggal_kembali || '', transport || '',
-    Number(uang_muka) || 0);
+    Number(uang_muka) || 0, initialLevel);
 
   const sppdId = result.lastInsertRowid;
 
@@ -450,7 +456,8 @@ router.get('/:id/download/pdf', async (req, res) => {
   const sppd = db.prepare(`
     SELECT s.*, u.full_name AS creator_name,
        (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 2 AND sa.status = 'approved') as gm1_approved,
-       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 3 AND sa.status = 'approved') as gm2_approved
+       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 3 AND sa.status = 'approved') as gm2_approved,
+       (SELECT CASE WHEN s.sppd_approval_level >= 1 AND NOT EXISTS (SELECT 1 FROM sppd_approvals sa2 WHERE sa2.sppd_id = s.id AND sa2.level = 1) THEN 1 ELSE 0 END) as am_skipped
     FROM sppd s JOIN users u ON s.created_by = u.id WHERE s.id = ?
   `).get(req.params.id);
   if (!sppd) return res.status(404).json({ error: 'SPPD tidak ditemukan' });
@@ -659,7 +666,8 @@ router.get('/:id/laporan/download/pdf', async (req, res) => {
   const sppd = db.prepare(`
     SELECT s.*, u.full_name AS creator_name,
        (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 2 AND sa.status = 'approved') as gm1_approved,
-       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 3 AND sa.status = 'approved') as gm2_approved
+       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 3 AND sa.status = 'approved') as gm2_approved,
+       (SELECT CASE WHEN s.sppd_approval_level >= 1 AND NOT EXISTS (SELECT 1 FROM sppd_approvals sa2 WHERE sa2.sppd_id = s.id AND sa2.level = 1) THEN 1 ELSE 0 END) as am_skipped
     FROM sppd s JOIN users u ON s.created_by = u.id WHERE s.id = ?
   `).get(req.params.id);
   if (!sppd) return res.status(404).json({ error: 'SPPD tidak ditemukan' });
@@ -725,7 +733,8 @@ router.get('/:id', (req, res) => {
   const sppd = db.prepare(`
     SELECT s.*, u.full_name AS creator_name,
        (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 2 AND sa.status = 'approved') as gm1_approved,
-       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 3 AND sa.status = 'approved') as gm2_approved
+       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 3 AND sa.status = 'approved') as gm2_approved,
+       (SELECT CASE WHEN s.sppd_approval_level >= 1 AND NOT EXISTS (SELECT 1 FROM sppd_approvals sa2 WHERE sa2.sppd_id = s.id AND sa2.level = 1) THEN 1 ELSE 0 END) as am_skipped
     FROM sppd s JOIN users u ON s.created_by = u.id
     WHERE s.id = ?
   `).get(req.params.id);
@@ -751,7 +760,9 @@ router.put('/:id', (req, res) => {
   const sppd = db.prepare('SELECT * FROM sppd WHERE id = ?').get(req.params.id);
   if (!sppd) return res.status(404).json({ error: 'SPPD tidak ditemukan' });
   if (sppd.created_by !== user.id && user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-  if (sppd.status !== 'pending' || sppd.sppd_approval_level > 0)
+  const amSkipped = sppd.sppd_approval_level === 1 && !db.prepare("SELECT id FROM sppd_approvals WHERE sppd_id=? AND level=1").get(sppd.id);
+  const gmStarted = db.prepare("SELECT id FROM sppd_approvals WHERE sppd_id=? AND level IN (2,3)").get(sppd.id);
+  if (sppd.status !== 'pending' || (sppd.sppd_approval_level > 0 && !(amSkipped && !gmStarted)))
     return res.status(400).json({ error: 'Tidak bisa diedit setelah proses approval dimulai' });
 
   const creatorUser = db.prepare('SELECT full_name, role, jabatan_detail, area_kerja FROM users WHERE id = ?').get(sppd.created_by);

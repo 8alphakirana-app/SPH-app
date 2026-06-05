@@ -1898,13 +1898,18 @@ let laporanBiayaRowCount = 0;
 let currentSppdId = null;
 
 // ── Approval progress badge ───────────────────────────────────────────────────
-// sppd_approval_level: 0=waiting AM, 1=AM done waiting GM1+GM2 parallel, 2=all approved
+// sppd_approval_level: 0=waiting AM, 1=AM done/skipped waiting GM1+GM2 parallel, 2=all approved
 function renderSPPDProgressBadge(sppd) {
-       const lvl = sppd.sppd_approval_level;
+       const lvl    = sppd.sppd_approval_level;
        const status = sppd.status;
+       // AM skipped: level sudah 1+ tapi tidak ada record approval AM (gm1_approved/gm2_approved
+       // bukan indikator AM — cek dari am_skipped flag via creator role tidak tersedia di sini,
+       // tapi kita bisa deteksi: jika level >= 1 dan sppd.am_approved === 0 maka di-skip)
+       const amSkipped = sppd.am_skipped === 1;
 
        const stepState = (stepIdx) => {
               // stepIdx: 0=AM, 1=GM1, 2=GM2
+              if (stepIdx === 0 && amSkipped) return 'skipped';
               if (status === 'approved' || status === 'completed') return 'approved';
               if (status === 'rejected') {
                      if (stepIdx === 0 && lvl === 0) return 'rejected';
@@ -1926,7 +1931,7 @@ function renderSPPDProgressBadge(sppd) {
               return 'waiting';
        };
 
-       const iconOf = s => ({ approved: '✅', rejected: '❌', current: '⏳', waiting: '○' }[s]);
+       const iconOf = s => ({ approved: '✅', rejected: '❌', current: '⏳', waiting: '○', skipped: '➡️' }[s]);
        const short = ['AM', 'GM1', 'GM2'];
        const labels = ['Area Manager', 'GM 1', 'GM 2'];
 
@@ -1974,7 +1979,9 @@ function renderSPPDTable(rows, { showCreator = false, showApproveBtn = false } =
               const pdfBtn = ['approved', 'completed'].includes(r.status)
                      ? `<a href="/api/sppd/${r.id}/download/pdf" target="_blank" class="btn btn-sm btn-pdf" title="Unduh PDF">🖨️</a> `
                      : '';
-              const editBtn = r.status === 'pending' && r.sppd_approval_level === 0 && (currentUser.role === 'admin' || r.created_by === currentUser.id)
+              const canEditSppd = r.status === 'pending' && (currentUser.role === 'admin' || r.created_by === currentUser.id) &&
+                     (r.sppd_approval_level === 0 || (r.am_skipped && r.sppd_approval_level === 1 && !r.gm1_approved && !r.gm2_approved));
+              const editBtn = canEditSppd
                      ? `<button onclick="openEditSPPD(${r.id})" class="btn btn-sm btn-secondary">✏️ Edit</button> `
                      : '';
               return `<tr>
@@ -2375,7 +2382,9 @@ async function viewSPPDDetail(id) {
                      footer.push(`<button onclick="openSPPDAction(${id},'approve')" class="btn btn-success">✅ Setujui</button>`);
                      footer.push(`<button onclick="openSPPDAction(${id},'reject')" class="btn btn-danger">❌ Tolak</button>`);
               }
-              if (sppd.status === 'pending' && sppd.sppd_approval_level === 0 && (currentUser.role === 'admin' || sppd.created_by === currentUser.id)) {
+              const canEditDetail = sppd.status === 'pending' && (currentUser.role === 'admin' || sppd.created_by === currentUser.id) &&
+                     (sppd.sppd_approval_level === 0 || (sppd.am_skipped && sppd.sppd_approval_level === 1 && !sppd.gm1_approved && !sppd.gm2_approved));
+              if (canEditDetail) {
                      footer.push(`<button onclick="closeModal('modal-sppd-detail');setTimeout(()=>openEditSPPD(${id}),200)" class="btn btn-secondary">✏️ Edit</button>`);
               }
               if (['approved', 'completed'].includes(sppd.status)) {
