@@ -457,6 +457,25 @@ router.post('/meta/upload/user-ttd/:userId', requireAdminOrKP, upload.single('im
     }
 });
 
+// POST /api/submissions/meta/upload/my-ttd (any logged-in user uploads own TTD)
+// MUST be registered before /meta/upload/:type to avoid being caught by the wildcard
+const ttdUploadSelf = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+router.post('/meta/upload/my-ttd', requireLogin, ttdUploadSelf.single('ttd'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+        const filename = `ttd_u${req.session.user.id}.png`;
+        const outputPath = path.join(__dirname, '..', 'public', 'img', filename);
+        await sharp(req.file.buffer)
+          .resize(300, 150, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 0 } })
+          .png()
+          .toFile(outputPath);
+        res.json({ success: true, filename, url: `/img/${filename}?t=${Date.now()}` });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Upload gagal' });
+    }
+});
+
 // POST /api/submissions/meta/upload/:type
 router.post('/meta/upload/:type', requireAdminOrKP, upload.single('image'), async (req, res) => {
     const type = req.params.type;
@@ -507,24 +526,6 @@ router.put('/meta/users/:id', requireAdminOrKP, (req, res) => {
     db.prepare('UPDATE users SET full_name=?, role=?, area_kerja=?, jabatan_detail=? WHERE id=?')
       .run(full_name, role, area_kerja || '', jabatan_detail || '', req.params.id);
     res.json({ success: true });
-});
-
-// POST /api/submissions/meta/upload/my-ttd (any logged-in user uploads own TTD)
-const ttdUploadSelf = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
-router.post('/meta/upload/my-ttd', requireLogin, ttdUploadSelf.single('ttd'), async (req, res) => {
-    try {
-        if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-        const filename = `ttd_u${req.session.user.id}.png`;
-        const outputPath = path.join(__dirname, '..', 'public', 'img', filename);
-        await sharp(req.file.buffer)
-          .resize(300, 150, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 0 } })
-          .png()
-          .toFile(outputPath);
-        res.json({ success: true, filename, url: `/img/${filename}?t=${Date.now()}` });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Upload gagal' });
-    }
 });
 
 // PUT /api/submissions/meta/users/:id/password  (admin reset password user)

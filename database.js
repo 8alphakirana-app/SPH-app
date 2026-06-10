@@ -329,13 +329,20 @@ db.exec(`
 // ── Default users untuk SPPD ──────────────────────────────────────────────────
 [
   { username: 'area_manager1', password: 'kirana', full_name: 'Area Manager 1', role: 'area_manager' },
-  { username: 'gm2',           password: 'kirana', full_name: 'GM 2',           role: 'gm2' },
+  { username: 'danny',         password: 'kirana', full_name: 'Danny',          role: 'gm2' },
 ].forEach(u => {
   if (!db.prepare('SELECT id FROM users WHERE username = ?').get(u.username)) {
     db.prepare('INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)').run(u.username, u.password, u.full_name, u.role);
     console.log(`✅ SPPD user default dibuat: ${u.username} (${u.role})`);
   }
 });
+
+// ── MIGRATION: rename username gm2 → danny ────────────────────────────────────
+const oldGm2User = db.prepare("SELECT id FROM users WHERE username = 'gm2' AND role = 'gm2'").get();
+if (oldGm2User) {
+  db.prepare("UPDATE users SET username='danny', full_name='Danny' WHERE id=?").run(oldGm2User.id);
+  console.log('✅ User gm2 direname menjadi danny');
+}
 
 // ── MIGRATION: sppd_itinerary new columns (rencana kunjungan) ─────────────────
 [
