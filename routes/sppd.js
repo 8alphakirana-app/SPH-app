@@ -27,6 +27,14 @@ function canSeeAll(role) {
   return ['admin', 'kantor_pusat', 'gm', 'gm2', 'manager_keuangan', 'direktur_ops', 'direktur_utama'].includes(role);
 }
 
+// ── Helper: cek apakah ada Area Manager untuk area tertentu ──────────────────
+function hasAreaManagerForArea(area_kerja) {
+  if (!area_kerja) return false;
+  return !!db.prepare(
+    "SELECT id FROM users WHERE role='area_manager' AND LOWER(TRIM(area_kerja)) = LOWER(TRIM(?))"
+  ).get(area_kerja);
+}
+
 // ── Helper: check/advance parallel GM stage for laporan/pencairan ─────────────
 function checkGmParallel(table, idCol, id) {
   // Returns nextLevel after GM stage: 5 if both gm(3) and gm2(4) approved, else 3
@@ -246,8 +254,9 @@ router.post('/', (req, res) => {
     itinerary, biaya
   } = req.body;
 
-  // Jika pembuat adalah Area Manager, lewati step AM → langsung ke GM stage
-  const initialLevel = creatorUser.role === 'area_manager' ? 1 : 0;
+  // Lewati step AM jika pembuat adalah Area Manager ATAU tidak ada AM di areanya
+  const noAMSppd = !hasAreaManagerForArea(creatorUser.area_kerja);
+  const initialLevel = (creatorUser.role === 'area_manager' || noAMSppd) ? 1 : 0;
 
   const nomor = `DRAFT-${Date.now()}`;
   const result = db.prepare(`
@@ -952,11 +961,19 @@ router.post('/:id/laporan', (req, res) => {
   const { tanggal_laporan, isi_laporan, catatan_umum, kunjungan, biaya } = req.body;
   const totalBiaya = Array.isArray(biaya) ? biaya.reduce((s, b) => s + (Number(b.jumlah) || 0), 0) : 0;
 
+  const noAMLaporan = !hasAreaManagerForArea(sppd.area_kerja);
+  const laporanInitLevel = noAMLaporan ? 2 : 1;
+
   const result = db.prepare(`
     INSERT INTO sppd_laporan (sppd_id, tanggal_laporan, isi_laporan, catatan_umum, total_biaya, laporan_approval_level)
-    VALUES (?, ?, ?, ?, ?, 1)
-  `).run(req.params.id, tanggal_laporan || '', isi_laporan || '', catatan_umum || '', totalBiaya);
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(req.params.id, tanggal_laporan || '', isi_laporan || '', catatan_umum || '', totalBiaya, laporanInitLevel);
   const laporanId = result.lastInsertRowid;
+
+  if (noAMLaporan) {
+    db.prepare("INSERT INTO sppd_laporan_approvals (laporan_id,level,approver_user_id,status,note,acted_at) VALUES (?,1,NULL,'approved','Auto: tidak ada Area Manager di area ini',datetime('now','localtime'))")
+      .run(laporanId);
+  }
 
   if (Array.isArray(kunjungan) && kunjungan.length) {
     const ins = db.prepare('INSERT INTO sppd_laporan_kunjungan (laporan_id, tanggal, nama_instansi, nama_kontak, nama_pelanggan, laporan_kunjungan, hasil) VALUES (?, ?, ?, ?, ?, ?, ?)');
@@ -1029,8 +1046,14 @@ router.post('/:id/laporan/approve', (req, res) => {
       db.prepare("UPDATE sppd SET status='completed' WHERE id=?").run(sppd.id);
       const existing = db.prepare('SELECT id FROM sppd_pencairan WHERE sppd_id=?').get(sppd.id);
       if (!existing) {
-        db.prepare("INSERT INTO sppd_pencairan (sppd_id,jumlah_usulan,jumlah_realisasi,status,pencairan_approval_level) VALUES (?,?,?,'belum_cair',1)")
-          .run(sppd.id, sppd.uang_muka || 0, laporan.total_biaya || 0);
+        const noAMPencairan = !hasAreaManagerForArea(sppd.area_kerja);
+        const pencairanInitLevel = noAMPencairan ? 2 : 1;
+        const pencairan = db.prepare("INSERT INTO sppd_pencairan (sppd_id,jumlah_usulan,jumlah_realisasi,status,pencairan_approval_level) VALUES (?,?,?,'belum_cair',?)")
+          .run(sppd.id, sppd.uang_muka || 0, laporan.total_biaya || 0, pencairanInitLevel);
+        if (noAMPencairan) {
+          db.prepare("INSERT INTO sppd_pencairan_approvals (pencairan_id,level,approver_user_id,status,note,acted_at) VALUES (?,1,NULL,'approved','Auto: tidak ada Area Manager di area ini',datetime('now','localtime'))")
+            .run(pencairan.lastInsertRowid);
+        }
       }
     } else {
       db.prepare('UPDATE sppd_laporan SET laporan_approval_level=? WHERE id=?').run(nextLvl, laporan.id);

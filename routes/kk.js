@@ -9,6 +9,13 @@ const ROLE_LEVELS  = { area_manager: 1, manager_keuangan: 2, gm: 3, gm2: 4, dire
 const LEVEL_LABELS = { 1: 'Area Manager', 2: 'Manager Keuangan', 3: 'GM 1', 4: 'GM 2', 5: 'Direktur Operasional', 6: 'Direktur Utama' };
 const MAX_LEVEL    = 6;
 
+function hasAreaManagerForArea(area_kerja) {
+  if (!area_kerja) return false;
+  return !!db.prepare(
+    "SELECT id FROM users WHERE role='area_manager' AND LOWER(TRIM(area_kerja)) = LOWER(TRIM(?))"
+  ).get(area_kerja);
+}
+
 function requireLogin(req, res, next) {
   if (!req.session.user) return res.status(401).json({ error: 'Belum login' });
   next();
@@ -90,13 +97,17 @@ router.post('/', requireLogin, (req, res) => {
   const bdoVal         = bDistribusiVal + ongkirVal;
   const nomorSurat     = generateNomorKK();
 
+  const creator = db.prepare('SELECT area_kerja, role FROM users WHERE id=?').get(req.session.user.id);
+  const noAMKK = !hasAreaManagerForArea(creator?.area_kerja);
+  const kkInitLevel = noAMKK ? 2 : 1;
+
   const subResult = db.prepare(`
     INSERT INTO submissions
       (client_title, client_name, client_address, client_city, items,
        ppn_included, ongkir_included, notes, lampiran, created_by,
        submission_type, kk_approval_level, status)
-    VALUES ('', ?, '', 'di Tempat', '[]', 0, 0, ?, '', ?, 'kk', 1, 'pending')
-  `).run(pelanggan, notes || '', req.session.user.id);
+    VALUES ('', ?, '', 'di Tempat', '[]', 0, 0, ?, '', ?, 'kk', ?, 'pending')
+  `).run(pelanggan, notes || '', req.session.user.id, kkInitLevel);
 
   const submissionId = subResult.lastInsertRowid;
 
@@ -116,7 +127,12 @@ router.post('/', requireLogin, (req, res) => {
   );
 
   for (let level = 1; level <= MAX_LEVEL; level++) {
-    db.prepare("INSERT INTO kk_approvals (submission_id, level, status) VALUES (?, ?, 'pending')").run(submissionId, level);
+    if (level === 1 && noAMKK) {
+      db.prepare("INSERT INTO kk_approvals (submission_id, level, status, note, acted_at) VALUES (?, 1, 'approved', 'Auto: tidak ada Area Manager di area ini', datetime('now','localtime'))")
+        .run(submissionId);
+    } else {
+      db.prepare("INSERT INTO kk_approvals (submission_id, level, status) VALUES (?, ?, 'pending')").run(submissionId, level);
+    }
   }
 
   res.json({ success: true, id: submissionId });
