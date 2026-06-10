@@ -501,6 +501,9 @@ function renderSubmissionTable(submissions, showActions = false, isAdmin = false
                                                                                                                                                                                                                                   <button onclick="openEditModal(${s.id})" class="btn btn-secondary btn-sm">✏️ Edit</button>
                                                                                                                                                                                                                                   <button onclick="deleteSubmission(${s.id})" class="btn btn-danger btn-sm">🗑️ Hapus</button>
                                                                                                                                                                                                                                 ` : ''}
+                                                                                                                                                                                                                                ${s.status === 'approved' && currentUser.role === 'admin' ? `
+                                                                                                                                                                                                                                    <button onclick="deleteSubmission(${s.id})" class="btn btn-danger btn-sm">🗑️ Hapus</button>
+                                                                                                                                                                                                                                ` : ''}
                                                                                                                                                                                                                 </div>
                                                                                                                                                                                                                       </td>
                                                                                                                                                                                                                           </tr>`;
@@ -630,6 +633,9 @@ async function viewDetail(id) {
               }
               if (s.status === 'pending' && (currentUser.role === 'admin' || s.created_by === currentUser.id)) {
                      footerHTML += `<button onclick="closeModal('modal-detail');setTimeout(()=>openEditModal(${s.id}),200)" class="btn btn-secondary">✏️ Edit</button>`;
+                     footerHTML += `<button onclick="deleteSubmission(${s.id})" class="btn btn-danger">🗑️ Hapus</button>`;
+              }
+              if (s.status === 'approved' && currentUser.role === 'admin') {
                      footerHTML += `<button onclick="deleteSubmission(${s.id})" class="btn btn-danger">🗑️ Hapus</button>`;
               }
               footerHTML += `<button onclick="closeModal('modal-detail')" class="btn btn-outline">Tutup</button>`;
@@ -1480,6 +1486,8 @@ function renderKKTable(rows, { showCreator = false, showApproveBtn = false } = {
                            ${r.status === 'pending' && (currentUser.role === 'admin' || r.created_by === currentUser.id) ? `
                                <button onclick="openEditKK(${r.id})" class="btn btn-secondary btn-sm">✏️ Edit</button>
                                <button onclick="deleteKK(${r.id})" class="btn btn-danger btn-sm">🗑️</button>` : ''}
+                           ${r.status === 'approved' && currentUser.role === 'admin' ? `
+                               <button onclick="deleteKK(${r.id})" class="btn btn-danger btn-sm">🗑️ Hapus</button>` : ''}
                        </div>
                    </td>
             </tr>`;
@@ -1655,6 +1663,9 @@ async function viewKKDetail(id) {
                      footer += `<button onclick="closeModal('modal-kk-detail');setTimeout(()=>openEditKK(${id}),200)" class="btn btn-secondary">✏️ Edit</button>`;
                      footer += `<button onclick="deleteKK(${id})" class="btn btn-danger">🗑️ Hapus</button>`;
               }
+              if (kk.status === 'approved' && currentUser.role === 'admin') {
+                     footer += `<button onclick="deleteKK(${id})" class="btn btn-danger">🗑️ Hapus</button>`;
+              }
               footer += `<button onclick="closeModal('modal-kk-detail')" class="btn btn-outline">Tutup</button>`;
               document.getElementById('kk-detail-footer').innerHTML = footer;
               showModal('modal-kk-detail');
@@ -1742,6 +1753,20 @@ async function deleteKK(id) {
               const data = await res.json();
               if (res.ok) { showToast('KK berhasil dihapus', 'success'); closeModal('modal-kk-detail'); refreshKKList(); }
               else showToast(data.error || 'Gagal menghapus', 'error');
+       } catch { showToast('Koneksi gagal', 'error'); }
+}
+
+async function deleteSppd(id) {
+       if (!confirm('Hapus SPPD ini beserta seluruh data terkait (laporan, pencairan)?\nTindakan ini tidak dapat dibatalkan.')) return;
+       try {
+              const res = await api(`/api/sppd/${id}`, 'DELETE');
+              const data = await res.json();
+              if (res.ok) {
+                     showToast('SPPD berhasil dihapus', 'success');
+                     closeModal('modal-sppd-detail');
+                     const activePage = document.querySelector('.menu-item.active')?.getAttribute('data-page');
+                     if (activePage) showPage(activePage); else loadDashboard();
+              } else showToast(data.error || 'Gagal menghapus', 'error');
        } catch { showToast('Koneksi gagal', 'error'); }
 }
 
@@ -1989,6 +2014,9 @@ function renderSPPDTable(rows, { showCreator = false, showApproveBtn = false } =
               const editBtn = canEditSppd
                      ? `<button onclick="openEditSPPD(${r.id})" class="btn btn-sm btn-secondary">✏️ Edit</button> `
                      : '';
+              const deleteSppdBtn = ['approved','completed'].includes(r.status) && currentUser.role === 'admin'
+                     ? `<button onclick="deleteSppd(${r.id})" class="btn btn-sm btn-danger">🗑️ Hapus</button> `
+                     : '';
               return `<tr>
               <td><span style="font-family:monospace;font-size:12px">${escHtml(r.nomor)}</span></td>
               <td>${escHtml(r.nama_pegawai)}</td>
@@ -1999,7 +2027,7 @@ function renderSPPDTable(rows, { showCreator = false, showApproveBtn = false } =
               <td>${renderSPPDProgressBadge(r)}</td>
               <td style="white-space:nowrap">
                 ${approveBtn}${editBtn}${pdfBtn}
-                <button onclick="viewSPPDDetail(${r.id})" class="btn btn-sm btn-outline">🔍 Detail</button>
+                ${deleteSppdBtn}<button onclick="viewSPPDDetail(${r.id})" class="btn btn-sm btn-outline">🔍 Detail</button>
               </td>
             </tr>`;
        }).join('');
@@ -2410,6 +2438,9 @@ async function viewSPPDDetail(id) {
               }
               if (pengembalian) {
                      footer.push(`<a href="/api/sppd/${id}/pengembalian/docx" class="btn btn-pdf">📄 Unduh SKUM</a>`);
+              }
+              if (['approved','completed'].includes(sppd.status) && currentUser.role === 'admin') {
+                     footer.push(`<button onclick="deleteSppd(${id})" class="btn btn-danger">🗑️ Hapus</button>`);
               }
               footer.push(`<button onclick="closeModal('modal-sppd-detail')" class="btn btn-outline">Tutup</button>`);
               document.getElementById('sppd-detail-footer').innerHTML = footer.join(' ');

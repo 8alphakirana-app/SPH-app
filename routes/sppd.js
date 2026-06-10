@@ -823,9 +823,23 @@ router.delete('/:id', (req, res) => {
   const sppd = db.prepare('SELECT * FROM sppd WHERE id = ?').get(req.params.id);
   if (!sppd) return res.status(404).json({ error: 'SPPD tidak ditemukan' });
   if (sppd.created_by !== user.id && user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-  if (sppd.status !== 'pending' || sppd.sppd_approval_level > 0)
+  if (user.role !== 'admin' && (sppd.status !== 'pending' || sppd.sppd_approval_level > 0))
     return res.status(400).json({ error: 'Tidak bisa dihapus setelah proses approval dimulai' });
 
+  // Cascade delete semua data terkait
+  const laporan = db.prepare('SELECT id FROM sppd_laporan WHERE sppd_id=?').get(req.params.id);
+  if (laporan) {
+    db.prepare('DELETE FROM sppd_laporan_biaya WHERE laporan_id=?').run(laporan.id);
+    db.prepare('DELETE FROM sppd_laporan_kunjungan WHERE laporan_id=?').run(laporan.id);
+    db.prepare('DELETE FROM sppd_laporan_approvals WHERE laporan_id=?').run(laporan.id);
+    db.prepare('DELETE FROM sppd_laporan WHERE id=?').run(laporan.id);
+  }
+  const pencairan = db.prepare('SELECT id FROM sppd_pencairan WHERE sppd_id=?').get(req.params.id);
+  if (pencairan) {
+    db.prepare('DELETE FROM sppd_pencairan_approvals WHERE pencairan_id=?').run(pencairan.id);
+    db.prepare('DELETE FROM sppd_pencairan WHERE id=?').run(pencairan.id);
+  }
+  db.prepare('DELETE FROM sppd_biaya WHERE sppd_id=?').run(req.params.id);
   db.prepare('DELETE FROM sppd_itinerary WHERE sppd_id = ?').run(req.params.id);
   db.prepare('DELETE FROM sppd_approvals WHERE sppd_id = ?').run(req.params.id);
   db.prepare('DELETE FROM sppd WHERE id = ?').run(req.params.id);
