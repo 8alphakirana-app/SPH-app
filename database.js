@@ -340,6 +340,8 @@ db.exec(`
 // ── MIGRATION: rename username gm2 → danny ────────────────────────────────────
 const oldGm2User = db.prepare("SELECT id FROM users WHERE username = 'gm2' AND role = 'gm2'").get();
 if (oldGm2User) {
+  // Hapus user danny yang baru saja di-seed (belum punya data) agar tidak konflik UNIQUE
+  db.prepare("DELETE FROM users WHERE username='danny' AND role='gm2' AND id != ?").run(oldGm2User.id);
   db.prepare("UPDATE users SET username='danny', full_name='Danny' WHERE id=?").run(oldGm2User.id);
   console.log('✅ User gm2 direname menjadi danny');
 }
