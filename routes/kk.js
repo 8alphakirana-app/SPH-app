@@ -473,8 +473,9 @@ router.get('/:id/export-pdf', requireLogin, async (req, res) => {
     await page.setContent(html, { waitUntil: 'networkidle0' });
     const pdfBuffer = await page.pdf({
       format: 'A4',
+      landscape: true,
       printBackground: true,
-      margin: { top: '15mm', bottom: '15mm', left: '15mm', right: '15mm' }
+      margin: { top: '10mm', bottom: '10mm', left: '8mm', right: '8mm' }
     });
     await browser.close();
     const safeName = (row.nama_pekerjaan || 'KK').replace(/[^a-zA-Z0-9]/g, '_');
@@ -539,50 +540,50 @@ function generateKKHTML(row, calc, approvals, settings) {
       const pLaba = pDppK - pDppB - pBdo;
       const pNM   = pDppK > 0 ? (pLaba / pDppK * 100).toFixed(2) : '0.00';
       financeRows += `<tr style="background:${i % 2 === 0 ? '#f9fafb' : '#fff'}">
-        <td style="padding:5px 8px;text-align:center">${i + 1}</td>
-        <td style="padding:5px 8px">${p.nama || '-'}</td>
-        <td style="padding:5px 8px;text-align:right">${fmtRp(p.nilai_kontrak)}</td>
-        <td style="padding:5px 8px;text-align:right">${fmtRp(pDppK)}</td>
-        <td style="padding:5px 8px;text-align:right">${fmtRp(pPpnK)}</td>
-        <td style="padding:5px 8px;text-align:right">${fmtRp(pPphK)}</td>
-        <td style="padding:5px 8px;text-align:right">${fmtRp(pPen)}</td>
-        <td style="padding:5px 8px;text-align:right">${fmtRp(pDppB)}</td>
-        <td style="padding:5px 8px;text-align:right">${fmtRp(p.b_distribusi)}</td>
-        <td style="padding:5px 8px;text-align:right">${fmtRp(p.ongkir)}</td>
-        <td style="padding:5px 8px;text-align:right;color:${pSurp >= 0 ? '#16a34a' : '#dc2626'}">${fmtRp(pSurp)}</td>
-        <td style="padding:5px 8px;text-align:right;color:${pLaba >= 0 ? '#16a34a' : '#dc2626'}">${fmtRp(pLaba)}</td>
-        <td style="padding:5px 8px;text-align:right">${pNM}%</td>
+        <td style="padding:3px;text-align:center">${i + 1}</td>
+        <td style="padding:3px 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.nama || '-'}</td>
+        <td style="padding:3px;text-align:right">${fmtRp(p.nilai_kontrak)}</td>
+        <td style="padding:3px;text-align:right">${fmtRp(pDppK)}</td>
+        <td style="padding:3px;text-align:right">${fmtRp(pPpnK)}</td>
+        <td style="padding:3px;text-align:right">${fmtRp(pPphK)}</td>
+        <td style="padding:3px;text-align:right">${fmtRp(pPen)}</td>
+        <td style="padding:3px;text-align:right">${fmtRp(pDppB)}</td>
+        <td style="padding:3px;text-align:right">${fmtRp(p.b_distribusi)}</td>
+        <td style="padding:3px;text-align:right">${fmtRp(p.ongkir)}</td>
+        <td style="padding:3px;text-align:right;color:${pSurp >= 0 ? '#16a34a' : '#dc2626'}">${fmtRp(pSurp)}</td>
+        <td style="padding:3px;text-align:right;color:${pLaba >= 0 ? '#16a34a' : '#dc2626'}">${fmtRp(pLaba)}</td>
+        <td style="padding:3px;text-align:right">${pNM}%</td>
       </tr>`;
     });
     financeRows += `<tr style="background:#dbeafe;font-weight:700">
-      <td colspan="2" style="padding:5px 8px;text-align:center">TOTAL</td>
-      <td style="padding:5px 8px;text-align:right">${fmtRp(products.reduce((s, p) => s + (p.nilai_kontrak || 0), 0))}</td>
-      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.dppKontrak)}</td>
-      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.ppnKontrak)}</td>
-      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.pphKontrak)}</td>
-      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.penerimaanUang)}</td>
-      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.dppBeli)}</td>
-      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.bDistribusi)}</td>
-      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.ongkir)}</td>
-      <td style="padding:5px 8px;text-align:right;color:${calc.surplusDefisit >= 0 ? '#16a34a' : '#dc2626'}">${fmtRp(calc.surplusDefisit)}</td>
-      <td style="padding:5px 8px;text-align:right;color:${calc.laba >= 0 ? '#16a34a' : '#dc2626'}">${fmtRp(calc.laba)}</td>
-      <td style="padding:5px 8px;text-align:right">${calc.netMargin.toFixed(2)}%</td>
+      <td colspan="2" style="padding:3px;text-align:center">TOTAL</td>
+      <td style="padding:3px;text-align:right">${fmtRp(products.reduce((s, p) => s + (p.nilai_kontrak || 0), 0))}</td>
+      <td style="padding:3px;text-align:right">${fmtRp(calc.dppKontrak)}</td>
+      <td style="padding:3px;text-align:right">${fmtRp(calc.ppnKontrak)}</td>
+      <td style="padding:3px;text-align:right">${fmtRp(calc.pphKontrak)}</td>
+      <td style="padding:3px;text-align:right">${fmtRp(calc.penerimaanUang)}</td>
+      <td style="padding:3px;text-align:right">${fmtRp(calc.dppBeli)}</td>
+      <td style="padding:3px;text-align:right">${fmtRp(calc.bDistribusi)}</td>
+      <td style="padding:3px;text-align:right">${fmtRp(calc.ongkir)}</td>
+      <td style="padding:3px;text-align:right;color:${calc.surplusDefisit >= 0 ? '#16a34a' : '#dc2626'}">${fmtRp(calc.surplusDefisit)}</td>
+      <td style="padding:3px;text-align:right;color:${calc.laba >= 0 ? '#16a34a' : '#dc2626'}">${fmtRp(calc.laba)}</td>
+      <td style="padding:3px;text-align:right">${calc.netMargin.toFixed(2)}%</td>
     </tr>`;
   } else {
     financeRows = `<tr style="background:#f9fafb">
-      <td style="padding:5px 8px;text-align:center">1</td>
-      <td style="padding:5px 8px">${row.pelanggan || '-'}</td>
-      <td style="padding:5px 8px;text-align:right">${fmtRp(row.nilai_kontrak_total)}</td>
-      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.dppKontrak)}</td>
-      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.ppnKontrak)}</td>
-      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.pphKontrak)}</td>
-      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.penerimaanUang)}</td>
-      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.dppBeli)}</td>
-      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.bDistribusi)}</td>
-      <td style="padding:5px 8px;text-align:right">${fmtRp(calc.ongkir)}</td>
-      <td style="padding:5px 8px;text-align:right;color:${calc.surplusDefisit >= 0 ? '#16a34a' : '#dc2626'}">${fmtRp(calc.surplusDefisit)}</td>
-      <td style="padding:5px 8px;text-align:right;color:${calc.laba >= 0 ? '#16a34a' : '#dc2626'}">${fmtRp(calc.laba)}</td>
-      <td style="padding:5px 8px;text-align:right">${calc.netMargin.toFixed(2)}%</td>
+      <td style="padding:3px;text-align:center">1</td>
+      <td style="padding:3px 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${row.pelanggan || '-'}</td>
+      <td style="padding:3px;text-align:right">${fmtRp(row.nilai_kontrak_total)}</td>
+      <td style="padding:3px;text-align:right">${fmtRp(calc.dppKontrak)}</td>
+      <td style="padding:3px;text-align:right">${fmtRp(calc.ppnKontrak)}</td>
+      <td style="padding:3px;text-align:right">${fmtRp(calc.pphKontrak)}</td>
+      <td style="padding:3px;text-align:right">${fmtRp(calc.penerimaanUang)}</td>
+      <td style="padding:3px;text-align:right">${fmtRp(calc.dppBeli)}</td>
+      <td style="padding:3px;text-align:right">${fmtRp(calc.bDistribusi)}</td>
+      <td style="padding:3px;text-align:right">${fmtRp(calc.ongkir)}</td>
+      <td style="padding:3px;text-align:right;color:${calc.surplusDefisit >= 0 ? '#16a34a' : '#dc2626'}">${fmtRp(calc.surplusDefisit)}</td>
+      <td style="padding:3px;text-align:right;color:${calc.laba >= 0 ? '#16a34a' : '#dc2626'}">${fmtRp(calc.laba)}</td>
+      <td style="padding:3px;text-align:right">${calc.netMargin.toFixed(2)}%</td>
     </tr>`;
   }
 
@@ -638,31 +639,44 @@ function generateKKHTML(row, calc, approvals, settings) {
   </table>
 
   <div class="section-title">Perhitungan Keuangan</div>
-  <div style="overflow-x:auto">
-  <table style="font-size:10px;border:1px solid #e5e7eb">
+  <table style="font-size:7.5px;border:1px solid #e5e7eb;table-layout:fixed;width:100%">
+    <colgroup>
+      <col style="width:22px">
+      <col style="width:13%">
+      <col style="width:8%">
+      <col style="width:8%">
+      <col style="width:7%">
+      <col style="width:7%">
+      <col style="width:8%">
+      <col style="width:8%">
+      <col style="width:7%">
+      <col style="width:6%">
+      <col style="width:8%">
+      <col style="width:8%">
+      <col style="width:6%">
+    </colgroup>
     <thead>
       <tr style="background:#1f4e79;color:#fff">
-        <th style="padding:6px 4px;text-align:center" rowspan="2">No</th>
-        <th style="padding:6px 4px;text-align:center" rowspan="2">Pelanggan / Produk</th>
-        <th style="padding:6px 4px;text-align:center" colspan="5">Nilai Kontrak</th>
-        <th style="padding:6px 4px;text-align:center" rowspan="2">DPP Beli</th>
-        <th style="padding:6px 4px;text-align:center" rowspan="2">B. Distribusi</th>
-        <th style="padding:6px 4px;text-align:center" rowspan="2">Ongkir</th>
-        <th style="padding:6px 4px;text-align:center" rowspan="2">Surplus/Defisit</th>
-        <th style="padding:6px 4px;text-align:center" rowspan="2">Laba</th>
-        <th style="padding:6px 4px;text-align:center" rowspan="2">Net Margin%</th>
+        <th style="padding:4px 3px;text-align:center" rowspan="2">No</th>
+        <th style="padding:4px 3px;text-align:center" rowspan="2">Pelanggan / Produk</th>
+        <th style="padding:4px 3px;text-align:center" colspan="5">Nilai Kontrak</th>
+        <th style="padding:4px 3px;text-align:center" rowspan="2">DPP Beli</th>
+        <th style="padding:4px 3px;text-align:center" rowspan="2">B. Distrib.</th>
+        <th style="padding:4px 3px;text-align:center" rowspan="2">Ongkir</th>
+        <th style="padding:4px 3px;text-align:center" rowspan="2">Surplus/<br>Defisit</th>
+        <th style="padding:4px 3px;text-align:center" rowspan="2">Laba</th>
+        <th style="padding:4px 3px;text-align:center" rowspan="2">Margin%</th>
       </tr>
       <tr style="background:#2e75b6;color:#fff">
-        <th style="padding:4px;text-align:center">Total</th>
-        <th style="padding:4px;text-align:center">DPP</th>
-        <th style="padding:4px;text-align:center">PPN 11%</th>
-        <th style="padding:4px;text-align:center">PPh 1,5%</th>
-        <th style="padding:4px;text-align:center">Penerimaan Uang</th>
+        <th style="padding:3px;text-align:center">Total</th>
+        <th style="padding:3px;text-align:center">DPP</th>
+        <th style="padding:3px;text-align:center">PPN 11%</th>
+        <th style="padding:3px;text-align:center">PPh 1,5%</th>
+        <th style="padding:3px;text-align:center">Penerimaan</th>
       </tr>
     </thead>
     <tbody>${financeRows}</tbody>
   </table>
-  </div>
 
   <div style="margin-top:20px;text-align:right;font-size:11px;color:#374151">
     ${city}, ${dateStr}
