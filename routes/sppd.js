@@ -822,12 +822,7 @@ router.delete('/:id', (req, res) => {
   const user = req.session.user;
   const sppd = db.prepare('SELECT * FROM sppd WHERE id = ?').get(req.params.id);
   if (!sppd) return res.status(404).json({ error: 'SPPD tidak ditemukan' });
-  if (sppd.created_by !== user.id && user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-  if (user.role !== 'admin') {
-    const canDelete = sppd.status === 'rejected' ||
-      (sppd.status === 'pending' && sppd.sppd_approval_level === 0);
-    if (!canDelete) return res.status(400).json({ error: 'Tidak bisa dihapus setelah proses approval dimulai' });
-  }
+  if (user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
 
   // Cascade delete semua data terkait
   const laporan = db.prepare('SELECT id FROM sppd_laporan WHERE sppd_id=?').get(req.params.id);

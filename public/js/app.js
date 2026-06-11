@@ -499,14 +499,10 @@ function renderSubmissionTable(submissions, showActions = false, isAdmin = false
                                                                                                                                                                                                         ` : ''}
                                                                                                                                                                                                                           ${s.status === 'pending' && showActions && (currentUser.role === 'admin' || s.created_by === currentUser.id) ? `
                                                                                                                                                                                                                                   <button onclick="openEditModal(${s.id})" class="btn btn-secondary btn-sm">✏️ Edit</button>
+                                                                                                                                                                                                                          ` : ''}
+                                                                                                                                                                                                                          ${(s.status === 'pending' || s.status === 'approved' || s.status === 'rejected') && currentUser.role === 'admin' ? `
                                                                                                                                                                                                                                   <button onclick="deleteSubmission(${s.id})" class="btn btn-danger btn-sm">🗑️ Hapus</button>
-                                                                                                                                                                                                                                ` : ''}
-                                                                                                                                                                                                                                ${s.status === 'approved' && currentUser.role === 'admin' ? `
-                                                                                                                                                                                                                                    <button onclick="deleteSubmission(${s.id})" class="btn btn-danger btn-sm">🗑️ Hapus</button>
-                                                                                                                                                                                                                                ` : ''}
-                                                                                                                                                                                                                                ${s.status === 'rejected' && (currentUser.role === 'admin' || s.created_by === currentUser.id) ? `
-                                                                                                                                                                                                                                    <button onclick="deleteSubmission(${s.id})" class="btn btn-danger btn-sm">🗑️ Hapus</button>
-                                                                                                                                                                                                                                ` : ''}
+                                                                                                                                                                                                                          ` : ''}
                                                                                                                                                                                                                 </div>
                                                                                                                                                                                                                       </td>
                                                                                                                                                                                                                           </tr>`;
@@ -636,12 +632,8 @@ async function viewDetail(id) {
               }
               if (s.status === 'pending' && (currentUser.role === 'admin' || s.created_by === currentUser.id)) {
                      footerHTML += `<button onclick="closeModal('modal-detail');setTimeout(()=>openEditModal(${s.id}),200)" class="btn btn-secondary">✏️ Edit</button>`;
-                     footerHTML += `<button onclick="deleteSubmission(${s.id})" class="btn btn-danger">🗑️ Hapus</button>`;
               }
-              if (s.status === 'approved' && currentUser.role === 'admin') {
-                     footerHTML += `<button onclick="deleteSubmission(${s.id})" class="btn btn-danger">🗑️ Hapus</button>`;
-              }
-              if (s.status === 'rejected' && (currentUser.role === 'admin' || s.created_by === currentUser.id)) {
+              if (['pending','approved','rejected'].includes(s.status) && currentUser.role === 'admin') {
                      footerHTML += `<button onclick="deleteSubmission(${s.id})" class="btn btn-danger">🗑️ Hapus</button>`;
               }
               footerHTML += `<button onclick="closeModal('modal-detail')" class="btn btn-outline">Tutup</button>`;
@@ -1490,11 +1482,8 @@ function renderKKTable(rows, { showCreator = false, showApproveBtn = false } = {
                                <button onclick="downloadKKExcel(${r.id})" class="btn btn-success btn-sm">📊 Excel</button>
                                <button onclick="downloadKKPDF(${r.id})" class="btn btn-pdf btn-sm">📄 PDF</button>` : ''}
                            ${r.status === 'pending' && (currentUser.role === 'admin' || r.created_by === currentUser.id) ? `
-                               <button onclick="openEditKK(${r.id})" class="btn btn-secondary btn-sm">✏️ Edit</button>
-                               <button onclick="deleteKK(${r.id})" class="btn btn-danger btn-sm">🗑️</button>` : ''}
-                           ${r.status === 'approved' && currentUser.role === 'admin' ? `
-                               <button onclick="deleteKK(${r.id})" class="btn btn-danger btn-sm">🗑️ Hapus</button>` : ''}
-                           ${r.status === 'rejected' && (currentUser.role === 'admin' || r.created_by === currentUser.id) ? `
+                               <button onclick="openEditKK(${r.id})" class="btn btn-secondary btn-sm">✏️ Edit</button>` : ''}
+                           ${['pending','approved','rejected'].includes(r.status) && currentUser.role === 'admin' ? `
                                <button onclick="deleteKK(${r.id})" class="btn btn-danger btn-sm">🗑️ Hapus</button>` : ''}
                        </div>
                    </td>
@@ -1669,12 +1658,8 @@ async function viewKKDetail(id) {
               }
               if (kk.status === 'pending' && (currentUser.role === 'admin' || kk.created_by === currentUser.id)) {
                      footer += `<button onclick="closeModal('modal-kk-detail');setTimeout(()=>openEditKK(${id}),200)" class="btn btn-secondary">✏️ Edit</button>`;
-                     footer += `<button onclick="deleteKK(${id})" class="btn btn-danger">🗑️ Hapus</button>`;
               }
-              if (kk.status === 'approved' && currentUser.role === 'admin') {
-                     footer += `<button onclick="deleteKK(${id})" class="btn btn-danger">🗑️ Hapus</button>`;
-              }
-              if (kk.status === 'rejected' && (currentUser.role === 'admin' || kk.created_by === currentUser.id)) {
+              if (['pending','approved','rejected'].includes(kk.status) && currentUser.role === 'admin') {
                      footer += `<button onclick="deleteKK(${id})" class="btn btn-danger">🗑️ Hapus</button>`;
               }
               footer += `<button onclick="closeModal('modal-kk-detail')" class="btn btn-outline">Tutup</button>`;
@@ -2025,10 +2010,8 @@ function renderSPPDTable(rows, { showCreator = false, showApproveBtn = false } =
               const editBtn = canEditSppd
                      ? `<button onclick="openEditSPPD(${r.id})" class="btn btn-sm btn-secondary">✏️ Edit</button> `
                      : '';
-              const deleteSppdBtn = (
-                     (['approved','completed'].includes(r.status) && currentUser.role === 'admin') ||
-                     (r.status === 'rejected' && (currentUser.role === 'admin' || r.created_by === currentUser.id))
-              ) ? `<button onclick="deleteSppd(${r.id})" class="btn btn-sm btn-danger">🗑️ Hapus</button> ` : '';
+              const deleteSppdBtn = ['approved','completed','rejected'].includes(r.status) && currentUser.role === 'admin'
+                     ? `<button onclick="deleteSppd(${r.id})" class="btn btn-sm btn-danger">🗑️ Hapus</button> ` : '';
               return `<tr>
               <td><span style="font-family:monospace;font-size:12px">${escHtml(r.nomor)}</span></td>
               <td>${escHtml(r.nama_pegawai)}</td>
@@ -2451,10 +2434,7 @@ async function viewSPPDDetail(id) {
               if (pengembalian) {
                      footer.push(`<a href="/api/sppd/${id}/pengembalian/docx" class="btn btn-pdf">📄 Unduh SKUM</a>`);
               }
-              if (['approved','completed'].includes(sppd.status) && currentUser.role === 'admin') {
-                     footer.push(`<button onclick="deleteSppd(${id})" class="btn btn-danger">🗑️ Hapus</button>`);
-              }
-              if (sppd.status === 'rejected' && (currentUser.role === 'admin' || sppd.created_by === currentUser.id)) {
+              if (['approved','completed','rejected'].includes(sppd.status) && currentUser.role === 'admin') {
                      footer.push(`<button onclick="deleteSppd(${id})" class="btn btn-danger">🗑️ Hapus</button>`);
               }
               footer.push(`<button onclick="closeModal('modal-sppd-detail')" class="btn btn-outline">Tutup</button>`);
