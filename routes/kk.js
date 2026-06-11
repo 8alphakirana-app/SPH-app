@@ -273,9 +273,11 @@ router.delete('/:id', requireLogin, (req, res) => {
   const user = req.session.user;
   const sub  = db.prepare("SELECT * FROM submissions WHERE id=? AND submission_type='kk'").get(req.params.id);
   if (!sub) return res.status(404).json({ error: 'KK tidak ditemukan' });
-  if (user.role !== 'admin' && sub.status !== 'pending')
-    return res.status(400).json({ error: 'Hanya KK pending yang dapat dihapus' });
-  if (user.role !== 'admin' && sub.created_by !== user.id) return res.status(403).json({ error: 'Akses ditolak' });
+  const isAdmin = user.role === 'admin';
+  const isCreator = sub.created_by === user.id;
+  if (!isAdmin && !isCreator) return res.status(403).json({ error: 'Akses ditolak' });
+  if (!isAdmin && !['pending', 'rejected'].includes(sub.status))
+    return res.status(400).json({ error: 'Hanya KK berstatus pending atau ditolak yang dapat dihapus' });
 
   db.prepare('DELETE FROM kk_approvals WHERE submission_id=?').run(req.params.id);
   db.prepare('DELETE FROM kertas_kerja WHERE submission_id=?').run(req.params.id);

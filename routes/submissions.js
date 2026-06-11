@@ -414,10 +414,10 @@ router.delete('/:id', requireLogin, (req, res) => {
     const row = db.prepare('SELECT * FROM submissions WHERE id = ?').get(req.params.id);
     if (!row) return res.status(404).json({ error: 'Tidak ditemukan' });
     const isAdmin = req.session.user.role === 'admin';
-    if (!isAdmin && row.status !== 'pending')
-        return res.status(400).json({ error: 'Hanya pengajuan berstatus pending yang dapat dihapus' });
-    if (!isAdmin && !isAdminOrKP(req.session.user) && row.created_by !== req.session.user.id)
-        return res.status(403).json({ error: 'Akses ditolak' });
+    const isCreator = row.created_by === req.session.user.id;
+    if (!isAdmin && !isCreator) return res.status(403).json({ error: 'Akses ditolak' });
+    if (!isAdmin && !['pending', 'rejected'].includes(row.status))
+        return res.status(400).json({ error: 'Hanya pengajuan berstatus pending atau ditolak yang dapat dihapus' });
     db.prepare('DELETE FROM submissions WHERE id = ?').run(req.params.id);
     res.json({ success: true });
 });
