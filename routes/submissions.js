@@ -44,6 +44,15 @@ function isAdminOrKP(user) {
     return user.role === 'admin' || user.role === 'kantor_pusat';
 }
 
+// Middleware: approve/reject SPH — admin, kantor_pusat, gm, gm2
+function requireSPHApprover(req, res, next) {
+    const role = req.session.user?.role;
+    if (!['admin', 'kantor_pusat', 'gm', 'gm2'].includes(role)) {
+        return res.status(403).json({ error: 'Akses ditolak' });
+    }
+    next();
+}
+
 // Generate nomor urut otomatis
 function generateNomor() {
     const now = new Date();
@@ -264,8 +273,8 @@ router.post('/', requireLogin, (req, res) => {
     res.json({ success: true, id: result.lastInsertRowid });
 });
 
-// POST /api/submissions/:id/approve - admin / kantor_pusat approve
-router.post('/:id/approve', requireAdminOrKP, (req, res) => {
+// POST /api/submissions/:id/approve - admin / kantor_pusat / gm / gm2 approve
+router.post('/:id/approve', requireSPHApprover, (req, res) => {
     const row = db.prepare('SELECT * FROM submissions WHERE id = ?').get(req.params.id);
     if (!row) return res.status(404).json({ error: 'Tidak ditemukan' });
     if (row.status !== 'pending') return res.status(400).json({ error: 'Pengajuan sudah diproses' });
@@ -277,8 +286,8 @@ router.post('/:id/approve', requireAdminOrKP, (req, res) => {
     res.json({ success: true, nomor });
 });
 
-// POST /api/submissions/:id/reject - admin / kantor_pusat reject
-router.post('/:id/reject', requireAdminOrKP, (req, res) => {
+// POST /api/submissions/:id/reject - admin / kantor_pusat / gm / gm2 reject
+router.post('/:id/reject', requireSPHApprover, (req, res) => {
     const { reason } = req.body;
     const row = db.prepare('SELECT * FROM submissions WHERE id = ?').get(req.params.id);
     if (!row) return res.status(404).json({ error: 'Tidak ditemukan' });
