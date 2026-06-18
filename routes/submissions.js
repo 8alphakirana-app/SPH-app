@@ -420,11 +420,19 @@ router.put('/:id', requireLogin, (req, res) => {
 
 // DELETE /api/submissions/:id
 router.delete('/:id', requireLogin, (req, res) => {
-    const row = db.prepare('SELECT * FROM submissions WHERE id = ?').get(req.params.id);
-    if (!row) return res.status(404).json({ error: 'Tidak ditemukan' });
-    if (req.session.user.role !== 'admin') return res.status(403).json({ error: 'Akses ditolak' });
-    db.prepare('DELETE FROM submissions WHERE id = ?').run(req.params.id);
-    res.json({ success: true });
+    try {
+        const row = db.prepare('SELECT * FROM submissions WHERE id = ?').get(req.params.id);
+        if (!row) return res.status(404).json({ error: 'Tidak ditemukan' });
+        if (req.session.user.role !== 'admin') return res.status(403).json({ error: 'Akses ditolak' });
+        // Hapus child records dulu jika ada (untuk SPH yang punya KK terhubung)
+        db.prepare('DELETE FROM kk_approvals WHERE submission_id = ?').run(req.params.id);
+        db.prepare('DELETE FROM kertas_kerja WHERE submission_id = ?').run(req.params.id);
+        db.prepare('DELETE FROM submissions WHERE id = ?').run(req.params.id);
+        res.json({ success: true });
+    } catch (e) {
+        console.error('DELETE submission error:', e);
+        res.status(500).json({ error: e.message });
+    }
 });
 
 // GET /api/submissions/meta/settings
