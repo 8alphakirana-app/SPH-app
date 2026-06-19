@@ -459,6 +459,67 @@ ${itinerary.length ? `
 </html>`;
 }
 
+// ── GET /api/sppd/bulk-pdf-zip — download semua SPPD disetujui sebagai ZIP ─────
+router.get('/bulk-pdf-zip', async (req, res) => {
+  const rows = db.prepare(`
+    SELECT s.*, u.full_name AS creator_name
+    FROM sppd s JOIN users u ON s.created_by = u.id
+    WHERE s.status IN ('approved','completed')
+    ORDER BY s.created_at ASC
+  `).all();
+  if (rows.length === 0) return res.status(404).json({ error: 'Belum ada SPPD yang disetujui' });
+  const settings = {};
+  db.prepare('SELECT key, value FROM settings').all().forEach(s => { settings[s.key] = s.value; });
+  const archiver = require('archiver');
+  const puppeteer = require('puppeteer');
+  const { generateHeaderHTML, generateFooterHTML } = require('../htmlGenerator');
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', 'attachment; filename="Semua_SPPD.zip"');
+  const archive = archiver('zip', { zlib: { level: 6 } });
+  archive.on('error', err => console.error('Archiver error:', err));
+  archive.pipe(res);
+  let browser = null;
+  try {
+    browser = await puppeteer.launch({
+      headless: 'new',
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH ||
+        (fs.existsSync('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
+          ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+          : (fs.existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined)),
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    });
+    const headerHtml = generateHeaderHTML(settings);
+    const footerHtml = generateFooterHTML(settings);
+    const hasFooter = !!(settings.company_headoffice || settings.company_warehouse);
+    for (const sppd of rows) {
+      const itinerary = db.prepare('SELECT * FROM sppd_itinerary WHERE sppd_id = ? ORDER BY id').all(sppd.id);
+      const approvals = db.prepare(`
+        SELECT sa.*, u.full_name, u.role, u.id AS approver_user_id
+        FROM sppd_approvals sa JOIN users u ON sa.approver_user_id = u.id
+        WHERE sa.sppd_id = ? ORDER BY sa.level
+      `).all(sppd.id);
+      const html = generateSPPDHtml(sppd, itinerary, approvals, settings);
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: 'networkidle0' });
+      const pdfBuffer = await page.pdf({
+        format: 'A4', printBackground: true, displayHeaderFooter: true,
+        headerTemplate: headerHtml,
+        footerTemplate: hasFooter ? footerHtml : '<span></span>',
+        margin: { top: '38mm', bottom: hasFooter ? '28mm' : '15mm', left: '20mm', right: '20mm' }
+      });
+      await page.close();
+      const safeNomor = (sppd.nomor || `ID${sppd.id}`).replace(/[^a-zA-Z0-9]/g, '_');
+      archive.append(Buffer.from(pdfBuffer), { name: `SPPD_${safeNomor}.pdf` });
+    }
+    await browser.close(); browser = null;
+    await archive.finalize();
+  } catch (err) {
+    if (browser) { try { await browser.close(); } catch {} }
+    console.error('SPPD Bulk PDF ZIP error:', err);
+    if (!res.headersSent) res.status(500).json({ error: 'Gagal membuat ZIP: ' + err.message });
+  }
+});
+
 // ── Download SPPD as PDF ──────────────────────────────────────────────────────
 router.get('/:id/download/pdf', async (req, res) => {
   const user = req.session.user;

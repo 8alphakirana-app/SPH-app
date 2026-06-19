@@ -411,6 +411,45 @@ async function loadSppdDashboard() {
        }
 }
 
+async function downloadAllSPHZip() {
+       showToast('⏳ Menyiapkan ZIP semua SPH... Harap tunggu', '');
+       try {
+              const res = await fetch('/api/submissions/bulk-pdf-zip-all');
+              if (!res.ok) { const d = await res.json(); showToast(d.error || 'Gagal membuat ZIP', 'error'); return; }
+              const blob = await res.blob();
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(blob); a.download = 'Semua_SPH.zip'; a.click();
+              URL.revokeObjectURL(a.href);
+              showToast('✅ ZIP SPH berhasil diunduh!', 'success');
+       } catch { showToast('Gagal mengunduh ZIP', 'error'); }
+}
+
+async function downloadAllKKZip() {
+       showToast('⏳ Menyiapkan ZIP semua Kertas Kerja... Harap tunggu', '');
+       try {
+              const res = await fetch('/api/kk/bulk-pdf-zip');
+              if (!res.ok) { const d = await res.json(); showToast(d.error || 'Gagal membuat ZIP', 'error'); return; }
+              const blob = await res.blob();
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(blob); a.download = 'Semua_KK.zip'; a.click();
+              URL.revokeObjectURL(a.href);
+              showToast('✅ ZIP Kertas Kerja berhasil diunduh!', 'success');
+       } catch { showToast('Gagal mengunduh ZIP', 'error'); }
+}
+
+async function downloadAllSPPDZip() {
+       showToast('⏳ Menyiapkan ZIP semua SPPD... Harap tunggu', '');
+       try {
+              const res = await fetch('/api/sppd/bulk-pdf-zip');
+              if (!res.ok) { const d = await res.json(); showToast(d.error || 'Gagal membuat ZIP', 'error'); return; }
+              const blob = await res.blob();
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(blob); a.download = 'Semua_SPPD.zip'; a.click();
+              URL.revokeObjectURL(a.href);
+              showToast('✅ ZIP SPPD berhasil diunduh!', 'success');
+       } catch { showToast('Gagal mengunduh ZIP', 'error'); }
+}
+
 async function downloadZip() {
        const month = document.getElementById('dash-filter-month')?.value;
        if (!month) { showToast('Pilih bulan terlebih dahulu', 'error'); return; }

@@ -166,7 +166,7 @@
           </form>
         </div>
         <div id="content-my-submissions" class="content-page" style="display:none"><div class="page-header"><h1 class="page-title">Pengajuan Saya</h1><button onclick="showPage('new-submission')" class="btn btn-primary">+ Buat Pengajuan</button></div><div class="card"><div id="my-submissions-list"></div></div></div>
-        <div id="content-admin-submissions" class="content-page" style="display:none"><div class="page-header"><h1 class="page-title">Semua Pengajuan</h1><div class="filter-bar"><select id="filter-status" onchange="loadAdminSubmissions()"><option value="">Semua Status</option><option value="pending">Menunggu</option><option value="approved">Disetujui</option><option value="rejected">Ditolak</option></select></div></div><div class="card"><div id="admin-submissions-list"></div></div></div>
+        <div id="content-admin-submissions" class="content-page" style="display:none"><div class="page-header"><h1 class="page-title">Semua Pengajuan</h1><div class="filter-bar"><select id="filter-status" onchange="loadAdminSubmissions()"><option value="">Semua Status</option><option value="pending">Menunggu</option><option value="approved">Disetujui</option><option value="rejected">Ditolak</option></select><button onclick="downloadAllSPHZip()" class="btn btn-pdf btn-sm">⬇️ Download Semua PDF (ZIP)</button></div></div><div class="card"><div id="admin-submissions-list"></div></div></div>
         <div id="content-admin-users" class="content-page" style="display:none"><div class="page-header"><h1 class="page-title">Kelola Pengguna</h1><button onclick="openAddUserModal()" class="btn btn-primary">+ Tambah Pengguna</button></div><div class="card"><div id="users-list"></div></div></div>
         <div id="content-admin-settings" class="content-page" style="display:none">
           <h1 class="page-title">Pengaturan Aplikasi</h1>
@@ -304,6 +304,7 @@
             <div class="filter-bar">
               <select id="admin-kk-filter" onchange="loadAdminKK()"><option value="">Semua Status</option><option value="pending">Menunggu</option><option value="approved">Disetujui</option><option value="rejected">Ditolak</option></select>
               <select id="admin-kk-month" onchange="loadAdminKK()"><option value="">Semua Bulan</option></select>
+              <button onclick="downloadAllKKZip()" class="btn btn-pdf btn-sm">⬇️ Download Semua PDF (ZIP)</button>
             </div>
           </div>
           <div class="card"><div id="admin-kk-container"><div class="loading">⏳ Memuat...</div></div></div>
@@ -405,6 +406,7 @@
             <h1 class="page-title">Semua SPPD</h1>
             <div class="filter-bar">
               <select id="admin-sppd-filter" onchange="loadAdminSPPD()"><option value="">Semua Status</option><option value="pending">Menunggu</option><option value="approved">Disetujui</option><option value="rejected">Ditolak</option><option value="completed">Selesai</option></select>
+              <button onclick="downloadAllSPPDZip()" class="btn btn-pdf btn-sm">⬇️ Download Semua PDF (ZIP)</button>
             </div>
           </div>
           <div class="card"><div id="admin-sppd-container"><div class="loading">⏳ Memuat...</div></div></div>

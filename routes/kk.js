@@ -433,6 +433,63 @@ router.get('/:id/export-excel', requireLogin, async (req, res) => {
   }
 });
 
+// ── GET /api/kk/bulk-pdf-zip — download semua KK disetujui sebagai ZIP ─────────
+router.get('/bulk-pdf-zip', requireLogin, async (req, res) => {
+  const rows = db.prepare(`
+    SELECT s.*, kk.*, u.full_name as creator_name
+    FROM submissions s
+    JOIN kertas_kerja kk ON kk.submission_id = s.id
+    LEFT JOIN users u ON s.created_by = u.id
+    WHERE s.status = 'approved' AND s.submission_type = 'kk'
+    ORDER BY s.created_at ASC
+  `).all();
+  if (rows.length === 0) return res.status(404).json({ error: 'Belum ada Kertas Kerja yang disetujui' });
+  const settings = {};
+  db.prepare('SELECT key, value FROM settings').all().forEach(s => { settings[s.key] = s.value; });
+  const archiver = require('archiver');
+  const puppeteer = require('puppeteer');
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', 'attachment; filename="Semua_KK.zip"');
+  const archive = archiver('zip', { zlib: { level: 6 } });
+  archive.on('error', err => console.error('Archiver error:', err));
+  archive.pipe(res);
+  let browser = null;
+  try {
+    browser = await puppeteer.launch({
+      headless: 'new',
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH ||
+        (fs.existsSync('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
+          ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+          : (fs.existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined)),
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    });
+    for (const row of rows) {
+      const approvals = db.prepare(`
+        SELECT a.*, u.full_name as approver_name
+        FROM kk_approvals a LEFT JOIN users u ON a.approver_user_id = u.id
+        WHERE a.submission_id = ? ORDER BY a.level ASC
+      `).all(row.id);
+      const html = generateKKHTML(row, calcKK(row), approvals, settings);
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: 'networkidle0' });
+      const pdfBuffer = await page.pdf({
+        format: 'A4', landscape: true, printBackground: true,
+        margin: { top: '10mm', bottom: '10mm', left: '8mm', right: '8mm' }
+      });
+      await page.close();
+      const safeName = (row.nama_pekerjaan || row.pelanggan || `KK${row.id}`).replace(/[^a-zA-Z0-9]/g, '_');
+      const safeNomor = (row.nomor_surat || `ID${row.id}`).replace(/\//g, '-');
+      archive.append(Buffer.from(pdfBuffer), { name: `KK_${safeNomor}_${safeName}.pdf` });
+    }
+    await browser.close(); browser = null;
+    await archive.finalize();
+  } catch (err) {
+    if (browser) { try { await browser.close(); } catch {} }
+    console.error('KK Bulk PDF ZIP error:', err);
+    if (!res.headersSent) res.status(500).json({ error: 'Gagal membuat ZIP: ' + err.message });
+  }
+});
+
 // ── GET /api/kk/:id/export-pdf ────────────────────────────────────────────────
 router.get('/:id/export-pdf', requireLogin, async (req, res) => {
   const row = db.prepare(`

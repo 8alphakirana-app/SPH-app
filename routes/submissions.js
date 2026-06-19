@@ -228,6 +228,59 @@ router.get('/bulk-pdf-zip', requireAdminOrKP, async (req, res) => {
     }
 });
 
+// GET /api/submissions/bulk-pdf-zip-all  — download semua SPH disetujui sebagai ZIP
+router.get('/bulk-pdf-zip-all', requireLogin, async (req, res) => {
+    const rows = db.prepare(`
+        SELECT s.*, u.full_name as creator_name
+        FROM submissions s LEFT JOIN users u ON s.created_by = u.id
+        WHERE s.status = 'approved' AND (s.submission_type = 'sph' OR s.submission_type IS NULL)
+        ORDER BY s.created_at ASC
+    `).all();
+    if (rows.length === 0) return res.status(404).json({ error: 'Belum ada SPH yang disetujui' });
+    const settings = {};
+    db.prepare('SELECT key, value FROM settings').all().forEach(s => { settings[s.key] = s.value; });
+    const archiver = require('archiver');
+    const puppeteer = require('puppeteer');
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename="Semua_SPH.zip"');
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    archive.on('error', err => console.error('Archiver error:', err));
+    archive.pipe(res);
+    let browser = null;
+    try {
+        browser = await puppeteer.launch({
+            headless: 'new',
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || (fs.existsSync('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome') ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : (fs.existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined)),
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+        });
+        const headerHtml = generateHeaderHTML(settings);
+        const footerHtml = generateFooterHTML(settings);
+        const hasFooter = !!(settings.company_headoffice || settings.company_warehouse);
+        for (const row of rows) {
+            const submission = { ...row, items: JSON.parse(row.items) };
+            const html = await generateHTML(submission, settings);
+            const page = await browser.newPage();
+            await page.setContent(html, { waitUntil: 'networkidle0' });
+            const pdfBuffer = await page.pdf({
+                format: 'A4', printBackground: true, displayHeaderFooter: true,
+                headerTemplate: headerHtml,
+                footerTemplate: hasFooter ? footerHtml : '<span></span>',
+                margin: { top: '38mm', bottom: hasFooter ? '28mm' : '15mm', left: '20mm', right: '20mm' }
+            });
+            await page.close();
+            const safeNomor = row.nomor ? row.nomor.replace(/\//g, '-') : `ID${row.id}`;
+            const safeName = row.client_name.replace(/[^a-zA-Z0-9]/g, '_');
+            archive.append(Buffer.from(pdfBuffer), { name: `SPH_${safeNomor}_${safeName}.pdf` });
+        }
+        await browser.close(); browser = null;
+        await archive.finalize();
+    } catch (err) {
+        if (browser) { try { await browser.close(); } catch {} }
+        console.error('Bulk PDF ZIP error:', err);
+        if (!res.headersSent) res.status(500).json({ error: 'Gagal membuat ZIP: ' + err.message });
+    }
+});
+
 // GET /api/submissions/:id - detail
 router.get('/:id', requireLogin, (req, res) => {
     const row = db.prepare(`
@@ -418,15 +471,12 @@ router.put('/:id', requireLogin, (req, res) => {
     res.json({ success: true });
 });
 
-// DELETE /api/submissions/:id
+// DELETE /api/submissions/:id (SPH only — KK dihapus via /api/kk/:id)
 router.delete('/:id', requireLogin, (req, res) => {
     try {
-        const row = db.prepare('SELECT * FROM submissions WHERE id = ?').get(req.params.id);
+        const row = db.prepare("SELECT * FROM submissions WHERE id = ? AND (submission_type = 'sph' OR submission_type IS NULL)").get(req.params.id);
         if (!row) return res.status(404).json({ error: 'Tidak ditemukan' });
         if (req.session.user.role !== 'admin') return res.status(403).json({ error: 'Akses ditolak' });
-        // Hapus child records dulu jika ada (untuk SPH yang punya KK terhubung)
-        db.prepare('DELETE FROM kk_approvals WHERE submission_id = ?').run(req.params.id);
-        db.prepare('DELETE FROM kertas_kerja WHERE submission_id = ?').run(req.params.id);
         db.prepare('DELETE FROM submissions WHERE id = ?').run(req.params.id);
         res.json({ success: true });
     } catch (e) {
