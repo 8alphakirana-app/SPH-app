@@ -46,6 +46,7 @@
         <li class="admin-or-kp" style="display:none"><a href="#" onclick="showPage('admin-submissions')" class="menu-item" data-page="admin-submissions"><span class="icon">🗂️</span> Semua Pengajuan</a></li>
         <li class="admin-or-kp" style="display:none"><a href="#" onclick="showPage('admin-users')" class="menu-item" data-page="admin-users"><span class="icon">👥</span> Kelola Pengguna</a></li>
         <li class="admin-or-kp" style="display:none"><a href="#" onclick="showPage('admin-settings')" class="menu-item" data-page="admin-settings"><span class="icon">⚙️</span> Pengaturan</a></li>
+        <li class="admin-only" style="display:none"><a href="#" onclick="showPage('backup')" class="menu-item" data-page="backup"><span class="icon">💾</span> Backup Database</a></li>
         <li class="menu-divider kk-menu" style="display:none"></li>
         <li class="kk-menu kk-create" style="display:none"><a href="#" onclick="showPage('new-kk')" class="menu-item" data-page="new-kk"><span class="icon">📝</span> Buat Kertas Kerja</a></li>
         <li class="kk-menu kk-mine" style="display:none"><a href="#" onclick="showPage('my-kk')" class="menu-item" data-page="my-kk"><span class="icon">📋</span> Kertas Kerja Saya</a></li>
@@ -435,6 +436,29 @@
         </div>
 
         <!-- ═══════════ PROFIL SAYA ═══════════ -->
+        <!-- ═══════════ BACKUP DATABASE ═══════════ -->
+        <div id="content-backup" class="content-page" style="display:none">
+          <div class="page-header">
+            <h1 class="page-title">💾 Backup Database</h1>
+            <button onclick="createBackup()" class="btn btn-primary">💾 Buat Backup Sekarang</button>
+          </div>
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-header"><h3>ℹ️ Informasi</h3></div>
+            <div class="card-body" style="font-size:14px;line-height:1.8;color:var(--text-light)">
+              <ul style="padding-left:20px">
+                <li>Backup dibuat otomatis setiap server dinyalakan</li>
+                <li>Maksimal <strong>10 backup</strong> tersimpan — yang terlama otomatis dihapus</li>
+                <li>File backup terkompresi (gzip), ukuran kecil</li>
+                <li>Untuk <strong>pemulihan</strong>: klik Pulihkan → server akan berhenti → jalankan ulang <code>node server.js</code></li>
+              </ul>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>📋 Daftar Backup</h3></div>
+            <div class="card-body" id="backup-list-container"><div class="loading">⏳ Memuat...</div></div>
+          </div>
+        </div>
+
         <div id="content-profile" class="content-page" style="display:none">
           <h1 class="page-title">Profil Saya</h1>
           <div class="card">

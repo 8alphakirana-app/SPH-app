@@ -211,6 +211,7 @@ function showPage(page) {
        else if (page === 'sppd-laporan-approvals') loadLaporanApprovals();
        else if (page === 'sppd-pencairan') loadPencairan();
        else if (page === 'admin-sppd') loadAdminSPPD();
+       else if (page === 'backup') loadBackupPage();
        else if (page === 'profile') loadProfile();
        if (window.innerWidth <= 768) {
               document.getElementById('sidebar').classList.remove('open');
@@ -409,6 +410,99 @@ async function loadSppdDashboard() {
        } catch (e) {
               console.error('SPPD dashboard error:', e);
        }
+}
+
+// ===================== BACKUP =====================
+async function loadBackupPage() {
+       const container = document.getElementById('backup-list-container');
+       container.innerHTML = '<div class="loading">⏳ Memuat daftar backup...</div>';
+       try {
+              const res = await api('/api/backup/list');
+              const list = await res.json();
+              if (!Array.isArray(list) || list.length === 0) {
+                     container.innerHTML = '<p style="color:var(--text-light);padding:16px">Belum ada backup tersimpan. Klik "Buat Backup Sekarang" untuk membuat backup pertama.</p>';
+                     return;
+              }
+              const rows = list.map((b, i) => {
+                     const sizeKB = (b.size / 1024).toFixed(1);
+                     const dt = new Date(b.created_at).toLocaleString('id-ID');
+                     return `<tr>
+                       <td>${i + 1}</td>
+                       <td style="font-family:monospace;font-size:12px">${escHtml(b.filename)}</td>
+                       <td>${dt}</td>
+                       <td>${sizeKB} KB</td>
+                       <td>
+                         <div style="display:flex;gap:6px;flex-wrap:wrap">
+                           <button onclick="downloadBackup('${escHtml(b.filename)}')" class="btn btn-success btn-sm">⬇️ Unduh</button>
+                           <button onclick="restoreBackup('${escHtml(b.filename)}')" class="btn btn-danger btn-sm">♻️ Pulihkan</button>
+                           <button onclick="deleteBackup('${escHtml(b.filename)}')" class="btn btn-outline btn-sm">🗑️ Hapus</button>
+                         </div>
+                       </td>
+                     </tr>`;
+              }).join('');
+              container.innerHTML = `<div class="table-responsive"><table class="table">
+                <thead><tr><th>#</th><th>File</th><th>Dibuat</th><th>Ukuran</th><th>Aksi</th></tr></thead>
+                <tbody>${rows}</tbody>
+              </table></div>`;
+       } catch (e) {
+              container.innerHTML = '<p style="color:red">Gagal memuat daftar backup.</p>';
+       }
+}
+
+async function createBackup() {
+       showToast('⏳ Membuat backup...', '');
+       try {
+              const res = await api('/api/backup/create', 'POST');
+              const data = await res.json();
+              if (res.ok) {
+                     showToast(`✅ Backup berhasil: ${data.filename} (${(data.size/1024).toFixed(1)} KB)`, 'success');
+                     loadBackupPage();
+              } else {
+                     showToast(data.error || 'Gagal membuat backup', 'error');
+              }
+       } catch { showToast('Koneksi gagal', 'error'); }
+}
+
+function downloadBackup(filename) {
+       const a = document.createElement('a');
+       a.href = `/api/backup/download/${encodeURIComponent(filename)}`;
+       a.download = filename;
+       a.click();
+}
+
+async function deleteBackup(filename) {
+       if (!confirm(`Hapus backup "${filename}"?`)) return;
+       try {
+              const res = await api(`/api/backup/${encodeURIComponent(filename)}`, 'DELETE');
+              const data = await res.json();
+              if (res.ok) { showToast('Backup dihapus', 'success'); loadBackupPage(); }
+              else showToast(data.error || 'Gagal menghapus', 'error');
+       } catch { showToast('Koneksi gagal', 'error'); }
+}
+
+async function restoreBackup(filename) {
+       if (!confirm(`⚠️ PERHATIAN: Pulihkan database dari "${filename}"?\n\nSemua data saat ini akan DIGANTIKAN dengan data backup ini.\nServer akan berhenti — Anda perlu menjalankan ulang server setelah ini.\n\nLanjutkan?`)) return;
+       showToast('⏳ Memproses pemulihan...', '');
+       try {
+              const res = await api(`/api/backup/restore/${encodeURIComponent(filename)}`, 'POST');
+              const data = await res.json();
+              if (res.ok) {
+                     showToast('✅ ' + data.message, 'success');
+                     setTimeout(() => {
+                            document.body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;text-align:center">
+                              <div>
+                                <div style="font-size:48px">✅</div>
+                                <h2>Pemulihan berhasil disiapkan</h2>
+                                <p style="color:#666">Server telah berhenti. Jalankan kembali server dengan perintah:</p>
+                                <code style="background:#f0f0f0;padding:8px 16px;border-radius:6px;font-size:16px">node server.js</code>
+                                <p style="color:#666;margin-top:16px">Setelah server berjalan, refresh halaman ini.</p>
+                              </div>
+                            </div>`;
+                     }, 1500);
+              } else {
+                     showToast(data.error || 'Gagal memulihkan', 'error');
+              }
+       } catch { showToast('Koneksi gagal atau server sudah berhenti', 'error'); }
 }
 
 async function downloadAllSPHZip() {

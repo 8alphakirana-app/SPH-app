@@ -274,11 +274,15 @@ router.delete('/:id', requireLogin, (req, res) => {
   const sub  = db.prepare("SELECT * FROM submissions WHERE id=? AND submission_type='kk'").get(req.params.id);
   if (!sub) return res.status(404).json({ error: 'KK tidak ditemukan' });
   if (user.role !== 'admin') return res.status(403).json({ error: 'Akses ditolak' });
-
-  db.prepare('DELETE FROM kk_approvals WHERE submission_id=?').run(req.params.id);
-  db.prepare('DELETE FROM kertas_kerja WHERE submission_id=?').run(req.params.id);
-  db.prepare('DELETE FROM submissions WHERE id=?').run(req.params.id);
-  res.json({ success: true });
+  try {
+    db.prepare('DELETE FROM kk_approvals WHERE submission_id=?').run(req.params.id);
+    db.prepare('DELETE FROM kertas_kerja WHERE submission_id=?').run(req.params.id);
+    db.prepare('DELETE FROM submissions WHERE id=?').run(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    console.error('DELETE KK error:', e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── POST /api/kk/:id/approve ──────────────────────────────────────────────────

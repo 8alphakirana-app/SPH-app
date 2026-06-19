@@ -1,12 +1,28 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
+const zlib = require('zlib');
 
-const DB_PATH = path.join(__dirname, 'data', 'sph.db');
+const DB_PATH    = path.join(__dirname, 'data', 'sph.db');
+const BACKUP_DIR = path.join(__dirname, 'data', 'backups');
+const RESTORE_MARKER = path.join(__dirname, 'data', 'RESTORE_PENDING');
+const RESTORE_DB     = path.join(__dirname, 'data', 'restore_pending.db');
 
 // Pastikan folder data ada
 if (!fs.existsSync(path.join(__dirname, 'data'))) {
   fs.mkdirSync(path.join(__dirname, 'data'));
+}
+
+// ── Cek & terapkan restore pending (sebelum buka DB) ─────────────────────────
+if (fs.existsSync(RESTORE_MARKER) && fs.existsSync(RESTORE_DB)) {
+  try {
+    fs.copyFileSync(RESTORE_DB, DB_PATH);
+    fs.unlinkSync(RESTORE_MARKER);
+    fs.unlinkSync(RESTORE_DB);
+    console.log('✅ Database berhasil dipulihkan dari backup');
+  } catch (e) {
+    console.error('❌ Gagal memulihkan database:', e.message);
+  }
 }
 
 const db = new Database(DB_PATH);
@@ -547,5 +563,27 @@ if (pendingKKSubs.length > 0) {
   }
   console.log(`✅ Migrasi KK: ${pendingKKSubs.length} KK pending diupgrade ke sistem approval 6 level`);
 }
+
+// ── Auto-backup saat server start ────────────────────────────────────────────
+(async () => {
+  try {
+    if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const tempPath  = path.join(BACKUP_DIR, `_temp_${ts}.db`);
+    const finalPath = path.join(BACKUP_DIR, `backup_${ts}.db.gz`);
+    await db.backup(tempPath);
+    const compressed = zlib.gzipSync(fs.readFileSync(tempPath), { level: 9 });
+    fs.writeFileSync(finalPath, compressed);
+    fs.unlinkSync(tempPath);
+    // Hapus backup lama, simpan hanya 10 terbaru
+    const files = fs.readdirSync(BACKUP_DIR)
+      .filter(f => f.startsWith('backup_') && f.endsWith('.db.gz'))
+      .sort().reverse();
+    files.slice(10).forEach(f => { try { fs.unlinkSync(path.join(BACKUP_DIR, f)); } catch {} });
+    console.log(`✅ Auto-backup: ${path.basename(finalPath)} (${(compressed.length/1024).toFixed(1)} KB)`);
+  } catch (e) {
+    console.error('Auto-backup gagal:', e.message);
+  }
+})();
 
 module.exports = db;
