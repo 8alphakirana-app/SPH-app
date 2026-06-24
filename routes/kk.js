@@ -160,33 +160,30 @@ router.get('/', requireLogin, (req, res) => {
   if (user.role === 'admin' || user.role === 'direktur_utama' || user.role === 'kantor_pusat') {
     rows = db.prepare(base + ' ORDER BY s.created_at DESC').all();
   } else if (user.role === 'area_manager') {
-    const area = user.area_kerja || db.prepare('SELECT area_kerja FROM users WHERE id=?').get(user.id)?.area_kerja || '';
+    const area = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(user.id)?.area_kerja || '';
     rows = db.prepare(base + `
-      AND (
-        (s.kk_approval_level = 1 AND EXISTS (
-          SELECT 1 FROM users u2 WHERE u2.id = s.created_by AND LOWER(TRIM(u2.area_kerja)) = LOWER(TRIM(?))
-        ))
-        OR s.status != 'pending'
-        OR EXISTS (SELECT 1 FROM kk_approvals a WHERE a.submission_id=s.id AND a.level=1 AND a.approver_user_id=?)
+      AND EXISTS (
+        SELECT 1 FROM users u2 WHERE u2.id = s.created_by
+        AND LOWER(TRIM(u2.area_kerja)) = LOWER(TRIM(?))
       )
       ORDER BY s.created_at DESC
-    `).all(area, user.id);
+    `).all(area);
   } else if (user.role === 'gm') {
     rows = db.prepare(base + `
-      AND (s.kk_approval_level = 3 OR s.status != 'pending'
+      AND (s.kk_approval_level = 3
            OR EXISTS (SELECT 1 FROM kk_approvals a WHERE a.submission_id=s.id AND a.level=3 AND a.approver_user_id=?))
       ORDER BY s.created_at DESC
     `).all(user.id);
   } else if (user.role === 'gm2') {
     rows = db.prepare(base + `
-      AND (s.kk_approval_level = 3 OR s.status != 'pending'
+      AND (s.kk_approval_level = 3
            OR EXISTS (SELECT 1 FROM kk_approvals a WHERE a.submission_id=s.id AND a.level=4 AND a.approver_user_id=?))
       ORDER BY s.created_at DESC
     `).all(user.id);
   } else if (ROLE_LEVELS[user.role]) {
     const myLevel = ROLE_LEVELS[user.role];
     rows = db.prepare(base + `
-      AND (s.kk_approval_level = ? OR s.status != 'pending'
+      AND (s.kk_approval_level = ?
            OR EXISTS (SELECT 1 FROM kk_approvals a WHERE a.submission_id=s.id AND a.level=? AND a.approver_user_id=?))
       ORDER BY s.created_at DESC
     `).all(myLevel, myLevel, user.id);
@@ -195,6 +192,26 @@ router.get('/', requireLogin, (req, res) => {
   }
 
   res.json(rows.map(r => ({ ...r, calc: calcKK(r) })));
+});
+
+// ── KK Stats endpoint (untuk dashboard) ──────────────────────────────────────
+router.get('/stats', requireLogin, (req, res) => {
+  const { month } = req.query;
+  const likeMonth = month ? month + '%' : null;
+
+  function cnt(extra) {
+    const base = "SELECT COUNT(*) AS c FROM submissions s WHERE s.submission_type='kk'";
+    return likeMonth
+      ? db.prepare(base + " AND s.created_at LIKE ? " + extra).get(likeMonth).c
+      : db.prepare(base + " " + extra).get().c;
+  }
+
+  res.json({
+    total:    cnt(''),
+    menunggu: cnt("AND s.status='pending'"),
+    disetujui:cnt("AND s.status='approved'"),
+    ditolak:  cnt("AND s.status='rejected'"),
+  });
 });
 
 // ── GET /api/kk/:id ───────────────────────────────────────────────────────────

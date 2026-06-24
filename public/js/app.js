@@ -78,6 +78,10 @@ document.getElementById('form-login').addEventListener('submit', async (e) => {
 async function logout() {
        await api('/api/auth/logout', 'POST');
        currentUser = null;
+       _dashFiltersInited = false;
+       _laporanDashInited = false;
+       _laporanFiltersCache = null;
+       if (_dashChartSales) { _dashChartSales.destroy(); _dashChartSales = null; }
        showLogin();
 }
 
@@ -130,6 +134,12 @@ function setUser(user) {
               document.querySelectorAll('.kk-all').forEach(el => el.style.display = '');
        }
 
+       // Laporan Bulanan: semua user bisa akses, hanya admin/manajemen lihat rekap semua
+       const LAPORAN_ADMIN_ROLES = ['admin','kantor_pusat','gm','gm2','manager_keuangan','direktur_ops','direktur_utama','area_manager'];
+       if (LAPORAN_ADMIN_ROLES.includes(user.role)) {
+              document.querySelectorAll('.laporan-admin').forEach(el => el.style.display = '');
+       }
+
        // SPPD menu visibility
        const isSppdCreator = SPPD_CREATE_ROLES.includes(user.role);
        const isSppdApprover = SPPD_APPROVER_ROLES.includes(user.role) || user.role === 'admin';
@@ -174,7 +184,11 @@ function showPage(page) {
        const target = document.getElementById(`content-${page}`);
        if (target) target.style.display = '';
        const menuItem = document.querySelector(`[data-page="${page}"]`);
-       if (menuItem) menuItem.classList.add('active');
+       if (menuItem) {
+              menuItem.classList.add('active');
+              const parentGroup = menuItem.closest('.nav-group');
+              if (parentGroup) expandNavGroup(parentGroup.id.replace('nav-group-', ''));
+       }
        const titles = {
               'dashboard': 'Dashboard',
               'new-submission': 'Buat Pengajuan Baru',
@@ -193,6 +207,11 @@ function showPage(page) {
               'sppd-pencairan': 'Pencairan Dana SPPD',
               'admin-sppd': 'Semua SPPD',
               'profile': 'Profil Saya',
+              'new-laporan': 'Buat / Isi Laporan Bulanan',
+              'my-laporan': 'Laporan Saya',
+              'laporan-rekap': 'Rekap Laporan Bulanan',
+              'backup': 'Backup Database',
+              'sales-target': 'Target & Penjualan',
        };
        document.getElementById('top-bar-title').textContent = titles[page] || page;
        if (page === 'dashboard') loadDashboard();
@@ -211,8 +230,12 @@ function showPage(page) {
        else if (page === 'sppd-laporan-approvals') loadLaporanApprovals();
        else if (page === 'sppd-pencairan') loadPencairan();
        else if (page === 'admin-sppd') loadAdminSPPD();
+       else if (page === 'sales-target') initSalesTarget();
        else if (page === 'backup') loadBackupPage();
        else if (page === 'profile') loadProfile();
+       else if (page === 'new-laporan') initLaporanForm();
+       else if (page === 'my-laporan') loadMyLaporan();
+       else if (page === 'laporan-rekap') loadLaporanRekap();
        if (window.innerWidth <= 768) {
               document.getElementById('sidebar').classList.remove('open');
        }
@@ -223,19 +246,638 @@ function toggleSidebar() {
        document.getElementById('sidebar').classList.toggle('open');
 }
 
+function toggleNavGroup(id) {
+       const group = document.getElementById('nav-group-' + id);
+       const items = document.getElementById('nav-group-items-' + id);
+       if (!group || !items) return;
+       if (group.classList.contains('open')) {
+              group.classList.remove('open');
+              items.style.maxHeight = '0';
+       } else {
+              group.classList.add('open');
+              items.style.maxHeight = items.scrollHeight + 'px';
+       }
+}
+
+function expandNavGroup(id) {
+       const group = document.getElementById('nav-group-' + id);
+       const items = document.getElementById('nav-group-items-' + id);
+       if (!group || !items) return;
+       group.classList.add('open');
+       items.style.maxHeight = items.scrollHeight + 'px';
+}
+
 // ===================== DASHBOARD =====================
+let _dashChartModul   = null;
+let _dashChartNilai   = null;
+let _dashChartSales   = null;
+let _dashFiltersInited = false;
+
 async function loadDashboard() {
        try {
-              if (currentUser.role === 'admin' || currentUser.role === 'kantor_pusat') {
-                     await loadDashboardAdmin();
-              } else {
-                     await loadDashboardStaff();
+              const isAdmin = LAPORAN_ADMIN_ROLES_FE.includes(currentUser?.role);
+
+              // Init month select
+              _populateDashFilterMonths();
+              const month = document.getElementById('dash-filter-month')?.value || '';
+
+              const isPusat = LAPORAN_PUSAT_ROLES_FE.includes(currentUser?.role);
+              const isAreaMgr = currentUser?.role === 'area_manager';
+
+              // Init filters (once per session)
+              if (isAdmin && !_dashFiltersInited) {
+                     _dashFiltersInited = true;
+                     document.getElementById('dash-admin-filters').style.display = 'flex';
+                     // Area filter hanya untuk kantor pusat; area_manager tidak perlu pilih area
+                     if (!isPusat) document.getElementById('dash-filter-area-group').style.display = 'none';
+                     try {
+                            const filters = await _loadLaporanFilters();
+                            if (isPusat) _populateLaporanAreaDropdown(document.getElementById('dash-filter-area'), filters.areas);
+                            _populateLaporanUserDropdown(document.getElementById('dash-filter-user'), filters.users, '');
+                     } catch {}
               }
-              const hasSppdAccess = SPPD_ALL_ROLES.includes(currentUser.role) || SPPD_CREATE_ROLES.includes(currentUser.role);
-              if (hasSppdAccess) await loadSppdDashboard();
+
+              const area  = document.getElementById('dash-filter-area')?.value  || '';
+              const uid   = document.getElementById('dash-filter-user')?.value   || '';
+
+              // Build laporan query params (area+user affect narasi)
+              const lapParams = new URLSearchParams();
+              if (month) lapParams.set('periode', month);
+              if (isAdmin && area)  lapParams.set('area_kerja', area);
+              if (isAdmin && uid)   lapParams.set('user_id', uid);
+
+              // Tentukan periode untuk sales target (bulan terpilih atau bulan ini)
+              const salesPeriode = month || (() => {
+                     const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+              })();
+
+              const [sphR, kkR, sppdR, lapR, recentR, salesR, salesMonthlyR] = await Promise.allSettled([
+                     api('/api/submissions/dashboard-stats' + (month ? '?month=' + month : '')).then(r => r.ok ? r.json() : null),
+                     api('/api/kk/stats' + (month ? '?month=' + month : '')).then(r => r.ok ? r.json() : null),
+                     api('/api/sppd/dashboard-stats' + (month ? '?month=' + month : '')).then(r => r.ok ? r.json() : null),
+                     api(`/api/laporan/dashboard?${lapParams}`).then(r => r.ok ? r.json() : []),
+                     api('/api/submissions').then(r => r.ok ? r.json() : []),
+                     api(`/api/sales-target?periode=${salesPeriode}`).then(r => r.ok ? r.json() : []),
+                     api('/api/sales-target/monthly?months=12').then(r => r.ok ? r.json() : [])
+              ]);
+
+              const sphFull = sphR.status === 'fulfilled' ? sphR.value : null;
+              const allSph  = recentR.status === 'fulfilled' ? (recentR.value || []) : [];
+              const sph = sphFull?.summary || (() => {
+                     const f = month ? allSph.filter(s => s.created_at?.startsWith(month)) : allSph;
+                     return { total: f.length, menunggu: f.filter(s=>s.status==='pending').length, disetujui: f.filter(s=>s.status==='approved').length, ditolak: f.filter(s=>s.status==='rejected').length };
+              })();
+
+              const kk           = kkR.status          === 'fulfilled' ? kkR.value            : null;
+              const sppd         = sppdR.status        === 'fulfilled' ? sppdR.value?.summary  : null;
+              const lapRows      = lapR.status         === 'fulfilled' ? (lapR.value || [])    : [];
+              const salesRows    = salesR.status       === 'fulfilled' ? (salesR.value || [])  : [];
+              const salesMonthly = salesMonthlyR.status=== 'fulfilled' ? (salesMonthlyR.value || []) : [];
+              const lapPrognosa  = lapRows.reduce((s, r) => s + (r.prognosa_bulan_depan || 0), 0);
+
+              // SPH card
+              _setDEl('d-sph-total',    sph.total     || 0);
+              _setDEl('d-sph-approved', sph.disetujui || 0);
+              _setDEl('d-sph-pending',  sph.menunggu  || 0);
+
+              // KK card
+              _setDEl('d-kk-total',    kk?.total     || 0);
+              _setDEl('d-kk-approved', kk?.disetujui || 0);
+              _setDEl('d-kk-pending',  kk?.menunggu  || 0);
+
+              // SPPD card
+              _setDEl('d-sppd-total',   sppd?.total   || 0);
+              _setDEl('d-sppd-selesai', sppd?.selesai || 0);
+              _setDEl('d-sppd-biaya',   sppd ? 'Rp ' + fmtNumStr(sppd.total_biaya_dicairkan || 0) : '-');
+
+              // Laporan card
+              _setDEl('d-lap-total',    lapRows.length);
+              _setDEl('d-lap-prognosa', 'Rp ' + fmtNumStr(lapPrognosa));
+
+              // Charts
+              _renderDashCharts(sph, kk, sppd, lapPrognosa);
+
+              // Judul dinamis berdasarkan filter aktif
+              const filterLabel = uid
+                     ? (lapRows[0]?.full_name || 'Akun Dipilih')
+                     : area ? `Area ${area}` : null;
+
+              // Narasi
+              const narasiH2 = document.querySelector('#laporan-narasi-section .section-divider h2');
+              if (narasiH2) narasiH2.textContent = filterLabel ? `📝 Aktivitas & Rencana — ${filterLabel}` : '📝 Aktivitas & Rencana Tim';
+              _renderLaporanNarasi(lapRows);
+
+              // Project pipeline
+              const projH2 = document.getElementById('dash-project-title');
+              if (projH2) projH2.textContent = filterLabel ? `💼 Project Pipeline — ${filterLabel}` : '💼 Project Pipeline';
+              _renderDashProjects(lapRows);
+
+              // Sales hero chart
+              _renderSalesHero(salesMonthly, salesRows, salesPeriode);
+
+              // Sales target table
+              const salesH2 = document.getElementById('dash-sales-title');
+              if (salesH2) salesH2.textContent = `🎯 Target & Realisasi Penjualan — ${formatPeriode(salesPeriode)}`;
+              _renderDashSalesTarget(salesRows);
+
+              // Recent SPH
+              const recentEl = document.getElementById('recent-submissions');
+              if (recentEl) {
+                     const filtered = month ? allSph.filter(s => s.created_at?.startsWith(month)) : allSph;
+                     recentEl.innerHTML = filtered.slice(0, 5).length
+                            ? renderSubmissionTable(filtered.slice(0, 5), false)
+                            : emptyState('Belum ada pengajuan SPH');
+              }
+
+              // Populate month filter from available_months if returned
+              if (sphFull?.available_months?.length) {
+                     populateDashMonthFilter(sphFull.available_months, month);
+              }
+
+              // ZIP button
+              const zipBtn = document.getElementById('btn-download-zip');
+              if (zipBtn) zipBtn.style.display = (month && (sph.disetujui > 0)) ? '' : 'none';
+
        } catch (e) {
-              console.error(e);
+              console.error('Dashboard error:', e);
        }
+}
+
+async function onDashAreaChange() {
+       const area = document.getElementById('dash-filter-area')?.value || '';
+       try {
+              const filters = await _loadLaporanFilters();
+              _populateLaporanUserDropdown(document.getElementById('dash-filter-user'), filters.users, area);
+       } catch {}
+       loadDashboard();
+}
+
+function _setDEl(id, val) {
+       const el = document.getElementById(id);
+       if (el) el.textContent = val;
+}
+
+function _populateDashFilterMonths() {
+       const sel = document.getElementById('dash-filter-month');
+       if (!sel || sel.options.length > 1) return;
+       const cur = sel.value;
+       const months = getLast12Months();
+       sel.innerHTML = '<option value="">Semua Bulan</option>' +
+              months.map(m => `<option value="${m.value}"${m.value === cur ? ' selected' : ''}>${m.label}</option>`).join('');
+}
+
+function _renderDashCharts(sph, kk, sppd, lapPrognosa) {
+       if (typeof Chart === 'undefined') return;
+
+       const ctx1 = document.getElementById('chart-modul')?.getContext('2d');
+       if (ctx1) {
+              if (_dashChartModul) _dashChartModul.destroy();
+              _dashChartModul = new Chart(ctx1, {
+                     type: 'bar',
+                     data: {
+                            labels: ['SPH', 'Kertas Kerja', 'SPPD'],
+                            datasets: [
+                                   { label: 'Total',              data: [sph?.total||0,    kk?.total||0,    sppd?.total||0],   backgroundColor:'#1a56db33', borderColor:'#1a56db', borderWidth:2 },
+                                   { label: 'Disetujui/Selesai', data: [sph?.disetujui||0, kk?.disetujui||0, sppd?.selesai||0], backgroundColor:'#0e9f6e55', borderColor:'#0e9f6e', borderWidth:2 },
+                                   { label: 'Menunggu',           data: [sph?.menunggu||0,  kk?.menunggu||0,  0],               backgroundColor:'#e3a00844', borderColor:'#e3a008', borderWidth:2 }
+                            ]
+                     },
+                     options: {
+                            responsive: true, maintainAspectRatio: false,
+                            plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 14 } } },
+                            scales: { y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } } }
+                     }
+              });
+       }
+
+       const ctx2 = document.getElementById('chart-nilai')?.getContext('2d');
+       if (ctx2) {
+              if (_dashChartNilai) _dashChartNilai.destroy();
+              _dashChartNilai = new Chart(ctx2, {
+                     type: 'bar',
+                     data: {
+                            labels: ['Biaya Usulan SPPD', 'Realisasi Biaya SPPD'],
+                            datasets: [{
+                                   label: 'Nilai (Rp)',
+                                   data: [sppd?.total_biaya_usulan||0, sppd?.total_biaya_dicairkan||0],
+                                   backgroundColor: ['#ff5a1f33', '#0e9f6e33'],
+                                   borderColor:     ['#ff5a1f',   '#0e9f6e'],
+                                   borderWidth: 2
+                            }]
+                     },
+                     options: {
+                            responsive: true, maintainAspectRatio: false,
+                            plugins: {
+                                   legend: { display: false },
+                                   tooltip: { callbacks: { label: c => 'Rp ' + fmtNumStr(c.raw) } }
+                            },
+                            scales: { y: { beginAtZero: true, ticks: { callback: v => 'Rp ' + fmtNumStr(v), font: { size: 10 } } } }
+                     }
+              });
+       }
+}
+
+function _renderLaporanNarasi(rows) {
+       const section = document.getElementById('laporan-narasi-section');
+       const grid    = document.getElementById('laporan-narasi-grid');
+       if (!section || !grid) return;
+       const withNarasi = (rows || []).filter(r => r.aktivitas_bulan_ini || r.rencana_bulan_depan);
+       if (!withNarasi.length) { section.style.display = 'none'; return; }
+       section.style.display = '';
+       const isReviewer = LAPORAN_REVIEWER_ROLES.includes(currentUser?.role);
+
+       grid.innerHTML = withNarasi.map(r => {
+              const lid = r.id;
+
+              // Support items section
+              const supports = r.support || [];
+              let supportHtml = '';
+              if (supports.length) {
+                     const suppItems = supports.map(s => {
+                            const respHtml = (s.tanggapan || []).map(t => `
+                                   <div class="ln-support-resp">
+                                          <span class="ln-resp-who">${escHtml(t.reviewer_name)}</span>:
+                                          <span class="ln-resp-text"> ${escHtml(t.tanggapan)}</span>
+                                   </div>`).join('');
+                            const inputHtml = isReviewer ? `
+                                   <div class="ln-input-wrap" style="margin-top:6px">
+                                          <textarea id="st-inp-${s.id}" placeholder="Tulis tanggapan support ini...">${(s.tanggapan||[]).find(t=>t.reviewer_name===currentUser.full_name)?.tanggapan||''}</textarea>
+                                          <button class="btn btn-secondary btn-sm btn-kirim" onclick="saveSupportTanggapan(${s.id},${lid})">Kirim</button>
+                                   </div>` : '';
+                            return `<div class="ln-support-item">
+                                   <div class="ln-support-keterangan">• ${escHtml(s.keterangan)}</div>
+                                   ${respHtml}${inputHtml}
+                            </div>`;
+                     }).join('');
+                     supportHtml = `
+                            <hr class="ln-divider">
+                            <div class="ln-support-toggle" onclick="toggleLnSupport(this)">
+                                   <span class="ln-toggle-arrow">›</span>
+                                   🤝 Support yang Dibutuhkan (${supports.length})
+                            </div>
+                            <div class="ln-support-list">${suppItems}</div>`;
+              }
+
+              // Tanggapan (general) section
+              const tanggapan = r.tanggapan || [];
+              const existingHtml = tanggapan.map(t => `
+                     <div class="ln-tanggapan-item">
+                            <div class="ln-tanggapan-avatar">${escHtml((t.reviewer_name||'?')[0].toUpperCase())}</div>
+                            <div class="ln-tanggapan-bubble">
+                                   <div class="ln-t-who">${escHtml(t.reviewer_name)} <span style="font-weight:normal;color:var(--text-light)">(${t.reviewer_role === 'gm' ? 'GM1' : t.reviewer_role === 'gm2' ? 'GM2' : 'Admin'})</span></div>
+                                   <div class="ln-t-text">${escHtml(t.tanggapan)}</div>
+                                   <div class="ln-t-time">${t.updated_at || ''}</div>
+                            </div>
+                     </div>`).join('');
+
+              const myExisting = tanggapan.find(t => t.reviewer_name === currentUser.full_name)?.tanggapan || '';
+              const reviewInputHtml = isReviewer ? `
+                     <div class="ln-input-wrap">
+                            <textarea id="lt-inp-${lid}" placeholder="Tulis tanggapan untuk laporan ini...">${myExisting}</textarea>
+                            <button class="btn btn-primary btn-sm btn-kirim" onclick="saveLaporanTanggapan(${lid})">Kirim</button>
+                     </div>` : '';
+
+              const tanggapanHtml = (tanggapan.length || isReviewer) ? `
+                     <div class="ln-tanggapan-section">
+                            <div class="ln-tanggapan-title">💬 Tanggapan Manajemen</div>
+                            <div id="lt-bubbles-${lid}">${existingHtml}</div>
+                            ${reviewInputHtml}
+                     </div>` : '';
+
+              return `<div class="laporan-narasi-card" id="ln-card-${lid}">
+                     <div class="ln-header">
+                            <div>
+                                   <div class="ln-name">${escHtml(r.full_name || '-')}</div>
+                                   <div class="ln-area">${escHtml(r.area_kerja || '-')}</div>
+                            </div>
+                            <div class="ln-periode">${formatPeriode(r.periode)}</div>
+                     </div>
+                     ${r.aktivitas_bulan_ini ? `<div class="ln-block"><div class="ln-block-title">Aktivitas Bulan Ini</div><div class="ln-block-text">${escHtml(r.aktivitas_bulan_ini)}</div></div>` : ''}
+                     ${r.rencana_bulan_depan ? `<div class="ln-block"><div class="ln-block-title">Rencana Bulan Depan</div><div class="ln-block-text">${escHtml(r.rencana_bulan_depan)}</div></div>` : ''}
+                     ${r.prognosa_bulan_depan ? `<span class="ln-prognosa">Prognosa ${formatPeriodeNext(r.periode)}: Rp ${fmtNumStr(r.prognosa_bulan_depan)}</span>` : ''}
+                     ${supportHtml}
+                     ${tanggapanHtml}
+              </div>`;
+       }).join('');
+}
+
+function toggleLnSupport(el) {
+       el.classList.toggle('open');
+       el.nextElementSibling.classList.toggle('open');
+}
+
+async function saveLaporanTanggapan(lapId) {
+       const ta = document.getElementById(`lt-inp-${lapId}`);
+       if (!ta || !ta.value.trim()) return;
+       try {
+              const res = await api(`/api/laporan/${lapId}/tanggapan`, 'POST', { tanggapan: ta.value.trim() });
+              if (!res.ok) { const d = await res.json(); showToast(d.error || 'Gagal', 'error'); return; }
+              showToast('Tanggapan tersimpan');
+              // Re-render bubble langsung tanpa reload penuh
+              const bubblesEl = document.getElementById(`lt-bubbles-${lapId}`);
+              if (bubblesEl) {
+                     const existing = bubblesEl.innerHTML;
+                     const myBubble = `<div class="ln-tanggapan-item">
+                            <div class="ln-tanggapan-avatar">${escHtml(currentUser.full_name[0].toUpperCase())}</div>
+                            <div class="ln-tanggapan-bubble">
+                                   <div class="ln-t-who">${escHtml(currentUser.full_name)} <span style="font-weight:normal;color:var(--text-light)">(${currentUser.role === 'gm' ? 'GM1' : currentUser.role === 'gm2' ? 'GM2' : 'Admin'})</span></div>
+                                   <div class="ln-t-text">${escHtml(ta.value.trim())}</div>
+                                   <div class="ln-t-time">Baru saja</div>
+                            </div>
+                     </div>`;
+                     // Replace existing bubble from this reviewer or prepend
+                     if (existing.includes(`>${escHtml(currentUser.full_name)}<`)) {
+                            bubblesEl.innerHTML = myBubble + existing.replace(/<div class="ln-tanggapan-item">[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/, '');
+                     } else {
+                            bubblesEl.innerHTML = myBubble + existing;
+                     }
+              }
+       } catch { showToast('Koneksi gagal', 'error'); }
+}
+
+async function saveSupportTanggapan(supportId, lapId) {
+       const ta = document.getElementById(`st-inp-${supportId}`);
+       if (!ta || !ta.value.trim()) return;
+       try {
+              const res = await api(`/api/laporan/support-item/${supportId}/tanggapan`, 'POST', { tanggapan: ta.value.trim() });
+              if (!res.ok) { const d = await res.json(); showToast(d.error || 'Gagal', 'error'); return; }
+              showToast('Tanggapan support tersimpan');
+              // Update UI: tambahkan resp di atas input
+              const inputWrap = ta.parentElement;
+              const respEl = document.createElement('div');
+              respEl.className = 'ln-support-resp';
+              respEl.innerHTML = `<span class="ln-resp-who">${escHtml(currentUser.full_name)}</span>: <span class="ln-resp-text">${escHtml(ta.value.trim())}</span>`;
+              inputWrap.parentElement.insertBefore(respEl, inputWrap);
+       } catch { showToast('Koneksi gagal', 'error'); }
+}
+
+function _renderDashProjects(lapRows) {
+       const section = document.getElementById('dash-project-section');
+       const tbody   = document.getElementById('dash-project-tbody');
+       const totalEl = document.getElementById('dash-project-total');
+       if (!section || !tbody) return;
+
+       // Kumpulkan semua project dari semua laporan rows
+       const allProjects = [];
+       (lapRows || []).forEach(r => {
+              (r.projects || []).forEach(p => {
+                     allProjects.push({ ...p, full_name: r.full_name, area_kerja: r.area_kerja, periode: r.periode });
+              });
+       });
+
+       if (!allProjects.length) { section.style.display = 'none'; return; }
+       section.style.display = '';
+
+       let totalNilai = 0;
+       tbody.innerHTML = allProjects.map(p => {
+              totalNilai += p.nilai || 0;
+              const pct = p.probability != null && p.probability !== '' ? p.probability : 0;
+              const barColor = pct >= 75 ? '#0e9f6e' : pct >= 40 ? '#e3a008' : '#f05252';
+              return `<tr>
+                     <td><strong>${escHtml(p.full_name || '-')}</strong></td>
+                     <td><span style="font-size:11px;color:var(--text-light)">${escHtml(p.area_kerja || '-')}</span></td>
+                     <td>${escHtml(p.pelanggan || '-')}</td>
+                     <td>${escHtml(p.principal || '-')}</td>
+                     <td>${escHtml(p.produk || '-')}</td>
+                     <td>Rp ${fmtNumStr(p.nilai || 0)}</td>
+                     <td>
+                            <div style="display:flex;align-items:center;gap:5px">
+                                   <div style="flex:1;height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden">
+                                          <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px"></div>
+                                   </div>
+                                   <span style="font-size:12px;font-weight:600;color:${barColor};min-width:32px">${pct}%</span>
+                            </div>
+                     </td>
+                     <td style="font-size:12px;color:var(--text-light)">${formatPeriode(p.periode)}</td>
+              </tr>`;
+       }).join('');
+       if (totalEl) totalEl.textContent = 'Rp ' + fmtNumStr(totalNilai);
+}
+
+function _renderSalesHero(monthly, currentRows, periode) {
+       const hero = document.getElementById('dash-sales-hero');
+       if (!hero) return;
+
+       const hasAny = monthly.some(r => r.target > 0 || r.penjualan > 0);
+       if (!hasAny) { hero.style.display = 'none'; return; }
+       hero.style.display = '';
+
+       // KPI dari bulan terpilih / bulan saat ini
+       const curTarget = (currentRows || []).reduce((s, r) => s + (r.target || 0), 0);
+       const curPenj   = (currentRows || []).reduce((s, r) => s + (r.penjualan || 0), 0);
+       const curPct    = curTarget > 0 ? Math.round((curPenj / curTarget) * 100) : 0;
+       const gap       = curTarget - curPenj;
+       const achieved  = curPenj >= curTarget && curTarget > 0;
+
+       // Update periode badge
+       const periodeEl = document.getElementById('sales-hero-periode');
+       if (periodeEl) periodeEl.textContent = formatPeriode(periode);
+
+       // Update KPI boxes (angka singkat agar tidak wrap)
+       const _s = id => document.getElementById(id);
+       if (_s('sh-target')) _s('sh-target').textContent = 'Rp ' + formatRupiahShort(curTarget);
+       if (_s('sh-real'))   _s('sh-real').textContent   = 'Rp ' + formatRupiahShort(curPenj);
+
+       const pctEl = _s('sh-pct');
+       if (pctEl) {
+              pctEl.textContent = curTarget > 0 ? curPct + '%' : '—';
+              pctEl.style.color = curPct >= 100 ? '#6ee7b7' : curPct >= 75 ? '#93c5fd' : curPct >= 50 ? '#fde68a' : '#fca5a5';
+       }
+
+       const gapBox  = _s('sh-gap-box');
+       const gapEl   = _s('sh-gap');
+       const gapIcon = _s('sh-gap-icon');
+       const gapLbl  = _s('sh-gap-lbl');
+       if (gapEl) {
+              gapEl.textContent = 'Rp ' + formatRupiahShort(Math.abs(gap));
+              if (gapBox)  { gapBox.classList.toggle('achieved', achieved); }
+              if (gapIcon) gapIcon.textContent = achieved ? '🎉' : '📉';
+              if (gapLbl)  gapLbl.textContent  = achieved ? 'Surplus' : 'GAP';
+       }
+
+       // Chart
+       const ctx = document.getElementById('chart-sales-monthly')?.getContext('2d');
+       if (!ctx) return;
+       if (_dashChartSales) { _dashChartSales.destroy(); _dashChartSales = null; }
+
+       const labels    = monthly.map(r => formatPeriode(r.periode));
+       const targets   = monthly.map(r => r.target);
+       const penjualan = monthly.map(r => r.penjualan);
+       const pctLine   = monthly.map(r => r.target > 0 ? Math.round((r.penjualan / r.target) * 100) : null);
+
+       // Plugin 1: angka singkat di atas setiap bar
+       const barValLabels = {
+              id: 'barValLabels',
+              afterDraw(chart) {
+                     const c = chart.ctx;
+                     const colors = ['rgba(147,197,253,.95)', 'rgba(110,231,183,.95)'];
+                     chart.data.datasets.forEach((ds, i) => {
+                            const meta = chart.getDatasetMeta(i);
+                            if (!meta.visible) return;
+                            c.save();
+                            c.font = 'bold 9px system-ui,sans-serif';
+                            c.textAlign = 'center';
+                            c.textBaseline = 'alphabetic';
+                            c.fillStyle = colors[i] || 'rgba(255,255,255,.8)';
+                            meta.data.forEach((el, j) => {
+                                   const val = ds.data[j];
+                                   if (!val) return;
+                                   c.fillText(formatRupiahShort(val), el.x, el.y - 5);
+                            });
+                            c.restore();
+                     });
+              }
+       };
+
+       // Plugin 2: persentase berwarna di bawah label bulan
+       const pctLabels = {
+              id: 'pctLabels',
+              afterDraw(chart) {
+                     const c = chart.ctx;
+                     const xScale = chart.scales.x;
+                     c.save();
+                     c.font = 'bold 11px system-ui,sans-serif';
+                     c.textAlign = 'center';
+                     c.textBaseline = 'top';
+                     const yPos = xScale.bottom + 5;
+                     xScale.ticks.forEach((tick, i) => {
+                            const pct = pctLine[i];
+                            if (pct === null || pct === undefined) return;
+                            const x = xScale.getPixelForTick(i);
+                            const col = pct >= 100 ? '#6ee7b7'
+                                       : pct >= 75  ? '#93c5fd'
+                                       : pct >= 50  ? '#fde68a'
+                                       : '#fca5a5';
+                            c.fillStyle = col;
+                            c.fillText(pct + '%', x, yPos);
+                     });
+                     c.restore();
+              }
+       };
+
+       _dashChartSales = new Chart(ctx, {
+              type: 'bar',
+              plugins: [barValLabels, pctLabels],
+              data: {
+                     labels,
+                     datasets: [
+                            {
+                                   label: 'Target',
+                                   data: targets,
+                                   backgroundColor: 'rgba(147,197,253,.18)',
+                                   borderColor: 'rgba(147,197,253,.7)',
+                                   borderWidth: 2,
+                                   borderRadius: 6,
+                                   borderSkipped: false,
+                                   order: 1
+                            },
+                            {
+                                   label: 'Realisasi',
+                                   data: penjualan,
+                                   backgroundColor: 'rgba(110,231,183,.32)',
+                                   borderColor: 'rgba(110,231,183,.9)',
+                                   borderWidth: 2,
+                                   borderRadius: 6,
+                                   borderSkipped: false,
+                                   order: 2
+                            }
+                     ]
+              },
+              options: {
+                     responsive: true,
+                     maintainAspectRatio: false,
+                     layout: { padding: { top: 28, bottom: 24 } },
+                     interaction: { mode: 'index', intersect: false },
+                     plugins: {
+                            legend: {
+                                   position: 'top',
+                                   align: 'end',
+                                   labels: {
+                                          color: 'rgba(255,255,255,.65)',
+                                          font: { size: 11 },
+                                          boxWidth: 14,
+                                          padding: 16
+                                   }
+                            },
+                            tooltip: {
+                                   backgroundColor: 'rgba(15,23,42,.92)',
+                                   titleColor: '#fff',
+                                   bodyColor: 'rgba(255,255,255,.75)',
+                                   borderColor: 'rgba(255,255,255,.12)',
+                                   borderWidth: 1,
+                                   padding: 12,
+                                   callbacks: {
+                                          label: c => {
+                                                 const pct = pctLine[c.dataIndex];
+                                                 if (c.datasetIndex === 1 && pct !== null)
+                                                        return [` ${c.dataset.label}: Rp ${fmtNumStr(c.raw)}`, ` Pencapaian: ${pct}%`];
+                                                 return ` ${c.dataset.label}: Rp ${fmtNumStr(c.raw)}`;
+                                          }
+                                   }
+                            }
+                     },
+                     scales: {
+                            x: {
+                                   ticks: {
+                                          color: 'rgba(255,255,255,.5)',
+                                          font: { size: 10 }
+                                   },
+                                   grid: { color: 'rgba(255,255,255,.05)' }
+                            },
+                            y: {
+                                   position: 'left',
+                                   ticks: {
+                                          color: 'rgba(255,255,255,.5)',
+                                          font: { size: 10 },
+                                          maxTicksLimit: 6,
+                                          callback: v => formatRupiahShort(v)
+                                   },
+                                   grid: { color: 'rgba(255,255,255,.06)' }
+                            }
+                     }
+              }
+       });
+}
+
+function _renderDashSalesTarget(rows) {
+       const section  = document.getElementById('dash-sales-section');
+       const tbody    = document.getElementById('dash-sales-tbody');
+       const totTgt   = document.getElementById('dash-sales-total-target');
+       const totPenj  = document.getElementById('dash-sales-total-penjualan');
+       const totPct   = document.getElementById('dash-sales-total-pct');
+       if (!section || !tbody) return;
+
+       const meaningful = (rows || []).filter(r => r.target > 0 || r.penjualan > 0);
+       if (!meaningful.length) { section.style.display = 'none'; return; }
+       section.style.display = '';
+
+       let sumTarget = 0, sumPenj = 0;
+       tbody.innerHTML = meaningful.map(r => {
+              sumTarget += r.target || 0;
+              sumPenj   += r.penjualan || 0;
+              const pct = r.target > 0 ? Math.round((r.penjualan / r.target) * 100) : 0;
+              const barColor = pct >= 100 ? '#0e9f6e' : pct >= 75 ? '#3b82f6' : pct >= 50 ? '#e3a008' : '#f05252';
+              const pctText  = r.target > 0 ? `${pct}%` : '—';
+              return `<tr>
+                     <td><strong>${escHtml(r.area_kerja)}</strong></td>
+                     <td class="text-right">Rp ${fmtNumStr(r.target)}</td>
+                     <td class="text-right">Rp ${fmtNumStr(r.penjualan)}</td>
+                     <td class="text-right">
+                            <span class="sales-pct-badge" style="color:${barColor}">${pctText}</span>
+                     </td>
+                     <td>
+                            ${r.target > 0 ? `<div class="sales-progress-wrap">
+                                   <div class="sales-progress-bar" style="width:${Math.min(pct,100)}%;background:${barColor}"></div>
+                            </div>` : '<span style="color:var(--text-light);font-size:12px">—</span>'}
+                     </td>
+              </tr>`;
+       }).join('');
+
+       const totalPct = sumTarget > 0 ? Math.round((sumPenj / sumTarget) * 100) : 0;
+       const totColor = totalPct >= 100 ? '#0e9f6e' : totalPct >= 75 ? '#3b82f6' : totalPct >= 50 ? '#e3a008' : '#f05252';
+       if (totTgt)  totTgt.textContent  = 'Rp ' + fmtNumStr(sumTarget);
+       if (totPenj) totPenj.textContent = 'Rp ' + fmtNumStr(sumPenj);
+       if (totPct)  { totPct.textContent = sumTarget > 0 ? `${totalPct}%` : '—'; totPct.style.color = totColor; }
 }
 
 async function loadDashboardAdmin() {
@@ -1561,16 +2203,24 @@ function renderKKProgressBadge(r) {
               let icon, cls;
               // GM1 (3) dan GM2 (4) paralel: keduanya aktif saat kk_approval_level == 3
               const atGmStage = lvl === 3 && (i === 3 || i === 4);
+              const gm1ok = !!r.gm1_approved;
+              const gm2ok = !!r.gm2_approved;
               if (status === 'approved') {
                      icon = '✅'; cls = 'approved';
               } else if (status === 'rejected') {
-                     if (atGmStage) { icon = '❌'; cls = 'rejected'; }
-                     else if (i < lvl) { icon = '✅'; cls = 'approved'; }
+                     if (atGmStage) {
+                            // Determine which GM rejected based on who approved
+                            if (i === 3) { icon = gm1ok ? '✅' : '❌'; cls = gm1ok ? 'approved' : 'rejected'; }
+                            else         { icon = gm2ok ? '✅' : '❌'; cls = gm2ok ? 'approved' : 'rejected'; }
+                     } else if (i < lvl) { icon = '✅'; cls = 'approved'; }
                      else if (i === lvl) { icon = '❌'; cls = 'rejected'; }
                      else { icon = '○'; cls = 'waiting'; }
               } else {
-                     if (atGmStage) { icon = '⏳'; cls = 'current'; }
-                     else if (i < lvl) { icon = '✅'; cls = 'approved'; }
+                     if (lvl === 3 && (i === 3 || i === 4)) {
+                            // Pending GM stage: show individual approval state
+                            if (i === 3) { icon = gm1ok ? '✅' : '⏳'; cls = gm1ok ? 'approved' : 'current'; }
+                            else         { icon = gm2ok ? '✅' : '⏳'; cls = gm2ok ? 'approved' : 'current'; }
+                     } else if (i < lvl) { icon = '✅'; cls = 'approved'; }
                      else if (i === lvl) { icon = '⏳'; cls = 'current'; }
                      else { icon = '○'; cls = 'waiting'; }
               }
@@ -2072,7 +2722,8 @@ function renderSPPDProgressBadge(sppd) {
               if (status === 'approved' || status === 'completed') return 'approved';
               if (status === 'rejected') {
                      if (stepIdx === 0 && lvl === 0) return 'rejected';
-                     if (stepIdx > 0 && lvl === 1) return 'rejected';
+                     if (stepIdx === 1 && lvl === 1) return sppd.gm1_approved ? 'approved' : 'rejected';
+                     if (stepIdx === 2 && lvl === 1) return sppd.gm2_approved ? 'approved' : 'rejected';
                      if (stepIdx === 0 && lvl >= 1) return 'approved';
                      return 'waiting';
               }
@@ -3348,5 +3999,665 @@ async function submitEditSPPD() {
        } catch {
               errEl.textContent = 'Koneksi gagal';
               errEl.style.display = 'block';
+       }
+}
+
+// ===================== LAPORAN BULANAN =====================
+
+const LAPORAN_ADMIN_ROLES_FE  = ['admin','kantor_pusat','gm','gm2','manager_keuangan','direktur_ops','direktur_utama','area_manager'];
+const LAPORAN_PUSAT_ROLES_FE  = ['admin','kantor_pusat','gm','gm2','manager_keuangan','direktur_ops','direktur_utama'];
+const LAPORAN_REVIEWER_ROLES  = ['admin','gm','gm2'];
+
+function formatPeriode(periode) {
+       if (!periode) return '';
+       const [year, month] = periode.split('-');
+       const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+       return `${months[parseInt(month, 10) - 1]} ${year}`;
+}
+
+function formatPeriodeNext(periode) {
+       if (!periode) return '';
+       const [year, month] = periode.split('-').map(Number);
+       const next = new Date(year, month, 1); // month sudah 1-based, new Date bulan ke-month = bulan berikutnya
+       return formatPeriode(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`);
+}
+
+function getLast12Months() {
+       const result = [];
+       const now = new Date();
+       for (let i = 0; i < 12; i++) {
+              const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+              const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+              result.push({ value, label: formatPeriode(value) });
+       }
+       return result;
+}
+
+function currentMonthValue() {
+       const now = new Date();
+       return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// ── Form Laporan ──────────────────────────────────────────────────────────────
+
+let _laporanProjectCount = 0;
+
+function _populatePeriodeSelect(selId, selectedVal) {
+       const sel = document.getElementById(selId);
+       if (!sel) return;
+       const cur = selectedVal || sel.value || currentMonthValue();
+       const months = getLast12Months();
+       const opts = months.map(m => `<option value="${m.value}"${m.value === cur ? ' selected' : ''}>${m.label}</option>`).join('');
+       if (selId === 'rekap-laporan-periode') {
+              sel.innerHTML = '<option value="">Semua Bulan</option>' + opts;
+       } else {
+              sel.innerHTML = opts;
+       }
+}
+
+function initLaporanForm() {
+       document.getElementById('laporan-alasan').value = '';
+       document.getElementById('laporan-aktivitas').value = '';
+       document.getElementById('laporan-rencana').value = '';
+       document.getElementById('laporan-prognosa').value = '0';
+       document.getElementById('laporan-support-container').innerHTML =
+              '<p class="laporan-support-empty" style="color:var(--text-light);font-size:13px;margin:0">Tidak ada item support. Klik "+ Tambah" untuk menambah.</p>';
+       document.getElementById('laporan-project-tbody').innerHTML = '';
+       document.getElementById('laporan-project-total').textContent = 'Rp 0';
+       document.getElementById('laporan-status-badge').innerHTML = '';
+       document.getElementById('laporan-form-error').style.display = 'none';
+       document.getElementById('laporan-form-success').style.display = 'none';
+       _laporanProjectCount = 0;
+
+       _populatePeriodeSelect('laporan-periode');
+       onLaporanPeriodeChange();
+}
+
+async function onLaporanPeriodeChange() {
+       const periode = document.getElementById('laporan-periode').value;
+       if (!periode) return;
+
+       document.getElementById('laporan-alasan').value = '';
+       document.getElementById('laporan-aktivitas').value = '';
+       document.getElementById('laporan-rencana').value = '';
+       document.getElementById('laporan-prognosa').value = '0';
+       document.getElementById('laporan-support-container').innerHTML =
+              '<p class="laporan-support-empty" style="color:var(--text-light);font-size:13px;margin:0">Tidak ada item support. Klik "+ Tambah" untuk menambah.</p>';
+       document.getElementById('laporan-project-tbody').innerHTML = '';
+       document.getElementById('laporan-project-total').textContent = 'Rp 0';
+       _laporanProjectCount = 0;
+
+       const statusEl = document.getElementById('laporan-status-badge');
+       statusEl.innerHTML = '<span style="color:var(--text-light);font-size:13px">⏳ Memeriksa...</span>';
+
+       try {
+              const res = await api(`/api/laporan/mine?periode=${encodeURIComponent(periode)}`);
+              const data = await res.json();
+              if (data) {
+                     statusEl.innerHTML = '<span class="badge badge-approved">✅ Sudah diisi — mode edit</span>';
+                     document.getElementById('laporan-alasan').value = data.alasan || '';
+                     document.getElementById('laporan-aktivitas').value = data.aktivitas_bulan_ini || '';
+                     document.getElementById('laporan-rencana').value = data.rencana_bulan_depan || '';
+                     document.getElementById('laporan-prognosa').value = data.prognosa_bulan_depan ? fmtNumStr(data.prognosa_bulan_depan) : '0';
+                     (data.support || []).forEach(s => addLaporanSupportRow(s.keterangan));
+                     (data.projects || []).forEach(p => addLaporanProjectRow(p));
+              } else {
+                     statusEl.innerHTML = `<span class="badge badge-pending">📝 Belum diisi untuk ${formatPeriode(periode)}</span>`;
+              }
+       } catch {
+              statusEl.innerHTML = '<span style="color:var(--red);font-size:13px">Gagal memuat data</span>';
+       }
+}
+
+function addLaporanSupportRow(text) {
+       text = text || '';
+       const container = document.getElementById('laporan-support-container');
+       const empty = container.querySelector('.laporan-support-empty');
+       if (empty) empty.remove();
+
+       const row = document.createElement('div');
+       row.className = 'laporan-support-row';
+       row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px';
+       row.innerHTML = `<input type="text" class="laporan-support-input" placeholder="Deskripsikan support yang dibutuhkan..."
+              style="flex:1;padding:8px 10px;border:1px solid var(--gray-border);border-radius:6px;font-size:13px">
+              <button type="button" onclick="this.parentElement.remove();checkLaporanSupportEmpty()" class="btn-remove-row">✕</button>`;
+       container.appendChild(row);
+       row.querySelector('input').value = text;
+}
+
+function checkLaporanSupportEmpty() {
+       const container = document.getElementById('laporan-support-container');
+       if (!container.querySelector('.laporan-support-row')) {
+              container.innerHTML = '<p class="laporan-support-empty" style="color:var(--text-light);font-size:13px;margin:0">Tidak ada item support. Klik "+ Tambah" untuk menambah.</p>';
+       }
+}
+
+function addLaporanProjectRow(data) {
+       data = data || {};
+       _laporanProjectCount++;
+       const n = _laporanProjectCount;
+       const tbody = document.getElementById('laporan-project-tbody');
+       const pEmpty = document.querySelector('.laporan-project-empty');
+       if (pEmpty) pEmpty.style.display = 'none';
+
+       const row = document.createElement('tr');
+       row.innerHTML = `
+              <td>${n}</td>
+              <td><input type="text" class="table-input" placeholder="Pelanggan"></td>
+              <td><input type="text" class="table-input" placeholder="Principal"></td>
+              <td><input type="text" class="table-input" placeholder="Produk"></td>
+              <td><input type="text" inputmode="numeric" class="table-input num-fmt laporan-project-nilai"
+                     placeholder="0" oninput="formatNumInput(this);updateLaporanProjectTotal()"></td>
+              <td><div style="display:flex;align-items:center;gap:4px">
+                     <input type="number" class="table-input laporan-project-prob" placeholder="0" min="0" max="100" step="5"
+                            style="width:56px;text-align:center" oninput="this.value=Math.min(100,Math.max(0,this.value||0))">
+                     <span style="font-size:12px;color:var(--text-light)">%</span>
+              </div></td>
+              <td><button type="button" onclick="this.closest('tr').remove();updateLaporanProjectTotal();checkLaporanProjectEmpty()" class="btn-remove-row">✕</button></td>`;
+       tbody.appendChild(row);
+
+       const inputs = row.querySelectorAll('input');
+       inputs[0].value = data.pelanggan  || '';
+       inputs[1].value = data.principal  || '';
+       inputs[2].value = data.produk     || '';
+       if (data.nilai)       { inputs[3].value = fmtNumStr(data.nilai); updateLaporanProjectTotal(); }
+       if (data.probability != null) inputs[4].value = data.probability;
+}
+
+function checkLaporanProjectEmpty() {
+       const tbody = document.getElementById('laporan-project-tbody');
+       const pEmpty = document.querySelector('.laporan-project-empty');
+       if (!tbody.rows.length && pEmpty) pEmpty.style.display = '';
+}
+
+function updateLaporanProjectTotal() {
+       let total = 0;
+       document.querySelectorAll('.laporan-project-nilai').forEach(el => { total += parseNum(el.value); });
+       document.getElementById('laporan-project-total').textContent = 'Rp ' + fmtNumStr(total);
+}
+
+function collectLaporanSupport() {
+       return Array.from(document.querySelectorAll('.laporan-support-input')).map(el => el.value.trim()).filter(Boolean);
+}
+
+function collectLaporanProjects() {
+       return Array.from(document.querySelectorAll('#laporan-project-tbody tr')).map(tr => {
+              const inputs = tr.querySelectorAll('input');
+              return {
+                     pelanggan:   inputs[0]?.value || '',
+                     principal:   inputs[1]?.value || '',
+                     produk:      inputs[2]?.value || '',
+                     nilai:       parseNum(inputs[3]?.value || '0'),
+                     probability: Math.min(100, Math.max(0, parseFloat(inputs[4]?.value) || 0))
+              };
+       });
+}
+
+async function submitLaporanForm(e) {
+       e.preventDefault();
+       const errEl = document.getElementById('laporan-form-error');
+       const sucEl = document.getElementById('laporan-form-success');
+       errEl.style.display = 'none'; sucEl.style.display = 'none';
+
+       const periode = document.getElementById('laporan-periode').value;
+       if (!periode) { errEl.textContent = 'Pilih periode terlebih dahulu'; errEl.style.display = 'block'; return; }
+
+       const body = {
+              periode,
+              alasan: document.getElementById('laporan-alasan').value,
+              aktivitas_bulan_ini: document.getElementById('laporan-aktivitas').value,
+              rencana_bulan_depan: document.getElementById('laporan-rencana').value,
+              prognosa_bulan_depan: parseNum(document.getElementById('laporan-prognosa').value),
+              support: collectLaporanSupport(),
+              projects: collectLaporanProjects(),
+       };
+
+       try {
+              const res = await api('/api/laporan', 'POST', body);
+              const data = await res.json();
+              if (res.ok) {
+                     sucEl.textContent = `✅ Laporan ${formatPeriode(periode)} berhasil disimpan`;
+                     sucEl.style.display = 'block';
+                     document.getElementById('laporan-status-badge').innerHTML = '<span class="badge badge-approved">✅ Sudah diisi — mode edit</span>';
+              } else {
+                     errEl.textContent = data.error || 'Gagal menyimpan laporan';
+                     errEl.style.display = 'block';
+              }
+       } catch {
+              errEl.textContent = 'Koneksi ke server gagal';
+              errEl.style.display = 'block';
+       }
+}
+
+// ── Laporan Saya ──────────────────────────────────────────────────────────────
+
+async function loadMyLaporan() {
+       const container = document.getElementById('my-laporan-container');
+       container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
+       try {
+              const res = await api('/api/laporan/mine/list');
+              const rows = await res.json();
+              if (!rows.length) {
+                     container.innerHTML = '<div class="empty-state"><div class="empty-icon">📈</div><p>Belum ada laporan. Klik "+ Isi Laporan" untuk mulai.</p></div>';
+                     return;
+              }
+              const cards = rows.map(r => {
+                     const tanggapan = r.tanggapan || [];
+                     const jmlTanggapan = tanggapan.length;
+                     const badge = jmlTanggapan ? `<span class="badge-tanggapan">${jmlTanggapan} tanggapan</span>` : '';
+
+                     // Tanggapan umum bubbles
+                     const tBubbles = tanggapan.map(t => `
+                            <div class="ln-tanggapan-item">
+                                   <div class="ln-tanggapan-avatar">${escHtml((t.reviewer_name||'?')[0].toUpperCase())}</div>
+                                   <div class="ln-tanggapan-bubble">
+                                          <div class="ln-t-who">${escHtml(t.reviewer_name)} <span style="font-weight:normal;color:var(--text-light)">(${t.reviewer_role==='gm'?'GM1':t.reviewer_role==='gm2'?'GM2':'Admin'})</span></div>
+                                          <div class="ln-t-text">${escHtml(t.tanggapan)}</div>
+                                          <div class="ln-t-time">${t.updated_at||''}</div>
+                                   </div>
+                            </div>`).join('');
+
+                     // Support items dengan tanggapan per item
+                     const supports = r.support_with_tanggapan || r.support || [];
+                     const suppHtml = supports.length ? supports.map(s => {
+                            const sResps = (s.tanggapan||[]).map(t => `
+                                   <div class="ln-support-resp">
+                                          <span class="ln-resp-who">${escHtml(t.reviewer_name)}</span>:
+                                          <span class="ln-resp-text"> ${escHtml(t.tanggapan)}</span>
+                                   </div>`).join('');
+                            return `<div class="ln-support-item">
+                                   <div class="ln-support-keterangan">• ${escHtml(s.keterangan)}</div>
+                                   ${sResps || '<span style="color:var(--text-light);font-size:12px">Belum ada tanggapan</span>'}
+                            </div>`;
+                     }).join('') : '';
+
+                     const tanggapanSection = (jmlTanggapan || suppHtml) ? `
+                            <div class="my-lap-tanggapan" id="mlt-${r.id}" style="display:none">
+                                   ${jmlTanggapan ? `<div style="margin-bottom:10px">
+                                          <div class="ln-tanggapan-title">💬 Tanggapan Umum</div>
+                                          ${tBubbles}
+                                   </div>` : ''}
+                                   ${suppHtml ? `<div>
+                                          <div class="ln-tanggapan-title">🤝 Tanggapan Support</div>
+                                          ${suppHtml}
+                                   </div>` : ''}
+                            </div>` : '';
+
+                     const hasExpand = jmlTanggapan || suppHtml;
+                     return `<div class="my-lap-card">
+                            <div class="my-lap-header">
+                                   <div class="my-lap-periode">${formatPeriode(r.periode)} ${badge}</div>
+                                   <div class="my-lap-meta">${r.jumlah_project} project &bull; Rp ${fmtNumStr(r.total_nilai)} &bull; Prognosa: Rp ${fmtNumStr(r.prognosa_bulan_depan)}</div>
+                                   <div class="my-lap-updated">Update: ${r.updated_at || '-'}</div>
+                            </div>
+                            <div class="my-lap-actions">
+                                   ${hasExpand ? `<button class="btn btn-secondary btn-sm" onclick="toggleMyLapTanggapan(${r.id}, this)">💬 Lihat Tanggapan</button>` : ''}
+                                   <button onclick="editLaporan('${r.periode}')" class="btn btn-secondary btn-sm">✏️ Edit</button>
+                                   <button onclick="deleteLaporan(${r.id})" class="btn btn-danger btn-sm">🗑️</button>
+                            </div>
+                            ${tanggapanSection}
+                     </div>`;
+              }).join('');
+
+              container.innerHTML = `<div class="my-lap-list">${cards}</div>`;
+       } catch {
+              container.innerHTML = '<div class="empty-state"><p>Gagal memuat data</p></div>';
+       }
+}
+
+function toggleMyLapTanggapan(id, btn) {
+       const el = document.getElementById(`mlt-${id}`);
+       if (!el) return;
+       const open = el.style.display === 'block';
+       el.style.display = open ? 'none' : 'block';
+       btn.textContent = open ? '💬 Lihat Tanggapan' : '🙈 Sembunyikan';
+}
+
+function editLaporan(periode) {
+       showPage('new-laporan');
+       setTimeout(() => {
+              _populatePeriodeSelect('laporan-periode', periode);
+              onLaporanPeriodeChange();
+       }, 60);
+}
+
+async function deleteLaporan(id) {
+       if (!confirm('Hapus laporan ini?')) return;
+       try {
+              const res = await api(`/api/laporan/${id}`, 'DELETE');
+              if (res.ok) { showToast('Laporan dihapus'); loadMyLaporan(); }
+              else { const d = await res.json(); showToast(d.error || 'Gagal hapus', 'error'); }
+       } catch { showToast('Koneksi gagal', 'error'); }
+}
+
+// ── Rekap & Dashboard Section ─────────────────────────────────────────────────
+
+let _laporanFiltersCache = null;
+let _laporanDashInited = false;
+
+async function _loadLaporanFilters() {
+       if (_laporanFiltersCache) return _laporanFiltersCache;
+       const res = await api('/api/laporan/filters');
+       _laporanFiltersCache = await res.json();
+       return _laporanFiltersCache;
+}
+
+function _populateLaporanAreaDropdown(el, areas) {
+       const cur = el.value;
+       el.innerHTML = '<option value="">Semua Area</option>' + areas.map(a => `<option value="${a}">${a}</option>`).join('');
+       if (cur) el.value = cur;
+}
+
+function _populateLaporanUserDropdown(el, users, areaFilter) {
+       const cur = el.value;
+       const filtered = areaFilter ? users.filter(u => (u.area_kerja || '').toLowerCase().trim() === areaFilter.toLowerCase().trim()) : users;
+       el.innerHTML = '<option value="">Semua User</option>' + filtered.map(u => `<option value="${u.id}">${u.full_name}${u.area_kerja ? ' ('+u.area_kerja+')' : ''}</option>`).join('');
+       if (cur && filtered.find(u => String(u.id) === String(cur))) el.value = cur;
+}
+
+function _renderLaporanTable(rows, containerId) {
+       const container = document.getElementById(containerId);
+       if (!container) return;
+       if (!rows.length) {
+              container.innerHTML = '<div class="empty-state" style="padding:24px"><div class="empty-icon">📈</div><p>Tidak ada data laporan untuk filter ini</p></div>';
+              return;
+       }
+       container.innerHTML = `<table class="table">
+              <thead><tr><th>User</th><th>Area</th><th>Periode</th><th>Project</th><th>Total Nilai</th><th>Prognosa Bulan Depan</th><th>Terakhir Update</th></tr></thead>
+              <tbody>${rows.map(r => `<tr>
+                     <td><strong>${r.full_name}</strong></td>
+                     <td>${r.area_kerja || '-'}</td>
+                     <td>${formatPeriode(r.periode)}</td>
+                     <td>${r.jumlah_project}</td>
+                     <td>Rp ${fmtNumStr(r.total_nilai)}</td>
+                     <td>Rp ${fmtNumStr(r.prognosa_bulan_depan)}</td>
+                     <td style="font-size:12px;color:var(--text-light)">${r.updated_at || '-'}</td>
+              </tr>`).join('')}</tbody></table>`;
+}
+
+async function loadLaporanRekap() {
+       const container = document.getElementById('rekap-laporan-container');
+       if (!container) return;
+       container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
+       _populatePeriodeSelect('rekap-laporan-periode');
+       try {
+              if (!_laporanFiltersCache) {
+                     const filters = await _loadLaporanFilters();
+                     _populateLaporanAreaDropdown(document.getElementById('rekap-laporan-area'), filters.areas);
+                     _populateLaporanUserDropdown(document.getElementById('rekap-laporan-user'), filters.users, '');
+              }
+              const params = new URLSearchParams();
+              const periode = document.getElementById('rekap-laporan-periode').value;
+              const area = document.getElementById('rekap-laporan-area').value;
+              const uid = document.getElementById('rekap-laporan-user').value;
+              if (periode) params.set('periode', periode);
+              if (area) params.set('area_kerja', area);
+              if (uid) params.set('user_id', uid);
+              const res = await api(`/api/laporan/dashboard?${params}`);
+              const rows = await res.json();
+              _renderLaporanTable(rows, 'rekap-laporan-container');
+       } catch {
+              container.innerHTML = '<div class="empty-state"><p>Gagal memuat data</p></div>';
+       }
+}
+
+async function onRekaplaporanAreaChange() {
+       const area = document.getElementById('rekap-laporan-area').value;
+       const filters = await _loadLaporanFilters();
+       _populateLaporanUserDropdown(document.getElementById('rekap-laporan-user'), filters.users, area);
+       loadLaporanRekap();
+}
+
+async function loadLaporanDashboard() {
+       const section = document.getElementById('laporan-dashboard-section');
+       if (!section) return;
+       section.style.display = '';
+
+       const isAdmin = LAPORAN_ADMIN_ROLES_FE.includes(currentUser.role);
+
+       if (isAdmin && !_laporanDashInited) {
+              _laporanDashInited = true;
+              document.querySelectorAll('.laporan-admin-filter').forEach(el => el.style.display = 'flex');
+              const months = getLast12Months();
+              const periodeEl = document.getElementById('laporan-dash-filter-periode');
+              periodeEl.innerHTML = '<option value="">Semua Periode</option>' +
+                     months.map(m => `<option value="${m.value}"${m.value === currentMonthValue() ? ' selected' : ''}>${m.label}</option>`).join('');
+              try {
+                     const filters = await _loadLaporanFilters();
+                     _populateLaporanAreaDropdown(document.getElementById('laporan-dash-filter-area'), filters.areas);
+                     _populateLaporanUserDropdown(document.getElementById('laporan-dash-filter-user'), filters.users, '');
+              } catch {}
+       }
+
+       const params = new URLSearchParams();
+       if (isAdmin) {
+              const periode = document.getElementById('laporan-dash-filter-periode')?.value || currentMonthValue();
+              const area = document.getElementById('laporan-dash-filter-area')?.value || '';
+              const uid = document.getElementById('laporan-dash-filter-user')?.value || '';
+              if (periode) params.set('periode', periode);
+              if (area) params.set('area_kerja', area);
+              if (uid) params.set('user_id', uid);
+       } else {
+              params.set('periode', currentMonthValue());
+       }
+
+       const container = document.getElementById('laporan-dashboard-content');
+       container.innerHTML = '<div class="loading" style="padding:16px">⏳ Memuat rekap laporan...</div>';
+       try {
+              const res = await api(`/api/laporan/dashboard?${params}`);
+              const rows = await res.json();
+              if (!rows.length) {
+                     const msg = isAdmin
+                            ? 'Belum ada laporan untuk filter ini'
+                            : `Anda belum mengisi laporan untuk <strong>${formatPeriode(currentMonthValue())}</strong>. <a href="#" onclick="showPage('new-laporan');return false">Isi sekarang →</a>`;
+                     container.innerHTML = `<div class="empty-state" style="padding:20px"><p>${msg}</p></div>`;
+                     return;
+              }
+              _renderLaporanTable(rows, 'laporan-dashboard-content');
+       } catch {
+              container.innerHTML = '<div class="empty-state" style="padding:16px"><p>Gagal memuat data</p></div>';
+       }
+}
+
+async function onLaporanDashAreaChange() {
+       const area = document.getElementById('laporan-dash-filter-area').value;
+       const filters = await _loadLaporanFilters();
+       _populateLaporanUserDropdown(document.getElementById('laporan-dash-filter-user'), filters.users, area);
+       loadLaporanDashboard();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TARGET & PENJUALAN
+// ══════════════════════════════════════════════════════════════════
+
+let _stInited = false;
+
+function initSalesTarget() {
+       const sel = document.getElementById('st-tahun');
+       if (sel && !_stInited) {
+              _stInited = true;
+              const thisYear = new Date().getFullYear();
+              sel.innerHTML = [thisYear + 1, thisYear, thisYear - 1, thisYear - 2]
+                     .map(y => `<option value="${y}"${y === thisYear ? ' selected' : ''}>${y}</option>`).join('');
+       }
+       loadSalesTarget();
+}
+
+async function loadSalesTarget() {
+       const year = document.getElementById('st-tahun')?.value || new Date().getFullYear();
+       const container = document.getElementById('st-container');
+       if (!container) return;
+       container.innerHTML = '<div class="loading" style="padding:32px;text-align:center">⏳ Memuat...</div>';
+       try {
+              const res = await api(`/api/sales-target/by-area?year=${encodeURIComponent(year)}`);
+              if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Gagal'); }
+              const data = await res.json();
+              _renderSalesAreaAccordion(data, container);
+       } catch (e) {
+              container.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+       }
+}
+
+const _ST_BULAN = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+
+function _stColor(pct) {
+       return pct >= 100 ? '#0e9f6e' : pct >= 75 ? '#1a56db' : pct >= 40 ? '#e3a008' : '#f05252';
+}
+
+function _stPct(t, p) {
+       return t > 0 ? Math.round((p / t) * 100) : 0;
+}
+
+function _fmtPeriode(p) {
+       const [y, m] = p.split('-');
+       return `${_ST_BULAN[parseInt(m) - 1]} ${y}`;
+}
+
+function _renderSalesAreaAccordion(data, container) {
+       if (!data.areas || !data.areas.length) {
+              container.innerHTML = '<div class="empty-state" style="padding:48px;text-align:center;color:var(--text-light)">Belum ada area kerja terdaftar</div>';
+              return;
+       }
+       const year = document.getElementById('st-tahun')?.value || new Date().getFullYear();
+       container.innerHTML = data.areas.map((area, ai) => {
+              const pct = _stPct(area.total_target, area.total_penjualan);
+              const col = _stColor(pct);
+              const monthRows = area.months.map((d, mi) => {
+                     const mPct = _stPct(d.target, d.penjualan);
+                     const mCol = _stColor(mPct);
+                     return `<tr>
+                            <td class="st-month-label">${_fmtPeriode(d.periode)}</td>
+                            <td>
+                                   <input type="text" inputmode="numeric" class="table-input num-fmt st-inp-t"
+                                          data-area="${escHtml(area.area_kerja)}" data-periode="${d.periode}"
+                                          value="${d.target ? fmtNumStr(d.target) : ''}" placeholder="0"
+                                          oninput="formatNumInput(this);_stUpdateCard(this)"
+                                          style="text-align:right;width:100%;min-width:130px">
+                            </td>
+                            <td>
+                                   <input type="text" inputmode="numeric" class="table-input num-fmt st-inp-p"
+                                          data-area="${escHtml(area.area_kerja)}" data-periode="${d.periode}"
+                                          value="${d.penjualan ? fmtNumStr(d.penjualan) : ''}" placeholder="0"
+                                          oninput="formatNumInput(this);_stUpdateCard(this)"
+                                          style="text-align:right;width:100%;min-width:130px">
+                            </td>
+                            <td class="st-pct-cell">
+                                   <div style="display:flex;align-items:center;gap:8px">
+                                          <div style="flex:1;height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;min-width:60px">
+                                                 <div class="st-m-bar" style="height:100%;width:${Math.min(100,mPct)}%;background:${mCol};border-radius:3px;transition:width .25s"></div>
+                                          </div>
+                                          <span class="st-m-pct" style="min-width:38px;font-size:13px;font-weight:700;color:${mCol}">${mPct}%</span>
+                                   </div>
+                            </td>
+                     </tr>`;
+              }).join('');
+              return `<div class="st-area-card" id="st-card-${ai}">
+                     <div class="st-area-header" onclick="toggleSalesArea(${ai})">
+                            <span class="st-toggle-icon">▶</span>
+                            <span class="st-area-name">${escHtml(area.area_kerja)}</span>
+                            <div class="st-area-summary">
+                                   <div class="st-sum-item">
+                                          <div class="st-sum-lbl">Total Target</div>
+                                          <div class="st-sum-val st-hdr-t" style="color:#1a56db">Rp ${fmtNumStr(area.total_target)}</div>
+                                   </div>
+                                   <div class="st-sum-item">
+                                          <div class="st-sum-lbl">Realisasi</div>
+                                          <div class="st-sum-val st-hdr-p" style="color:#0e9f6e">Rp ${fmtNumStr(area.total_penjualan)}</div>
+                                   </div>
+                                   <div class="st-sum-item">
+                                          <div class="st-sum-lbl">Pencapaian</div>
+                                          <div class="st-sum-val st-hdr-pct" style="color:${col}">${pct}%</div>
+                                   </div>
+                                   <div class="st-sum-bar-wrap">
+                                          <div class="st-sum-bar-track">
+                                                 <div class="st-sum-bar-fill" style="width:${Math.min(100,pct)}%;background:${col}"></div>
+                                          </div>
+                                   </div>
+                            </div>
+                     </div>
+                     <div class="st-area-body">
+                            <div class="table-responsive">
+                            <table class="st-month-table">
+                                   <thead>
+                                          <tr>
+                                                 <th>Bulan</th>
+                                                 <th>Target (Rp)</th>
+                                                 <th>Penjualan / Realisasi (Rp)</th>
+                                                 <th style="min-width:130px">Pencapaian</th>
+                                          </tr>
+                                   </thead>
+                                   <tbody>${monthRows}</tbody>
+                                   <tfoot>
+                                          <tr class="st-total-row">
+                                                 <td><strong>Total ${year}</strong></td>
+                                                 <td class="st-foot-t"><strong>Rp ${fmtNumStr(area.total_target)}</strong></td>
+                                                 <td class="st-foot-p"><strong>Rp ${fmtNumStr(area.total_penjualan)}</strong></td>
+                                                 <td class="st-foot-pct" style="color:${col}"><strong>${pct}%</strong></td>
+                                          </tr>
+                                   </tfoot>
+                            </table>
+                            </div>
+                     </div>
+              </div>`;
+       }).join('');
+}
+
+function toggleSalesArea(ai) {
+       const card = document.getElementById(`st-card-${ai}`);
+       if (!card) return;
+       card.classList.toggle('open');
+}
+
+function _stUpdateCard(inp) {
+       const card = inp.closest('.st-area-card');
+       if (!card) return;
+       let totT = 0, totP = 0;
+       card.querySelectorAll('tbody tr').forEach(tr => {
+              const t = parseNum(tr.querySelector('.st-inp-t')?.value || '0');
+              const p = parseNum(tr.querySelector('.st-inp-p')?.value || '0');
+              totT += t; totP += p;
+              const pct = _stPct(t, p);
+              const col = _stColor(pct);
+              const bar = tr.querySelector('.st-m-bar');
+              const pctEl = tr.querySelector('.st-m-pct');
+              if (bar) { bar.style.width = Math.min(100, pct) + '%'; bar.style.background = col; }
+              if (pctEl) { pctEl.textContent = pct + '%'; pctEl.style.color = col; }
+       });
+       const pct = _stPct(totT, totP);
+       const col = _stColor(pct);
+       const q = s => card.querySelector(s);
+       if (q('.st-hdr-t'))           { q('.st-hdr-t').textContent = 'Rp ' + fmtNumStr(totT); }
+       if (q('.st-hdr-p'))           { q('.st-hdr-p').textContent = 'Rp ' + fmtNumStr(totP); }
+       if (q('.st-hdr-pct'))         { q('.st-hdr-pct').textContent = pct + '%'; q('.st-hdr-pct').style.color = col; }
+       if (q('.st-sum-bar-fill'))    { q('.st-sum-bar-fill').style.width = Math.min(100,pct)+'%'; q('.st-sum-bar-fill').style.background = col; }
+       if (q('.st-foot-t'))          { q('.st-foot-t').innerHTML = `<strong>Rp ${fmtNumStr(totT)}</strong>`; }
+       if (q('.st-foot-p'))          { q('.st-foot-p').innerHTML = `<strong>Rp ${fmtNumStr(totP)}</strong>`; }
+       if (q('.st-foot-pct'))        { q('.st-foot-pct').innerHTML = `<strong>${pct}%</strong>`; q('.st-foot-pct').style.color = col; }
+}
+
+async function saveSalesTarget() {
+       const items = [];
+       document.querySelectorAll('#st-container .st-inp-t').forEach(inp => {
+              const area = inp.dataset.area;
+              const periode = inp.dataset.periode;
+              const target = parseNum(inp.value || '0');
+              const penjualan = parseNum(inp.closest('tr')?.querySelector('.st-inp-p')?.value || '0');
+              if (area && periode) items.push({ area_kerja: area, periode, target, penjualan });
+       });
+       if (!items.length) return;
+
+       const alertEl = document.getElementById('st-alert');
+       try {
+              const res = await api('/api/sales-target/bulk-multi', 'POST', { items });
+              const data = await res.json();
+              if (!res.ok) throw new Error(data.error || 'Gagal menyimpan');
+              alertEl.className = 'alert alert-success';
+              alertEl.textContent = `✅ Data berhasil disimpan (${data.saved} entri)`;
+              alertEl.style.display = 'block';
+              setTimeout(() => { alertEl.style.display = 'none'; }, 3000);
+       } catch (e) {
+              alertEl.className = 'alert alert-error';
+              alertEl.textContent = '❌ ' + e.message;
+              alertEl.style.display = 'block';
        }
 }

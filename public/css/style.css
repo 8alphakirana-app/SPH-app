@@ -306,6 +306,7 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
 .page-header .page-title { margin-bottom: 0; }
 .filter-bar { display: flex; gap: 12px; align-items: center; }
 .filter-bar select { padding: 7px 12px; border: 1px solid var(--gray-border); border-radius: 6px; }
+.filter-label { font-size: 13px; color: var(--text-light); white-space: nowrap; }
 
 /* ==================== ALERTS ==================== */
 .alert {
@@ -582,17 +583,436 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
   justify-content: center;
 }
 
-/* Responsive */
+/* ==================== NAV GROUP ACCORDION ==================== */
+.sidebar-menu > li.nav-group { padding: 2px 0; }
+
+.nav-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  margin: 0 8px;
+  border-radius: 6px;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: 500;
+  transition: background var(--transition), color var(--transition);
+  user-select: none;
+}
+.nav-group-header:hover { background: rgba(255,255,255,.08); color: white; }
+.nav-group.open > .nav-group-header { background: rgba(255,255,255,.07); color: white; }
+
+.nav-group-label { flex: 1; }
+
+.nav-group-chevron {
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.55;
+  display: inline-block;
+  transition: transform 0.25s ease, opacity 0.2s ease;
+}
+.nav-group.open > .nav-group-header > .nav-group-chevron {
+  transform: rotate(90deg);
+  opacity: 0.9;
+}
+
+.nav-group-items {
+  list-style: none;
+  padding: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+}
+
+.nav-group-items > li { padding: 1px 8px 1px 18px; }
+
+.nav-group-items .menu-item {
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
+/* ==================== NEW DASHBOARD ==================== */
+.dash-modules-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.dash-mod-card {
+  background: white;
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  box-shadow: var(--shadow);
+  border-left: 4px solid transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dash-mod-card.dash-mod-sph { border-color: #1a56db; }
+.dash-mod-card.dash-mod-kk  { border-color: #0e9f6e; }
+.dash-mod-card.dash-mod-sppd{ border-color: #ff5a1f; }
+.dash-mod-card.dash-mod-lap { border-color: #7c3aed; }
+.dash-mod-icon { font-size: 22px; }
+.dash-mod-title { font-size: 12px; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: .4px; }
+.dash-mod-nums { display: flex; gap: 16px; flex-wrap: wrap; }
+.dash-mod-num-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.dash-big { font-size: 26px; font-weight: 700; color: var(--text); line-height: 1; }
+.dash-big-sm { font-size: 16px; font-weight: 700; color: var(--text); line-height: 1; }
+.dash-lbl { font-size: 11px; color: var(--text-light); }
+.dash-green { color: #0e9f6e; }
+.dash-yellow { color: #e3a008; }
+.dash-orange { color: #ff5a1f; }
+.dash-blue  { color: #7c3aed; }
+
+.dash-chart-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.dash-chart-row .card { margin-bottom: 0; }
+
+.laporan-narasi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.laporan-narasi-card {
+  background: white;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+  border-top: 3px solid #7c3aed;
+}
+.laporan-narasi-card .ln-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+.laporan-narasi-card .ln-name { font-weight: 600; font-size: 14px; }
+.laporan-narasi-card .ln-area { font-size: 11px; color: var(--text-light); }
+.laporan-narasi-card .ln-periode { font-size: 11px; color: var(--text-light); background: var(--gray-light); padding: 2px 8px; border-radius: 20px; }
+.laporan-narasi-card .ln-block { margin-top: 8px; }
+.laporan-narasi-card .ln-block-title { font-size: 11px; font-weight: 600; color: var(--text-light); text-transform: uppercase; margin-bottom: 4px; }
+.laporan-narasi-card .ln-block-text { font-size: 13px; color: var(--text); line-height: 1.5; white-space: pre-wrap; }
+.laporan-narasi-card .ln-prognosa { display: inline-block; margin-top: 8px; font-size: 12px; font-weight: 600; color: #7c3aed; background: #f3f0ff; padding: 3px 10px; border-radius: 20px; }
+
+/* Support & Tanggapan di narasi card */
+.ln-divider { border: none; border-top: 1px solid var(--gray-border); margin: 10px 0 6px; }
+.ln-support-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text-light); text-transform: uppercase; margin-top: 10px; user-select: none; }
+.ln-support-toggle:hover { color: var(--blue); }
+.ln-support-toggle .ln-toggle-arrow { font-size: 10px; transition: transform 0.2s; }
+.ln-support-toggle.open .ln-toggle-arrow { transform: rotate(90deg); }
+.ln-support-list { display: none; margin-top: 6px; }
+.ln-support-list.open { display: block; }
+.ln-support-item { background: var(--gray-light); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; }
+.ln-support-keterangan { font-size: 13px; color: var(--text); margin-bottom: 4px; }
+.ln-support-resp { background: #fff; border-left: 3px solid var(--blue); padding: 4px 8px; margin: 4px 0; font-size: 12px; border-radius: 0 4px 4px 0; }
+.ln-support-resp .ln-resp-who { font-weight: 600; color: var(--blue); font-size: 11px; }
+.ln-support-resp .ln-resp-text { color: var(--text); }
+.ln-tanggapan-section { margin-top: 12px; border-top: 1px solid var(--gray-border); padding-top: 10px; }
+.ln-tanggapan-title { font-size: 11px; font-weight: 600; color: var(--text-light); text-transform: uppercase; margin-bottom: 6px; }
+.ln-tanggapan-item { display: flex; gap: 8px; margin-bottom: 6px; }
+.ln-tanggapan-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--blue); color: white; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+.ln-tanggapan-bubble { background: var(--blue-light); border-radius: 0 8px 8px 8px; padding: 6px 10px; flex: 1; }
+.ln-tanggapan-bubble .ln-t-who { font-size: 11px; font-weight: 600; color: var(--blue); }
+.ln-tanggapan-bubble .ln-t-text { font-size: 13px; color: var(--text); margin-top: 2px; }
+.ln-tanggapan-bubble .ln-t-time { font-size: 10px; color: var(--text-light); margin-top: 2px; }
+.ln-input-wrap { margin-top: 8px; display: flex; gap: 6px; align-items: flex-end; }
+.ln-input-wrap textarea { flex: 1; border: 1px solid var(--gray-border); border-radius: 6px; padding: 6px 8px; font-size: 13px; resize: vertical; min-height: 60px; }
+.ln-input-wrap textarea:focus { outline: none; border-color: var(--blue); }
+.ln-input-wrap .btn-kirim { white-space: nowrap; }
+
+/* ── Sales Hero Card ──────────────────────────────────────────────────────── */
+.sales-hero-card {
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f2942 100%);
+  border-radius: 16px;
+  padding: 28px 32px 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 8px 32px rgba(15,23,42,.35);
+  overflow: hidden;
+  position: relative;
+}
+.sales-hero-card::before {
+  content: '';
+  position: absolute;
+  top: -60px; right: -60px;
+  width: 240px; height: 240px;
+  background: radial-gradient(circle, rgba(59,130,246,.18) 0%, transparent 70%);
+  pointer-events: none;
+}
+.sales-hero-card::after {
+  content: '';
+  position: absolute;
+  bottom: -80px; left: 20%;
+  width: 320px; height: 200px;
+  background: radial-gradient(circle, rgba(16,185,129,.1) 0%, transparent 70%);
+  pointer-events: none;
+}
+.sales-hero-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.sales-hero-label {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.55);
+}
+.sales-hero-periode-badge {
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.15);
+  color: rgba(255,255,255,.75);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 12px;
+  border-radius: 20px;
+  backdrop-filter: blur(4px);
+}
+.sales-hero-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.sales-hero-kpi-col {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+.sales-kpi-box {
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 14px;
+  padding: 18px 22px;
+  backdrop-filter: blur(6px);
+  transition: background var(--transition);
+}
+.sales-kpi-box:hover { background: rgba(255,255,255,.13); }
+.sales-kpi-icon { font-size: 22px; margin-bottom: 8px; line-height: 1; }
+.sales-kpi-val {
+  font-size: 24px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.sales-kpi-lbl { font-size: 11px; color: rgba(255,255,255,.5); margin-top: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.sales-kpi-target .sales-kpi-val { color: #93c5fd; }
+.sales-kpi-real   .sales-kpi-val { color: #6ee7b7; }
+.sales-kpi-pct    .sales-kpi-val { color: #fde68a; font-size: 32px; }
+.sales-kpi-gap    .sales-kpi-val { color: #fca5a5; }
+.sales-kpi-gap.achieved .sales-kpi-val { color: #6ee7b7; }
+.sales-hero-chart-col { position: relative; height: 280px; }
+
+/* Sales target dashboard table */
+.sales-pct-badge { font-size: 14px; font-weight: 700; }
+.sales-progress-wrap { height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; }
+.sales-progress-bar { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+
+@media (max-width: 900px) {
+  .sales-hero-kpi-col { grid-template-columns: repeat(2, 1fr); }
+  .sales-hero-chart-col { height: 220px; }
+  .sales-hero-card { padding: 20px 22px; }
+  .sales-kpi-val { font-size: 20px; }
+  .sales-kpi-pct .sales-kpi-val { font-size: 26px; }
+  .detail-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Sales Target Accordion ──────────────────────────────────────── */
+.st-area-card {
+  background: #fff;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,.05);
+  transition: box-shadow .2s;
+}
+.st-area-card.open { box-shadow: 0 4px 16px rgba(0,0,0,.09); }
+
+.st-area-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+  cursor: pointer;
+  user-select: none;
+  transition: background .15s;
+}
+.st-area-header:hover { background: #f8fafc; }
+
+.st-toggle-icon {
+  font-size: 12px;
+  color: #9ca3af;
+  transition: transform .22s;
+  flex-shrink: 0;
+}
+.st-area-card.open .st-toggle-icon { transform: rotate(90deg); }
+
+.st-area-name {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text, #111827);
+  min-width: 140px;
+  flex-shrink: 0;
+}
+
+.st-area-summary {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+.st-sum-item { text-align: right; }
+.st-sum-lbl  { font-size: 11px; color: #9ca3af; font-weight: 500; line-height: 1.2; }
+.st-sum-val  { font-size: 14px; font-weight: 700; line-height: 1.4; }
+
+.st-sum-bar-wrap { flex: 1; min-width: 80px; max-width: 160px; }
+.st-sum-bar-track {
+  height: 8px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.st-sum-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width .3s, background .3s;
+}
+
+.st-area-body {
+  display: none;
+  border-top: 1px solid #f1f5f9;
+}
+.st-area-card.open .st-area-body { display: block; }
+
+.st-month-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.st-month-table th {
+  background: #f8fafc;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 10px 16px;
+  color: #6b7280;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+.st-month-table td {
+  padding: 8px 16px;
+  border-bottom: 1px solid #f8fafc;
+  vertical-align: middle;
+}
+.st-month-table tbody tr:hover { background: #fafbfd; }
+.st-month-table tbody tr:last-child td { border-bottom: 1px solid #e5e7eb; }
+.st-month-label { font-size: 13px; font-weight: 500; white-space: nowrap; min-width: 90px; }
+.st-pct-cell { min-width: 130px; }
+
+.st-total-row { background: #f0f7ff; }
+.st-total-row td { padding: 10px 16px; border-bottom: none; }
+
+/* My Laporan cards */
+.my-lap-list { display: flex; flex-direction: column; gap: 12px; }
+.my-lap-card { background: #fff; border: 1px solid var(--gray-border); border-radius: 10px; padding: 16px; }
+.my-lap-header { margin-bottom: 10px; }
+.my-lap-periode { font-size: 15px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.my-lap-meta { font-size: 13px; color: var(--text-light); margin-top: 3px; }
+.my-lap-updated { font-size: 11px; color: var(--text-light); margin-top: 2px; }
+.my-lap-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.my-lap-tanggapan { background: var(--gray-light); border-radius: 8px; padding: 12px; margin-top: 8px; }
+.badge-tanggapan { background: #3b82f6; color: white; border-radius: 20px; font-size: 11px; font-weight: 600; padding: 2px 8px; }
+
+/* Responsive — Tablet & HP */
 @media (max-width: 768px) {
+  /* Layout */
   .sidebar { transform: translateX(-100%); }
   .sidebar.open { transform: translateX(0); }
   .main-content { margin-left: 0; }
   .btn-menu-toggle { display: block; }
+  .top-bar { padding: 0 16px; }
+  .content-area { padding: 16px; }
+
+  /* Page header — stack title di atas, filter di bawah */
+  .page-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .filter-bar { flex-wrap: wrap; width: 100%; }
+
+  /* Forms & grids */
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .stats-grid-6 { grid-template-columns: repeat(2, 1fr); }
   .form-row { grid-template-columns: 1fr; }
-  .modal-dialog { margin: 0 10px; }
   .kk-calc-grid { grid-template-columns: 1fr; }
   .kk-finance-grid { grid-template-columns: 1fr; }
   .kk-approval-steps { flex-direction: column; }
+  .laporan-narasi-grid { grid-template-columns: 1fr; }
+
+  /* Dashboard */
+  .dash-modules-row { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .dash-chart-row { grid-template-columns: 1fr; }
+
+  /* Sales Hero */
+  .sales-hero-card { padding: 16px 18px; }
+  .sales-hero-kpi-col { gap: 10px; }
+  .sales-kpi-box { padding: 14px; }
+  .sales-kpi-val { font-size: 18px; }
+  .sales-kpi-pct .sales-kpi-val { font-size: 24px; }
+  .sales-hero-chart-col { height: 200px; }
+  .sales-hero-top { flex-wrap: wrap; gap: 8px; }
+
+  /* Sales Target Accordion — sembunyikan progress bar di header */
+  .st-sum-bar-wrap { display: none; }
+  .st-area-summary { gap: 16px; }
+
+  /* Modal */
+  .modal-dialog { margin: 0 8px; max-height: 92vh; }
+  .modal { padding: 16px 0 0; align-items: flex-end; }
+  .modal-dialog { border-radius: 16px 16px 0 0; }
+}
+
+/* HP kecil ≤ 480px */
+@media (max-width: 480px) {
+  .content-area { padding: 12px; }
+  .page-title { font-size: 18px; }
+
+  /* Sales Hero — lebih kompak */
+  .sales-hero-card { padding: 14px 14px 10px; margin-bottom: 14px; }
+  .sales-hero-kpi-col { gap: 8px; }
+  .sales-kpi-box { padding: 10px 12px; }
+  .sales-kpi-icon { font-size: 18px; margin-bottom: 4px; }
+  .sales-kpi-val { font-size: 16px; }
+  .sales-kpi-pct .sales-kpi-val { font-size: 20px; }
+  .sales-kpi-lbl { font-size: 10px; margin-top: 3px; }
+  .sales-hero-chart-col { height: 175px; }
+
+  /* Modul dashboard */
+  .dash-modules-row { gap: 8px; }
+  .dash-mod-card { padding: 12px 12px; }
+  .dash-mod-icon { font-size: 18px; }
+  .dash-big { font-size: 22px; }
+  .dash-mod-nums { gap: 12px; }
+
+  /* Accordion header — sembunyikan angka, hanya tampilkan nama + persen */
+  .st-sum-item { display: none; }
+  .st-pct-cell { min-width: 80px; }
+  .st-area-name { min-width: 100px; font-size: 13px; }
+  .st-area-header { padding: 12px 14px; gap: 10px; }
+  .st-month-table th, .st-month-table td { padding: 7px 10px; font-size: 12px; }
+
+  /* Tombol lebih mudah disentuh */
+  .btn { padding: 9px 14px; }
+  .btn-sm { padding: 7px 11px; }
+
+  /* Modal full-screen-ish */
+  .modal-dialog { margin: 0; border-radius: 16px 16px 0 0; max-height: 96vh; }
+  .modal-header { padding: 16px 16px 12px; }
+  .modal-body { padding: 16px; }
+  .modal-footer { padding: 12px 16px; }
 }

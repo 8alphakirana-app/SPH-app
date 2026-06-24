@@ -564,6 +564,79 @@ if (pendingKKSubs.length > 0) {
   console.log(`✅ Migrasi KK: ${pendingKKSubs.length} KK pending diupgrade ke sistem approval 6 level`);
 }
 
+// ── Laporan Bulanan tables ────────────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS laporan_bulanan (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    periode TEXT NOT NULL,
+    alasan TEXT DEFAULT '',
+    aktivitas_bulan_ini TEXT DEFAULT '',
+    rencana_bulan_depan TEXT DEFAULT '',
+    prognosa_bulan_depan REAL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    updated_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE (user_id, periode)
+  );
+
+  CREATE TABLE IF NOT EXISTS laporan_support (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    laporan_id INTEGER NOT NULL,
+    keterangan TEXT DEFAULT '',
+    FOREIGN KEY (laporan_id) REFERENCES laporan_bulanan(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS laporan_project (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    laporan_id INTEGER NOT NULL,
+    pelanggan TEXT DEFAULT '',
+    principal TEXT DEFAULT '',
+    produk TEXT DEFAULT '',
+    nilai REAL DEFAULT 0,
+    FOREIGN KEY (laporan_id) REFERENCES laporan_bulanan(id) ON DELETE CASCADE
+  );
+`);
+
+// Migrasi: tambah kolom probability jika belum ada
+try { db.exec("ALTER TABLE laporan_project ADD COLUMN probability REAL DEFAULT 0"); } catch {}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS laporan_tanggapan (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    laporan_id INTEGER NOT NULL,
+    reviewer_id INTEGER NOT NULL,
+    tanggapan TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    updated_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (laporan_id) REFERENCES laporan_bulanan(id) ON DELETE CASCADE,
+    UNIQUE(laporan_id, reviewer_id)
+  );
+  CREATE TABLE IF NOT EXISTS laporan_support_tanggapan (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    support_id INTEGER NOT NULL,
+    reviewer_id INTEGER NOT NULL,
+    tanggapan TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    updated_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (support_id) REFERENCES laporan_support(id) ON DELETE CASCADE,
+    UNIQUE(support_id, reviewer_id)
+  );
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sales_target (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    area_kerja TEXT NOT NULL,
+    periode TEXT NOT NULL,
+    target REAL DEFAULT 0,
+    penjualan REAL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    updated_at TEXT DEFAULT (datetime('now','localtime')),
+    UNIQUE(area_kerja, periode)
+  );
+`);
+
 // ── Auto-backup saat server start ────────────────────────────────────────────
 (async () => {
   try {

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DMS - PT Lapan Alpha Kirana</title>
   <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 </head>
 <body>
 <div id="app">
@@ -39,26 +40,78 @@
         <span>DMS <small style="font-size:10px;opacity:0.7;display:block;line-height:1.1">PT Lapan Alpha Kirana</small></span>
       </div>
       <ul class="sidebar-menu">
+        <!-- Dashboard (standalone) -->
         <li><a href="#" onclick="showPage('dashboard')" class="menu-item" data-page="dashboard"><span class="icon">📊</span> Dashboard</a></li>
-        <li><a href="#" onclick="showPage('new-submission')" class="menu-item" data-page="new-submission" id="menu-new-submission"><span class="icon">✏️</span> Buat Pengajuan</a></li>
-        <li><a href="#" onclick="showPage('my-submissions')" class="menu-item" data-page="my-submissions"><span class="icon">📄</span> Pengajuan Saya</a></li>
-        <li class="menu-divider admin-or-kp" style="display:none"></li>
-        <li class="admin-or-kp" style="display:none"><a href="#" onclick="showPage('admin-submissions')" class="menu-item" data-page="admin-submissions"><span class="icon">🗂️</span> Semua Pengajuan</a></li>
+        <li class="menu-divider"></li>
+
+        <!-- ── SPH (Pengajuan) ── -->
+        <li class="nav-group" id="nav-group-sph">
+          <div class="nav-group-header" onclick="toggleNavGroup('sph')">
+            <span class="icon">📄</span>
+            <span class="nav-group-label">SPH (Pengajuan)</span>
+            <span class="nav-group-chevron">›</span>
+          </div>
+          <ul class="nav-group-items" id="nav-group-items-sph">
+            <li><a href="#" onclick="showPage('new-submission')" class="menu-item" data-page="new-submission" id="menu-new-submission"><span class="icon">✏️</span> Buat Pengajuan</a></li>
+            <li><a href="#" onclick="showPage('my-submissions')" class="menu-item" data-page="my-submissions"><span class="icon">📄</span> Pengajuan Saya</a></li>
+            <li class="admin-or-kp" style="display:none"><a href="#" onclick="showPage('admin-submissions')" class="menu-item" data-page="admin-submissions"><span class="icon">🗂️</span> Semua Pengajuan</a></li>
+          </ul>
+        </li>
+
+        <!-- ── Kertas Kerja (KK) ── -->
+        <li class="nav-group kk-menu" id="nav-group-kk" style="display:none">
+          <div class="nav-group-header" onclick="toggleNavGroup('kk')">
+            <span class="icon">📝</span>
+            <span class="nav-group-label">Kertas Kerja (KK)</span>
+            <span class="nav-group-chevron">›</span>
+          </div>
+          <ul class="nav-group-items" id="nav-group-items-kk">
+            <li class="kk-create" style="display:none"><a href="#" onclick="showPage('new-kk')" class="menu-item" data-page="new-kk"><span class="icon">📝</span> Buat Kertas Kerja</a></li>
+            <li class="kk-mine" style="display:none"><a href="#" onclick="showPage('my-kk')" class="menu-item" data-page="my-kk"><span class="icon">📋</span> Kertas Kerja Saya</a></li>
+            <li class="kk-approver" style="display:none"><a href="#" onclick="showPage('kk-approvals')" class="menu-item" data-page="kk-approvals"><span class="icon">✅</span> Persetujuan KK</a></li>
+            <li class="kk-all" style="display:none"><a href="#" onclick="showPage('admin-kk')" class="menu-item" data-page="admin-kk"><span class="icon">🗂️</span> Semua Kertas Kerja</a></li>
+          </ul>
+        </li>
+
+        <!-- ── SPPD ── -->
+        <li class="nav-group sppd-menu" id="nav-group-sppd" style="display:none">
+          <div class="nav-group-header" onclick="toggleNavGroup('sppd')">
+            <span class="icon">🚗</span>
+            <span class="nav-group-label">SPPD</span>
+            <span class="nav-group-chevron">›</span>
+          </div>
+          <ul class="nav-group-items" id="nav-group-items-sppd">
+            <li class="sppd-create" style="display:none"><a href="#" onclick="showPage('new-sppd')" class="menu-item" data-page="new-sppd"><span class="icon">🚗</span> Buat SPPD</a></li>
+            <li class="sppd-mine" style="display:none"><a href="#" onclick="showPage('my-sppd')" class="menu-item" data-page="my-sppd"><span class="icon">📋</span> SPPD Saya</a></li>
+            <li class="sppd-approve" style="display:none"><a href="#" onclick="showPage('sppd-approvals')" class="menu-item" data-page="sppd-approvals"><span class="icon">✅</span> Persetujuan SPPD</a></li>
+            <li class="sppd-laporan-approve" style="display:none"><a href="#" onclick="showPage('sppd-laporan-approvals')" class="menu-item" data-page="sppd-laporan-approvals"><span class="icon">📝</span> Persetujuan Laporan</a></li>
+            <li class="sppd-pencairan-menu" style="display:none"><a href="#" onclick="showPage('sppd-pencairan')" class="menu-item" data-page="sppd-pencairan"><span class="icon">💰</span> Pencairan Dana</a></li>
+            <li class="sppd-all" style="display:none"><a href="#" onclick="showPage('admin-sppd')" class="menu-item" data-page="admin-sppd"><span class="icon">🗂️</span> Semua SPPD</a></li>
+          </ul>
+        </li>
+
+        <!-- ── Laporan Bulanan ── -->
+        <li class="nav-group" id="nav-group-laporan">
+          <div class="nav-group-header" onclick="toggleNavGroup('laporan')">
+            <span class="icon">📈</span>
+            <span class="nav-group-label">Laporan Bulanan</span>
+            <span class="nav-group-chevron">›</span>
+          </div>
+          <ul class="nav-group-items" id="nav-group-items-laporan">
+            <li><a href="#" onclick="showPage('new-laporan')" class="menu-item" data-page="new-laporan"><span class="icon">✏️</span> Isi Laporan</a></li>
+            <li><a href="#" onclick="showPage('my-laporan')" class="menu-item" data-page="my-laporan"><span class="icon">📋</span> Laporan Saya</a></li>
+            <li class="laporan-admin" style="display:none"><a href="#" onclick="showPage('laporan-rekap')" class="menu-item" data-page="laporan-rekap"><span class="icon">🗂️</span> Rekap Semua</a></li>
+          </ul>
+        </li>
+
+        <li class="menu-divider"></li>
+
+        <!-- Standalone admin/kp items -->
         <li class="admin-or-kp" style="display:none"><a href="#" onclick="showPage('admin-users')" class="menu-item" data-page="admin-users"><span class="icon">👥</span> Kelola Pengguna</a></li>
         <li class="admin-or-kp" style="display:none"><a href="#" onclick="showPage('admin-settings')" class="menu-item" data-page="admin-settings"><span class="icon">⚙️</span> Pengaturan</a></li>
+        <li class="admin-only" style="display:none"><a href="#" onclick="showPage('sales-target')" class="menu-item" data-page="sales-target"><span class="icon">🎯</span> Target & Penjualan</a></li>
         <li class="admin-only" style="display:none"><a href="#" onclick="showPage('backup')" class="menu-item" data-page="backup"><span class="icon">💾</span> Backup Database</a></li>
-        <li class="menu-divider kk-menu" style="display:none"></li>
-        <li class="kk-menu kk-create" style="display:none"><a href="#" onclick="showPage('new-kk')" class="menu-item" data-page="new-kk"><span class="icon">📝</span> Buat Kertas Kerja</a></li>
-        <li class="kk-menu kk-mine" style="display:none"><a href="#" onclick="showPage('my-kk')" class="menu-item" data-page="my-kk"><span class="icon">📋</span> Kertas Kerja Saya</a></li>
-        <li class="kk-menu kk-approver" style="display:none"><a href="#" onclick="showPage('kk-approvals')" class="menu-item" data-page="kk-approvals"><span class="icon">✅</span> Persetujuan KK</a></li>
-        <li class="kk-menu kk-all" style="display:none"><a href="#" onclick="showPage('admin-kk')" class="menu-item" data-page="admin-kk"><span class="icon">🗂️</span> Semua Kertas Kerja</a></li>
-        <li class="menu-divider sppd-menu" style="display:none"></li>
-        <li class="sppd-menu sppd-create" style="display:none"><a href="#" onclick="showPage('new-sppd')" class="menu-item" data-page="new-sppd"><span class="icon">🚗</span> Buat SPPD</a></li>
-        <li class="sppd-menu sppd-mine" style="display:none"><a href="#" onclick="showPage('my-sppd')" class="menu-item" data-page="my-sppd"><span class="icon">📋</span> SPPD Saya</a></li>
-        <li class="sppd-menu sppd-approve" style="display:none"><a href="#" onclick="showPage('sppd-approvals')" class="menu-item" data-page="sppd-approvals"><span class="icon">✅</span> Persetujuan SPPD</a></li>
-        <li class="sppd-menu sppd-laporan-approve" style="display:none"><a href="#" onclick="showPage('sppd-laporan-approvals')" class="menu-item" data-page="sppd-laporan-approvals"><span class="icon">📝</span> Persetujuan Laporan</a></li>
-        <li class="sppd-menu sppd-pencairan-menu" style="display:none"><a href="#" onclick="showPage('sppd-pencairan')" class="menu-item" data-page="sppd-pencairan"><span class="icon">💰</span> Pencairan Dana</a></li>
-        <li class="sppd-menu sppd-all" style="display:none"><a href="#" onclick="showPage('admin-sppd')" class="menu-item" data-page="admin-sppd"><span class="icon">🗂️</span> Semua SPPD</a></li>
+
         <li class="menu-divider"></li>
         <li><a href="#" onclick="showPage('profile')" class="menu-item" data-page="profile"><span class="icon">👤</span> Profil Saya</a></li>
       </ul>
@@ -84,42 +137,218 @@
         <div id="content-dashboard" class="content-page">
           <div class="page-header">
             <h1 class="page-title">Dashboard</h1>
-            <div class="filter-bar">
-              <select id="dash-filter-month" onchange="loadDashboard()"><option value="">Semua Bulan</option></select>
+            <div class="filter-bar" style="flex-wrap:wrap;row-gap:6px">
+              <label class="filter-label">Periode:</label>
+              <select id="dash-filter-month" onchange="loadDashboard()" style="min-width:150px">
+                <option value="">Semua Bulan</option>
+              </select>
+              <div id="dash-admin-filters" style="display:none;align-items:center;gap:8px;flex-wrap:wrap">
+                <div id="dash-filter-area-group" style="display:flex;align-items:center;gap:8px">
+                  <label class="filter-label">Area:</label>
+                  <select id="dash-filter-area" onchange="onDashAreaChange()" style="min-width:140px">
+                    <option value="">Semua Area</option>
+                  </select>
+                </div>
+                <label class="filter-label">Akun:</label>
+                <select id="dash-filter-user" onchange="loadDashboard()" style="min-width:160px">
+                  <option value="">Semua Akun</option>
+                </select>
+              </div>
               <button id="btn-download-zip" onclick="downloadZip()" class="btn btn-pdf btn-sm" style="display:none" title="Unduh semua PDF bulan ini dalam satu file ZIP">📦 Unduh ZIP PDF</button>
             </div>
           </div>
-          <div class="stats-grid stats-grid-6" id="stats-grid">
-            <div class="stat-card"><div class="stat-icon">📋</div><div class="stat-info"><div class="stat-number" id="stat-total">0</div><div class="stat-label">Total Pengajuan</div></div></div>
-            <div class="stat-card stat-pending"><div class="stat-icon">⏳</div><div class="stat-info"><div class="stat-number" id="stat-pending">0</div><div class="stat-label">Menunggu Persetujuan</div></div></div>
-            <div class="stat-card stat-approved"><div class="stat-icon">✅</div><div class="stat-info"><div class="stat-number" id="stat-approved">0</div><div class="stat-label">Disetujui</div></div></div>
-            <div class="stat-card stat-rejected"><div class="stat-icon">❌</div><div class="stat-info"><div class="stat-number" id="stat-rejected">0</div><div class="stat-label">Ditolak</div></div></div>
-            <div class="stat-card stat-products"><div class="stat-icon">📦</div><div class="stat-info"><div class="stat-number" id="stat-products">0</div><div class="stat-label">Jumlah Produk</div></div></div>
-            <div class="stat-card stat-clients"><div class="stat-icon">🏢</div><div class="stat-info"><div class="stat-number" id="stat-clients">0</div><div class="stat-label">Jumlah Pelanggan</div></div></div>
-          </div>
-          <div class="card" id="card-per-user" style="display:none"><div class="card-header"><h3>📊 Rekap Per Akun</h3></div><div id="per-user-stats"></div></div>
 
-          <!-- SPPD Rekap Section -->
-          <div id="sppd-dashboard-section" style="display:none">
-            <div class="section-divider"><h2>🚗 Rekap SPPD</h2></div>
-            <div class="filter-bar" style="margin-bottom:16px">
-              <select id="sppd-dash-filter-month" onchange="loadSppdDashboard()"><option value="">Semua Bulan</option></select>
-            </div>
-            <div class="stats-grid stats-grid-6">
-              <div class="stat-card stat-sppd"><div class="stat-icon">🚗</div><div class="stat-info"><div class="stat-number" id="sppd-stat-total">0</div><div class="stat-label">Total SPPD</div></div></div>
-              <div class="stat-card stat-aktif"><div class="stat-icon">⏳</div><div class="stat-info"><div class="stat-number" id="sppd-stat-aktif">0</div><div class="stat-label">SPPD Aktif</div></div></div>
-              <div class="stat-card stat-selesai"><div class="stat-icon">✅</div><div class="stat-info"><div class="stat-number" id="sppd-stat-selesai">0</div><div class="stat-label">SPPD Selesai</div></div></div>
-              <div class="stat-card stat-laporan"><div class="stat-icon">📋</div><div class="stat-info"><div class="stat-number" id="sppd-stat-laporan">0</div><div class="stat-label">Kertas Kerja</div></div></div>
-              <div class="stat-card stat-money"><div class="stat-icon">💰</div><div class="stat-info"><div class="stat-number-sm" id="sppd-stat-biaya-usulan">-</div><div class="stat-label">Total Biaya Usulan</div></div></div>
-              <div class="stat-card stat-cair"><div class="stat-icon">💵</div><div class="stat-info"><div class="stat-number-sm" id="sppd-stat-biaya-cair">-</div><div class="stat-label">Total Dicairkan</div></div></div>
-            </div>
-            <div class="card" id="sppd-card-per-user" style="display:none">
-              <div class="card-header"><h3>📊 Rekap SPPD Per Pegawai</h3></div>
-              <div id="sppd-per-user-stats"></div>
+          <!-- Hero: Target & Realisasi Penjualan -->
+          <div id="dash-sales-hero" style="display:none">
+            <div class="sales-hero-card">
+              <div class="sales-hero-top">
+                <div class="sales-hero-label">🎯 Performa Penjualan</div>
+                <div id="sales-hero-periode" class="sales-hero-periode-badge"></div>
+              </div>
+              <div class="sales-hero-body">
+                <div class="sales-hero-kpi-col">
+                  <div class="sales-kpi-box sales-kpi-target">
+                    <div class="sales-kpi-icon">🎯</div>
+                    <div class="sales-kpi-val" id="sh-target">Rp 0</div>
+                    <div class="sales-kpi-lbl">Total Target</div>
+                  </div>
+                  <div class="sales-kpi-box sales-kpi-real">
+                    <div class="sales-kpi-icon">💰</div>
+                    <div class="sales-kpi-val" id="sh-real">Rp 0</div>
+                    <div class="sales-kpi-lbl">Realisasi</div>
+                  </div>
+                  <div class="sales-kpi-box sales-kpi-pct" id="sh-pct-box">
+                    <div class="sales-kpi-icon">🏆</div>
+                    <div class="sales-kpi-val" id="sh-pct">0%</div>
+                    <div class="sales-kpi-lbl">Pencapaian</div>
+                  </div>
+                  <div class="sales-kpi-box sales-kpi-gap" id="sh-gap-box">
+                    <div class="sales-kpi-icon" id="sh-gap-icon">📉</div>
+                    <div class="sales-kpi-val" id="sh-gap">Rp 0</div>
+                    <div class="sales-kpi-lbl" id="sh-gap-lbl">GAP</div>
+                  </div>
+                </div>
+                <div class="sales-hero-chart-col">
+                  <canvas id="chart-sales-monthly" style="width:100%;height:100%"></canvas>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="card"><div class="card-header"><h3>Pengajuan Terbaru</h3></div><div id="recent-submissions"></div></div>
+          <!-- Module summary cards -->
+          <div class="dash-modules-row">
+            <div class="dash-mod-card dash-mod-sph">
+              <div class="dash-mod-icon">📋</div>
+              <div class="dash-mod-title">SPH Pengajuan</div>
+              <div class="dash-mod-nums">
+                <div class="dash-mod-num-item"><span id="d-sph-total" class="dash-big">0</span><span class="dash-lbl">Total</span></div>
+                <div class="dash-mod-num-item"><span id="d-sph-approved" class="dash-big dash-green">0</span><span class="dash-lbl">Disetujui</span></div>
+                <div class="dash-mod-num-item"><span id="d-sph-pending" class="dash-big dash-yellow">0</span><span class="dash-lbl">Menunggu</span></div>
+              </div>
+            </div>
+            <div class="dash-mod-card dash-mod-kk">
+              <div class="dash-mod-icon">📝</div>
+              <div class="dash-mod-title">Kertas Kerja</div>
+              <div class="dash-mod-nums">
+                <div class="dash-mod-num-item"><span id="d-kk-total" class="dash-big">0</span><span class="dash-lbl">Total</span></div>
+                <div class="dash-mod-num-item"><span id="d-kk-approved" class="dash-big dash-green">0</span><span class="dash-lbl">Disetujui</span></div>
+                <div class="dash-mod-num-item"><span id="d-kk-pending" class="dash-big dash-yellow">0</span><span class="dash-lbl">Menunggu</span></div>
+              </div>
+            </div>
+            <div class="dash-mod-card dash-mod-sppd">
+              <div class="dash-mod-icon">🚗</div>
+              <div class="dash-mod-title">SPPD</div>
+              <div class="dash-mod-nums">
+                <div class="dash-mod-num-item"><span id="d-sppd-total" class="dash-big">0</span><span class="dash-lbl">Total</span></div>
+                <div class="dash-mod-num-item"><span id="d-sppd-selesai" class="dash-big dash-green">0</span><span class="dash-lbl">Selesai</span></div>
+                <div class="dash-mod-num-item"><span id="d-sppd-biaya" class="dash-big-sm dash-orange">-</span><span class="dash-lbl">Biaya SPPD</span></div>
+              </div>
+            </div>
+            <div class="dash-mod-card dash-mod-lap">
+              <div class="dash-mod-icon">📈</div>
+              <div class="dash-mod-title">Laporan Bulanan</div>
+              <div class="dash-mod-nums">
+                <div class="dash-mod-num-item"><span id="d-lap-total" class="dash-big">0</span><span class="dash-lbl">Laporan</span></div>
+                <div class="dash-mod-num-item"><span id="d-lap-prognosa" class="dash-big-sm dash-blue">-</span><span class="dash-lbl">Total Prognosa</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Charts row -->
+          <div class="dash-chart-row">
+            <div class="card">
+              <div class="card-header"><h3>📊 Status Pengajuan per Modul</h3></div>
+              <div class="card-body" style="position:relative;height:240px">
+                <canvas id="chart-modul"></canvas>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><h3>💰 Biaya SPPD</h3></div>
+              <div class="card-body" style="position:relative;height:240px">
+                <canvas id="chart-nilai"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Laporan narasi: Aktivitas & Rencana Tim -->
+          <div id="laporan-narasi-section" style="display:none">
+            <div class="section-divider"><h2>📝 Aktivitas &amp; Rencana Tim</h2></div>
+            <div id="laporan-narasi-grid" class="laporan-narasi-grid"></div>
+          </div>
+
+          <!-- Project list dari laporan -->
+          <div id="dash-project-section" style="display:none">
+            <div class="section-divider"><h2 id="dash-project-title">💼 Project Pipeline</h2></div>
+            <div class="card">
+              <div class="card-body no-padding">
+                <div class="table-responsive">
+                  <table class="table" id="dash-project-table">
+                    <thead>
+                      <tr>
+                        <th>Pelapor</th>
+                        <th>Area</th>
+                        <th>Pelanggan</th>
+                        <th>Principal</th>
+                        <th>Produk</th>
+                        <th>Nilai (Rp)</th>
+                        <th width="80">Prob</th>
+                        <th width="110">Periode</th>
+                      </tr>
+                    </thead>
+                    <tbody id="dash-project-tbody"></tbody>
+                    <tfoot>
+                      <tr>
+                        <td colspan="5" class="text-right fw-bold">Total Nilai</td>
+                        <td class="fw-bold" id="dash-project-total">Rp 0</td>
+                        <td colspan="2"></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Target & Realisasi Penjualan -->
+          <div id="dash-sales-section" style="display:none">
+            <div class="section-divider"><h2 id="dash-sales-title">🎯 Target &amp; Realisasi Penjualan</h2></div>
+            <div class="card">
+              <div class="card-body no-padding">
+                <div class="table-responsive">
+                  <table class="table" id="dash-sales-table">
+                    <thead>
+                      <tr>
+                        <th>Area Kerja</th>
+                        <th class="text-right">Target (Rp)</th>
+                        <th class="text-right">Realisasi (Rp)</th>
+                        <th class="text-right" width="110">Pencapaian</th>
+                        <th width="180">Progress</th>
+                      </tr>
+                    </thead>
+                    <tbody id="dash-sales-tbody"></tbody>
+                    <tfoot>
+                      <tr>
+                        <td class="fw-bold">Total</td>
+                        <td class="text-right fw-bold" id="dash-sales-total-target">Rp 0</td>
+                        <td class="text-right fw-bold" id="dash-sales-total-penjualan">Rp 0</td>
+                        <td class="text-right fw-bold" id="dash-sales-total-pct">0%</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SPH Recent -->
+          <div class="card">
+            <div class="card-header"><h3>📋 Pengajuan SPH Terbaru</h3></div>
+            <div id="recent-submissions"></div>
+          </div>
+
+          <!-- Hidden legacy elements (dipakai fungsi lama yang masih aktif) -->
+          <div style="display:none" aria-hidden="true">
+            <div id="stats-grid">
+              <span id="stat-total"></span><span id="stat-pending"></span>
+              <span id="stat-approved"></span><span id="stat-rejected"></span>
+              <span id="stat-products"></span><span id="stat-clients"></span>
+            </div>
+            <div id="card-per-user"><div id="per-user-stats"></div></div>
+            <div id="sppd-dashboard-section">
+              <span id="sppd-stat-total"></span><span id="sppd-stat-aktif"></span>
+              <span id="sppd-stat-selesai"></span><span id="sppd-stat-laporan"></span>
+              <span id="sppd-stat-biaya-usulan"></span><span id="sppd-stat-biaya-cair"></span>
+              <div id="sppd-card-per-user"><div id="sppd-per-user-stats"></div></div>
+              <select id="sppd-dash-filter-month"></select>
+            </div>
+            <div id="laporan-dashboard-section">
+              <div id="laporan-dashboard-content"></div>
+              <select id="laporan-dash-filter-periode"></select>
+              <select id="laporan-dash-filter-area"></select>
+              <select id="laporan-dash-filter-user"></select>
+            </div>
+          </div>
         </div>
         <div id="content-new-submission" class="content-page" style="display:none">
           <h1 class="page-title">Buat Pengajuan SPH Baru</h1>
@@ -435,6 +664,22 @@
           <div class="card"><div id="pencairan-container"><div class="loading">⏳ Memuat...</div></div></div>
         </div>
 
+        <!-- ═══════════ TARGET & PENJUALAN ═══════════ -->
+        <div id="content-sales-target" class="content-page" style="display:none">
+          <div class="page-header">
+            <h1 class="page-title">🎯 Target & Penjualan</h1>
+            <div class="filter-bar">
+              <label class="filter-label">Tahun:</label>
+              <select id="st-tahun" onchange="loadSalesTarget()" style="min-width:110px"></select>
+              <button onclick="saveSalesTarget()" class="btn btn-primary">💾 Simpan Semua</button>
+            </div>
+          </div>
+          <div id="st-alert" class="alert" style="display:none;margin-bottom:12px"></div>
+          <div id="st-container">
+            <div class="loading" style="padding:32px;text-align:center">⏳ Memuat...</div>
+          </div>
+        </div>
+
         <!-- ═══════════ PROFIL SAYA ═══════════ -->
         <!-- ═══════════ BACKUP DATABASE ═══════════ -->
         <div id="content-backup" class="content-page" style="display:none">
@@ -457,6 +702,122 @@
             <div class="card-header"><h3>📋 Daftar Backup</h3></div>
             <div class="card-body" id="backup-list-container"><div class="loading">⏳ Memuat...</div></div>
           </div>
+        </div>
+
+        <!-- ═══════════ BUAT / ISI LAPORAN BULANAN ═══════════ -->
+        <div id="content-new-laporan" class="content-page" style="display:none">
+          <div class="page-header">
+            <h1 class="page-title">Buat / Isi Laporan Bulanan</h1>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>📅 Periode Laporan</h3></div>
+            <div class="card-body">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Pilih Bulan <span class="required">*</span></label>
+                  <select id="laporan-periode" onchange="onLaporanPeriodeChange()"></select>
+                </div>
+                <div class="form-group" style="display:flex;align-items:flex-end;padding-bottom:4px">
+                  <div id="laporan-status-badge"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <form id="form-laporan" onsubmit="submitLaporanForm(event)">
+            <div class="card">
+              <div class="card-header"><h3>📋 Aktivitas &amp; Rencana</h3></div>
+              <div class="card-body">
+                <div class="form-group">
+                  <label>Alasan Tercapai / Tidak Tercapai</label>
+                  <textarea id="laporan-alasan" rows="3" placeholder="Alasan pencapaian / hambatan bulan ini"></textarea>
+                </div>
+                <div class="form-group">
+                  <label>Aktivitas Bulan Ini</label>
+                  <textarea id="laporan-aktivitas" rows="4" placeholder="Aktivitas yang dilakukan bulan ini"></textarea>
+                </div>
+                <div class="form-group">
+                  <label>Rencana Aktivitas Bulan Depan</label>
+                  <textarea id="laporan-rencana" rows="3" placeholder="Rencana aktivitas bulan depan"></textarea>
+                </div>
+                <div class="form-group">
+                  <label>Prognosa Bulan Selanjutnya (Rp)</label>
+                  <input type="text" inputmode="numeric" id="laporan-prognosa" class="num-fmt" value="0" oninput="formatNumInput(this)" onfocus="if(this.value==='0')this.value=''">
+                  <small>Estimasi nilai penjualan bulan depan</small>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3>🤝 Support yang Diperlukan</h3>
+                <button type="button" onclick="addLaporanSupportRow()" class="btn btn-secondary btn-sm">+ Tambah</button>
+              </div>
+              <div class="card-body" id="laporan-support-container">
+                <p class="laporan-support-empty" style="color:var(--text-light);font-size:13px;margin:0">Tidak ada item support. Klik "+ Tambah" untuk menambah.</p>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3>💼 Project yang Dikerjakan</h3>
+                <button type="button" onclick="addLaporanProjectRow()" class="btn btn-secondary btn-sm">+ Tambah</button>
+              </div>
+              <div class="card-body no-padding">
+                <div class="table-responsive">
+                  <table class="table" id="laporan-project-table">
+                    <thead><tr><th width="36">No</th><th>Pelanggan</th><th>Principal</th><th>Produk</th><th width="150">Nilai (Rp)</th><th width="90">Prob (%)</th><th width="40"></th></tr></thead>
+                    <tbody id="laporan-project-tbody"></tbody>
+                    <tfoot><tr><td colspan="4" class="text-right fw-bold">Total Nilai</td><td class="fw-bold" id="laporan-project-total">Rp 0</td><td></td><td></td></tr></tfoot>
+                  </table>
+                </div>
+                <p class="laporan-project-empty" style="color:var(--text-light);font-size:13px;padding:12px 20px;margin:0">Tidak ada project. Klik "+ Tambah" untuk menambah.</p>
+              </div>
+            </div>
+            <div class="form-actions">
+              <div id="laporan-form-error" class="alert alert-error" style="display:none"></div>
+              <div id="laporan-form-success" class="alert alert-success" style="display:none"></div>
+              <button type="submit" class="btn btn-primary">💾 Simpan Laporan</button>
+              <button type="button" onclick="showPage('my-laporan')" class="btn btn-outline">Lihat Semua Laporan</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- ═══════════ LAPORAN SAYA ═══════════ -->
+        <div id="content-my-laporan" class="content-page" style="display:none">
+          <div class="page-header">
+            <h1 class="page-title">Laporan Saya</h1>
+            <button onclick="showPage('new-laporan')" class="btn btn-primary">+ Isi Laporan</button>
+          </div>
+          <div class="card"><div id="my-laporan-container"><div class="loading">⏳ Memuat...</div></div></div>
+        </div>
+
+        <!-- ═══════════ REKAP LAPORAN (admin/manajemen) ═══════════ -->
+        <div id="content-laporan-rekap" class="content-page" style="display:none">
+          <div class="page-header">
+            <h1 class="page-title">Rekap Laporan Bulanan</h1>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>🔍 Filter</h3></div>
+            <div class="card-body">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Bulan / Periode</label>
+                  <select id="rekap-laporan-periode" onchange="loadLaporanRekap()"><option value="">Semua Bulan</option></select>
+                </div>
+                <div class="form-group">
+                  <label>Area Kerja</label>
+                  <select id="rekap-laporan-area" onchange="onRekaplaporanAreaChange()">
+                    <option value="">Semua Area</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>User</label>
+                  <select id="rekap-laporan-user" onchange="loadLaporanRekap()">
+                    <option value="">Semua User</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card"><div id="rekap-laporan-container"><div class="loading">⏳ Memuat...</div></div></div>
         </div>
 
         <div id="content-profile" class="content-page" style="display:none">
