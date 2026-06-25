@@ -637,6 +637,23 @@ db.exec(`
   );
 `);
 
+// ── MIGRATION: notifications table ───────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT DEFAULT '',
+    type TEXT DEFAULT 'info',
+    ref_type TEXT DEFAULT '',
+    ref_id INTEGER,
+    is_read INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, is_read);
+`);
+
 // ── Auto-backup saat server start ────────────────────────────────────────────
 (async () => {
   try {

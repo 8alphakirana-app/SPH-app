@@ -5,6 +5,7 @@ const multer = require('multer');
 const sharp = require('sharp');
 const path = require('path');
 const fs = require('fs');
+const { notifySPPDNextLevel, notifySPPDResult } = require('../notif');
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 function requireLogin(req, res, next) {
@@ -289,6 +290,9 @@ router.post('/', (req, res) => {
         Number(biaya.uang_saku) || 0, Number(biaya.biaya_lain) || 0,
         biaya.biaya_lain_ket || '', total);
   }
+
+  // Notifikasi approver pertama
+  notifySPPDNextLevel(sppdId, initialLevel, area_kerja);
 
   res.json({ success: true, id: sppdId, nomor });
 });
@@ -920,10 +924,12 @@ router.post('/:id/approve', (req, res) => {
     db.prepare("INSERT INTO sppd_approvals (sppd_id,level,approver_user_id,status,note,acted_at) VALUES (?,?,?,'approved',?,datetime('now','localtime'))")
       .run(sppd.id, level, user.id, note || '');
 
+  let _finalized = false;
   const finalize = () => {
     const creatorArea = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sppd.created_by)?.area_kerja || sppd.area_kerja || '';
     const nomor = generateNomorSppd(creatorArea);
     db.prepare("UPDATE sppd SET status='approved', sppd_approval_level=2, nomor=? WHERE id=?").run(nomor, sppd.id);
+    _finalized = true;
   };
 
   if (user.role === 'area_manager') {
@@ -932,6 +938,7 @@ router.post('/:id/approve', (req, res) => {
     if ((creator?.area_kerja || '').trim().toLowerCase() !== (user.area_kerja || '').trim().toLowerCase())
       return res.status(403).json({ error: 'Area Anda tidak sesuai dengan area pembuat SPPD' });
     ins(1); db.prepare('UPDATE sppd SET sppd_approval_level=1 WHERE id=?').run(sppd.id);
+    notifySPPDNextLevel(sppd.id, 1, null);
 
   } else if (user.role === 'gm') {
     if (lvl !== 1) return res.status(403).json({ error: 'Bukan giliran GM' });
@@ -950,6 +957,7 @@ router.post('/:id/approve', (req, res) => {
   } else if (user.role === 'admin') {
     if (lvl === 0) {
       ins(1); db.prepare('UPDATE sppd SET sppd_approval_level=1 WHERE id=?').run(sppd.id);
+      notifySPPDNextLevel(sppd.id, 1, null);
     } else if (lvl === 1) {
       if (!db.prepare("SELECT id FROM sppd_approvals WHERE sppd_id=? AND level=2").get(sppd.id)) ins(2);
       if (!db.prepare("SELECT id FROM sppd_approvals WHERE sppd_id=? AND level=3").get(sppd.id)) ins(3);
@@ -959,6 +967,7 @@ router.post('/:id/approve', (req, res) => {
     return res.status(403).json({ error: 'Tidak berwenang' });
   }
 
+  if (_finalized) notifySPPDResult(sppd.id, sppd.created_by, 'approved');
   res.json({ success: true });
 });
 
@@ -994,6 +1003,7 @@ router.post('/:id/reject', (req, res) => {
   db.prepare("INSERT INTO sppd_approvals (sppd_id,level,approver_user_id,status,note,acted_at) VALUES (?,?,?,'rejected',?,datetime('now','localtime'))")
     .run(sppd.id, approvalLevel, user.id, note || '');
   db.prepare("UPDATE sppd SET status='rejected', reject_reason=? WHERE id=?").run(note || '', sppd.id);
+  notifySPPDResult(sppd.id, sppd.created_by, 'rejected');
 
   res.json({ success: true });
 });

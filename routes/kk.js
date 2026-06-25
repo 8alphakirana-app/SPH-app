@@ -3,6 +3,7 @@ const router  = express.Router();
 const db      = require('../database');
 const fs      = require('fs');
 const path    = require('path');
+const { notifyKKNextLevel, notifyKKResult } = require('../notif');
 
 const LEVEL_ROLES  = { 1: 'area_manager', 2: 'manager_keuangan', 3: 'gm', 4: 'gm2', 5: 'direktur_ops', 6: 'direktur_utama' };
 const ROLE_LEVELS  = { area_manager: 1, manager_keuangan: 2, gm: 3, gm2: 4, direktur_ops: 5, direktur_utama: 6 };
@@ -134,6 +135,9 @@ router.post('/', requireLogin, (req, res) => {
       db.prepare("INSERT INTO kk_approvals (submission_id, level, status) VALUES (?, ?, 'pending')").run(submissionId, level);
     }
   }
+
+  // Notifikasi ke approver level pertama
+  notifyKKNextLevel(submissionId, kkInitLevel, creator?.area_kerja || '');
 
   res.json({ success: true, id: submissionId });
 });
@@ -371,10 +375,20 @@ router.post('/:id/approve', requireLogin, (req, res) => {
     // Final approval (direktur_utama)
     db.prepare("UPDATE submissions SET status='approved', kk_approval_level=7, approved_by=?, approved_at=? WHERE id=?")
       .run(user.id, now, req.params.id);
+    notifyKKResult(req.params.id, sub.created_by, 'approved');
     return res.json({ success: true, nextLevel: null });
   }
 
   db.prepare('UPDATE submissions SET kk_approval_level=? WHERE id=?').run(nextLevel, req.params.id);
+  // Notifikasi approver berikutnya (level 3 = GM stage tetap notif gm dan gm2)
+  if (nextLevel === 3) {
+    const creatorArea = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sub.created_by)?.area_kerja || '';
+    notifyKKNextLevel(req.params.id, 3, creatorArea);
+    notifyKKNextLevel(req.params.id, 4, creatorArea);
+  } else {
+    const creatorArea = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sub.created_by)?.area_kerja || '';
+    notifyKKNextLevel(req.params.id, nextLevel, creatorArea);
+  }
   res.json({ success: true, nextLevel });
 });
 
@@ -415,6 +429,7 @@ router.post('/:id/reject', requireLogin, (req, res) => {
   db.prepare("UPDATE kk_approvals SET status='rejected', approver_user_id=?, note=?, acted_at=? WHERE submission_id=? AND level=?")
     .run(user.id, note || '', now, req.params.id, approvalLevel);
   db.prepare("UPDATE submissions SET status='rejected', reject_reason=? WHERE id=?").run(note || 'Ditolak', req.params.id);
+  notifyKKResult(req.params.id, sub.created_by, 'rejected');
 
   res.json({ success: true });
 });

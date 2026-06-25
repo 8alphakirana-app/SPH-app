@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database');
+const { notifySPHCreated, notifySPHResult } = require('../notif');
 const { generateDoc } = require('../docGenerator');
 const { generateHTML, generateHeaderHTML, generateFooterHTML } = require('../htmlGenerator');
 const os = require('os');
@@ -323,7 +324,9 @@ router.post('/', requireLogin, (req, res) => {
           lampiran || '',
           req.session.user.id
         );
-    res.json({ success: true, id: result.lastInsertRowid });
+    const newId = result.lastInsertRowid;
+    notifySPHCreated(newId);
+    res.json({ success: true, id: newId });
 });
 
 // POST /api/submissions/:id/approve - admin / kantor_pusat / gm / gm2 approve
@@ -336,6 +339,7 @@ router.post('/:id/approve', requireSPHApprover, (req, res) => {
     db.prepare(`
         UPDATE submissions SET status = 'approved', nomor = ?, approved_by = ?, approved_at = ? WHERE id = ?
           `).run(nomor, req.session.user.id, now, req.params.id);
+    notifySPHResult(req.params.id, row.created_by, 'approved');
     res.json({ success: true, nomor });
 });
 
@@ -348,6 +352,7 @@ router.post('/:id/reject', requireSPHApprover, (req, res) => {
     db.prepare(`
         UPDATE submissions SET status = 'rejected', reject_reason = ? WHERE id = ?
           `).run(reason || 'Tidak ada keterangan', req.params.id);
+    notifySPHResult(req.params.id, row.created_by, 'rejected');
     res.json({ success: true });
 });
 

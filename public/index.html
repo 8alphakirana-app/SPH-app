@@ -3,6 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1e293b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="DMS LAK">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/icon-180.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">
+  <link rel="shortcut icon" href="/favicon.png">
   <title>DMS - PT Lapan Alpha Kirana</title>
   <link rel="stylesheet" href="/css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
@@ -114,6 +122,7 @@
 
         <li class="menu-divider"></li>
         <li><a href="#" onclick="showPage('profile')" class="menu-item" data-page="profile"><span class="icon">👤</span> Profil Saya</a></li>
+        <li id="li-install-pwa" style="display:none"><a href="#" onclick="installPWA()" class="menu-item"><span class="icon">📲</span> Pasang Aplikasi</a></li>
       </ul>
       <div class="sidebar-footer">
         <div class="user-info">
@@ -131,7 +140,24 @@
       <header class="top-bar">
         <button class="btn-menu-toggle" onclick="toggleSidebar()">☰</button>
         <div class="top-bar-title" id="top-bar-title">Dashboard</div>
-        <div class="top-bar-right"><span id="top-bar-user"></span></div>
+        <div class="top-bar-right">
+          <div class="notif-bell-wrap">
+            <button class="notif-bell-btn" onclick="toggleNotifDropdown()" title="Notifikasi">
+              🔔
+              <span class="notif-badge" id="notif-badge" style="display:none">0</span>
+            </button>
+            <div class="notif-dropdown" id="notif-dropdown" style="display:none">
+              <div class="notif-dropdown-header">
+                <span>Notifikasi</span>
+                <button class="notif-read-all-btn" onclick="markAllRead()">Tandai semua dibaca</button>
+              </div>
+              <div class="notif-list" id="notif-list">
+                <div class="notif-empty">Tidak ada notifikasi</div>
+              </div>
+            </div>
+          </div>
+          <span id="top-bar-user"></span>
+        </div>
       </header>
       <div class="content-area">
         <div id="content-dashboard" class="content-page">
@@ -1227,5 +1253,39 @@
 
 <div id="toast" class="toast" style="display:none"></div>
 <script src="/js/app.js"></script>
+<script>
+(function () {
+  let _deferredInstallPrompt = null;
+
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    _deferredInstallPrompt = e;
+    var li = document.getElementById('li-install-pwa');
+    if (li) li.style.display = '';
+  });
+
+  window.installPWA = function () {
+    if (!_deferredInstallPrompt) return;
+    _deferredInstallPrompt.prompt();
+    _deferredInstallPrompt.userChoice.then(function () {
+      _deferredInstallPrompt = null;
+      var li = document.getElementById('li-install-pwa');
+      if (li) li.style.display = 'none';
+    });
+  };
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        .then(function (reg) {
+          console.log('[SW] Registered, scope:', reg.scope);
+        })
+        .catch(function (err) {
+          console.warn('[SW] Registration failed:', err);
+        });
+    });
+  }
+})();
+</script>
 </body>
 </html>

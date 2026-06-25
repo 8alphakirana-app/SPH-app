@@ -7,6 +7,8 @@ let rejectTargetId = null;
 let productRowCount = 0;
 let editTargetId = null;
 let editProductRowCount = 0;
+let _notifInterval = null;
+let _lastUnreadCount = 0;
 
 // ===================== NUMBER FORMATTING =====================
 // Strip thousand-separators and return a plain float
@@ -43,6 +45,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                      setUser(user);
                      showApp();
                      showPage('dashboard');
+                     startNotifPolling();
               } else {
                      showLogin();
               }
@@ -65,6 +68,7 @@ document.getElementById('form-login').addEventListener('submit', async (e) => {
                      setUser(data.user);
                      showApp();
                      showPage('dashboard');
+                     startNotifPolling();
               } else {
                      errEl.textContent = data.error || 'Login gagal';
                      errEl.style.display = 'block';
@@ -76,6 +80,7 @@ document.getElementById('form-login').addEventListener('submit', async (e) => {
 });
 
 async function logout() {
+       stopNotifPolling();
        await api('/api/auth/logout', 'POST');
        currentUser = null;
        _dashFiltersInited = false;
@@ -4660,4 +4665,136 @@ async function saveSalesTarget() {
               alertEl.textContent = '❌ ' + e.message;
               alertEl.style.display = 'block';
        }
+}
+
+// ===================== NOTIFICATIONS =====================
+function _notifIcon(type) {
+  const map = { approval: '📋', info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' };
+  return map[type] || '🔔';
+}
+
+function _timeSince(dateStr) {
+  if (!dateStr) return '';
+  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (diff < 60) return 'Baru saja';
+  if (diff < 3600) return Math.floor(diff / 60) + ' menit lalu';
+  if (diff < 86400) return Math.floor(diff / 3600) + ' jam lalu';
+  return Math.floor(diff / 86400) + ' hari lalu';
+}
+
+async function loadNotifications() {
+  try {
+    const res = await api('/api/notifications');
+    if (!res.ok) return;
+    const data = await res.json();
+    const badge = document.getElementById('notif-badge');
+    const list = document.getElementById('notif-list');
+    if (!badge || !list) return;
+
+    const unread = data.unread_count || 0;
+    if (badge) {
+      badge.textContent = unread > 99 ? '99+' : unread;
+      badge.style.display = unread > 0 ? 'flex' : 'none';
+    }
+
+    if (unread > _lastUnreadCount && _lastUnreadCount >= 0 && document.visibilityState !== 'visible') {
+      const newest = (data.notifications || [])[0];
+      if (newest) requestWebNotif(newest.title, newest.body);
+    }
+    _lastUnreadCount = unread;
+
+    const notifs = data.notifications || [];
+    if (notifs.length === 0) {
+      list.innerHTML = '<div class="notif-empty">Tidak ada notifikasi</div>';
+      return;
+    }
+    list.innerHTML = notifs.map(n => `
+      <div class="notif-item${n.is_read ? '' : ' unread'}" onclick="onNotifClick(${n.id},'${escHtml(n.ref_type||'')}',${n.ref_id||0})">
+        <div class="notif-icon">${_notifIcon(n.type)}</div>
+        <div class="notif-content">
+          <div class="notif-title">${escHtml(n.title)}</div>
+          <div class="notif-body">${escHtml(n.body)}</div>
+          <div class="notif-time">${_timeSince(n.created_at)}</div>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.warn('[notif] load error:', e);
+  }
+}
+
+async function onNotifClick(id, refType, refId) {
+  document.getElementById('notif-dropdown').style.display = 'none';
+  try { await api(`/api/notifications/${id}/read`, 'POST'); } catch {}
+  _lastUnreadCount = Math.max(0, _lastUnreadCount - 1);
+  await loadNotifications();
+  if (refType === 'sph' && refId) showPage('all-sph');
+  else if (refType === 'kk' && refId) showPage('kk-semua');
+  else if (refType === 'sppd' && refId) showPage('sppd-semua');
+}
+
+async function markAllRead() {
+  try {
+    await api('/api/notifications/read-all', 'POST');
+    _lastUnreadCount = 0;
+    await loadNotifications();
+  } catch (e) {
+    console.warn('[notif] markAllRead error:', e);
+  }
+}
+
+function toggleNotifDropdown() {
+  const dd = document.getElementById('notif-dropdown');
+  if (!dd) return;
+  const isOpen = dd.style.display !== 'none';
+  if (isOpen) {
+    dd.style.display = 'none';
+    document.removeEventListener('click', _closeNotifOnClickOutside);
+  } else {
+    dd.style.display = 'flex';
+    loadNotifications();
+    setTimeout(() => document.addEventListener('click', _closeNotifOnClickOutside), 10);
+  }
+}
+
+function _closeNotifOnClickOutside(e) {
+  const wrap = document.querySelector('.notif-bell-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('notif-dropdown').style.display = 'none';
+    document.removeEventListener('click', _closeNotifOnClickOutside);
+  }
+}
+
+function startNotifPolling() {
+  loadNotifications();
+  if (_notifInterval) clearInterval(_notifInterval);
+  _notifInterval = setInterval(loadNotifications, 30000);
+}
+
+function stopNotifPolling() {
+  if (_notifInterval) { clearInterval(_notifInterval); _notifInterval = null; }
+  _lastUnreadCount = 0;
+  const badge = document.getElementById('notif-badge');
+  if (badge) badge.style.display = 'none';
+  const list = document.getElementById('notif-list');
+  if (list) list.innerHTML = '<div class="notif-empty">Tidak ada notifikasi</div>';
+}
+
+function requestWebNotif(title, body) {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'granted') {
+    _sendWebNotif(title, body);
+  } else if (Notification.permission !== 'denied') {
+    Notification.requestPermission().then(perm => {
+      if (perm === 'granted') _sendWebNotif(title, body);
+    });
+  }
+}
+
+function _sendWebNotif(title, body) {
+  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage({ type: 'SHOW_NOTIFICATION', title, body });
+  } else {
+    new Notification(title, { body, icon: '/icons/icon-192.png' });
+  }
 }

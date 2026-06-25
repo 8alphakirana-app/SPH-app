@@ -12,6 +12,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Service Worker: pastikan header yang benar
+app.get('/sw.js', (req, res, next) => {
+    res.setHeader('Service-Worker-Allowed', '/');
+    res.setHeader('Cache-Control', 'no-cache');
+    next();
+});
+
 // Trust proxy (Railway / reverse proxy)
 app.set('trust proxy', 1);
 
@@ -35,6 +42,7 @@ app.use('/api/sppd', require('./routes/sppd'));
 app.use('/api/backup', require('./routes/backup'));
 app.use('/api/laporan', require('./routes/laporan'));
 app.use('/api/sales-target', require('./routes/sales-target'));
+app.use('/api/notifications', require('./routes/notifications'));
 
 // SPA fallback - semua route ke index.html
 app.get('*', (req, res) => {
