@@ -931,10 +931,22 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
 .my-lap-tanggapan { background: var(--gray-light); border-radius: 8px; padding: 12px; margin-top: 8px; }
 .badge-tanggapan { background: #3b82f6; color: white; border-radius: 20px; font-size: 11px; font-weight: 600; padding: 2px 8px; }
 
+/* Sidebar overlay (mobile) */
+#sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  z-index: 99;
+  backdrop-filter: blur(1px);
+  -webkit-backdrop-filter: blur(1px);
+}
+#sidebar-overlay.active { display: block; }
+
 /* Responsive — Tablet & HP */
 @media (max-width: 768px) {
   /* Layout */
-  .sidebar { transform: translateX(-100%); }
+  .sidebar { transform: translateX(-100%); transition: transform .25s ease; }
   .sidebar.open { transform: translateX(0); }
   .main-content { margin-left: 0; }
   .btn-menu-toggle { display: block; }
@@ -1145,4 +1157,55 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
 }
 @media (max-width: 480px) {
   .notif-dropdown { width: calc(100vw - 20px); right: -60px; }
+}
+
+/* ═══ Bottom Navbar (mobile only) ═══ */
+.bottom-nav {
+  display: none;
+}
+@media (max-width: 768px) {
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: #1e293b;
+    border-top: 1px solid rgba(255,255,255,.1);
+    z-index: 200;
+    justify-content: space-around;
+    align-items: stretch;
+  }
+  /* Push content above bottom nav */
+  .main-content {
+    padding-bottom: 60px;
+  }
+  .bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    color: #94a3b8;
+    text-decoration: none;
+    font-size: 10px;
+    gap: 2px;
+    cursor: pointer;
+    transition: color .15s;
+    -webkit-tap-highlight-color: transparent;
+    padding: 6px 0;
+  }
+  .bottom-nav-item:active,
+  .bottom-nav-item.active {
+    color: #38bdf8;
+  }
+  .bottom-nav-icon {
+    font-size: 20px;
+    line-height: 1;
+  }
+  .bottom-nav-label {
+    font-size: 10px;
+    white-space: nowrap;
+  }
 }

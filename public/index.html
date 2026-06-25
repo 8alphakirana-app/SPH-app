@@ -136,6 +136,7 @@
         <button onclick="logout()" class="btn-logout" title="Keluar">⏻</button>
       </div>
     </nav>
+    <div id="sidebar-overlay" onclick="closeSidebar()"></div>
     <main class="main-content">
       <header class="top-bar">
         <button class="btn-menu-toggle" onclick="toggleSidebar()">☰</button>
@@ -889,6 +890,31 @@
     </main>
   </div>
 </div>
+
+<!-- ═══════════ BOTTOM NAVBAR (mobile) ═══════════ -->
+<nav class="bottom-nav" id="bottom-nav">
+  <a class="bottom-nav-item" onclick="showPage('dashboard');return false" href="#">
+    <span class="bottom-nav-icon">🏠</span>
+    <span class="bottom-nav-label">Beranda</span>
+  </a>
+  <a class="bottom-nav-item" onclick="showPage('my-submissions');return false" href="#">
+    <span class="bottom-nav-icon">📄</span>
+    <span class="bottom-nav-label">SPH</span>
+  </a>
+  <a class="bottom-nav-item" onclick="showPage('my-kk');return false" href="#">
+    <span class="bottom-nav-icon">📋</span>
+    <span class="bottom-nav-label">KK</span>
+  </a>
+  <a class="bottom-nav-item" id="bottom-nav-install" style="display:none" onclick="installPWA();return false" href="#">
+    <span class="bottom-nav-icon">📲</span>
+    <span class="bottom-nav-label">Pasang App</span>
+  </a>
+  <a class="bottom-nav-item" onclick="toggleSidebar();return false" href="#">
+    <span class="bottom-nav-icon">☰</span>
+    <span class="bottom-nav-label">Menu</span>
+  </a>
+</nav>
+
 <!-- ═══════════ KK DETAIL MODAL ═══════════ -->
 <div id="modal-kk-detail" class="modal" style="display:none">
   <div class="modal-backdrop" onclick="closeModal('modal-kk-detail')"></div>
@@ -1257,11 +1283,23 @@
 (function () {
   let _deferredInstallPrompt = null;
 
+  function _showInstallBtn() {
+    var li = document.getElementById('li-install-pwa');
+    if (li) li.style.display = '';
+    var bn = document.getElementById('bottom-nav-install');
+    if (bn) bn.style.display = '';
+  }
+  function _hideInstallBtn() {
+    var li = document.getElementById('li-install-pwa');
+    if (li) li.style.display = 'none';
+    var bn = document.getElementById('bottom-nav-install');
+    if (bn) bn.style.display = 'none';
+  }
+
   window.addEventListener('beforeinstallprompt', function (e) {
     e.preventDefault();
     _deferredInstallPrompt = e;
-    var li = document.getElementById('li-install-pwa');
-    if (li) li.style.display = '';
+    _showInstallBtn();
   });
 
   window.installPWA = function () {
@@ -1269,8 +1307,7 @@
     _deferredInstallPrompt.prompt();
     _deferredInstallPrompt.userChoice.then(function () {
       _deferredInstallPrompt = null;
-      var li = document.getElementById('li-install-pwa');
-      if (li) li.style.display = 'none';
+      _hideInstallBtn();
     });
   };
 

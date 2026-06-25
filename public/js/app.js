@@ -242,13 +242,22 @@ function showPage(page) {
        else if (page === 'my-laporan') loadMyLaporan();
        else if (page === 'laporan-rekap') loadLaporanRekap();
        if (window.innerWidth <= 768) {
-              document.getElementById('sidebar').classList.remove('open');
+              closeSidebar();
        }
        return false;
 }
 
+function closeSidebar() {
+       document.getElementById('sidebar').classList.remove('open');
+       const ov = document.getElementById('sidebar-overlay');
+       if (ov) ov.classList.remove('active');
+}
+
 function toggleSidebar() {
-       document.getElementById('sidebar').classList.toggle('open');
+       const sidebar = document.getElementById('sidebar');
+       const ov = document.getElementById('sidebar-overlay');
+       sidebar.classList.toggle('open');
+       if (ov) ov.classList.toggle('active', sidebar.classList.contains('open'));
 }
 
 function toggleNavGroup(id) {
