@@ -202,12 +202,25 @@ router.get('/', requireLogin, (req, res) => {
 router.get('/stats', requireLogin, (req, res) => {
   const { month } = req.query;
   const likeMonth = month ? month + '%' : null;
+  const user = req.session.user;
+  const isAreaMgr = user.role === 'area_manager';
+  const area = isAreaMgr
+    ? (db.prepare('SELECT area_kerja FROM users WHERE id=?').get(user.id)?.area_kerja || '').trim().toLowerCase()
+    : null;
 
-  function cnt(extra) {
+  function cnt(statusClause) {
+    if (isAreaMgr) {
+      const base = `SELECT COUNT(*) AS c FROM submissions s JOIN users u ON u.id = s.created_by WHERE s.submission_type='kk' AND LOWER(TRIM(u.area_kerja)) = ?`;
+      const params = [area];
+      if (likeMonth) params.unshift(likeMonth);
+      return likeMonth
+        ? db.prepare(base + " AND s.created_at LIKE ? " + statusClause).get(area, likeMonth).c
+        : db.prepare(base + " " + statusClause).get(area).c;
+    }
     const base = "SELECT COUNT(*) AS c FROM submissions s WHERE s.submission_type='kk'";
     return likeMonth
-      ? db.prepare(base + " AND s.created_at LIKE ? " + extra).get(likeMonth).c
-      : db.prepare(base + " " + extra).get().c;
+      ? db.prepare(base + " AND s.created_at LIKE ? " + statusClause).get(likeMonth).c
+      : db.prepare(base + " " + statusClause).get().c;
   }
 
   res.json({

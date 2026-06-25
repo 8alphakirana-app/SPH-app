@@ -75,7 +75,8 @@ function generateNomor() {
 // GET /api/submissions - list pengajuan
 router.get('/', requireLogin, (req, res) => {
     let rows;
-    if (isAdminOrKP(req.session.user)) {
+    const user = req.session.user;
+    if (isAdminOrKP(user)) {
           rows = db.prepare(`
                 SELECT s.*, u.full_name as creator_name, a.full_name as approver_name
                       FROM submissions s
@@ -83,6 +84,17 @@ router.get('/', requireLogin, (req, res) => {
                                   LEFT JOIN users a ON s.approved_by = a.id
                                         ORDER BY s.created_at DESC
                                             `).all();
+    } else if (user.role === 'area_manager') {
+          const area = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(user.id)?.area_kerja || '';
+          rows = db.prepare(`
+                SELECT s.*, u.full_name as creator_name, a.full_name as approver_name
+                      FROM submissions s
+                            LEFT JOIN users u ON s.created_by = u.id
+                                  LEFT JOIN users a ON s.approved_by = a.id
+                                        WHERE (s.submission_type = 'sph' OR s.submission_type IS NULL)
+                                          AND LOWER(TRIM(u.area_kerja)) = LOWER(TRIM(?))
+                                              ORDER BY s.created_at DESC
+                                                  `).all(area);
     } else {
           rows = db.prepare(`
                 SELECT s.*, u.full_name as creator_name, a.full_name as approver_name
@@ -91,18 +103,32 @@ router.get('/', requireLogin, (req, res) => {
                                   LEFT JOIN users a ON s.approved_by = a.id
                                         WHERE s.created_by = ?
                                               ORDER BY s.created_at DESC
-                                                  `).all(req.session.user.id);
+                                                  `).all(user.id);
     }
     rows = rows.map(r => ({ ...r, items: JSON.parse(r.items) }));
     res.json(rows);
 });
 
 // GET /api/submissions/dashboard-stats?month=YYYY-MM
-router.get('/dashboard-stats', requireAdminOrKP, (req, res) => {
+router.get('/dashboard-stats', requireLogin, (req, res) => {
+    const role = req.session.user.role;
+    if (role !== 'admin' && role !== 'kantor_pusat' && role !== 'area_manager') {
+        return res.status(403).json({ error: 'Akses ditolak' });
+    }
     const month = req.query.month || null;
     try {
+        const isAreaMgr = role === 'area_manager';
+        const area = isAreaMgr
+            ? (db.prepare('SELECT area_kerja FROM users WHERE id=?').get(req.session.user.id)?.area_kerja || '').trim().toLowerCase()
+            : null;
+
+        // WHERE clause snippets for area filter
+        const areaJoin   = isAreaMgr ? ' AND LOWER(TRIM(u.area_kerja)) = ?' : '';
+        const areaWhere  = isAreaMgr ? ' AND LOWER(TRIM(u.area_kerja)) = ?' : '';
+
         let perUser;
         if (month) {
+            const params = isAreaMgr ? [month, area] : [month];
             perUser = db.prepare(`
                 SELECT u.id, u.full_name, u.username,
                     COUNT(s.id) as total,
@@ -113,9 +139,11 @@ router.get('/dashboard-stats', requireAdminOrKP, (req, res) => {
                 FROM users u
                 LEFT JOIN submissions s ON s.created_by = u.id
                     AND strftime('%Y-%m', s.created_at) = ?
+                WHERE 1=1 ${areaWhere}
                 GROUP BY u.id ORDER BY total DESC, u.full_name ASC
-            `).all(month);
+            `).all(...params);
         } else {
+            const params = isAreaMgr ? [area] : [];
             perUser = db.prepare(`
                 SELECT u.id, u.full_name, u.username,
                     COUNT(s.id) as total,
@@ -125,8 +153,9 @@ router.get('/dashboard-stats', requireAdminOrKP, (req, res) => {
                     COUNT(DISTINCT s.client_name) as jumlah_pelanggan
                 FROM users u
                 LEFT JOIN submissions s ON s.created_by = u.id
+                WHERE 1=1 ${areaWhere}
                 GROUP BY u.id ORDER BY total DESC, u.full_name ASC
-            `).all();
+            `).all(...params);
         }
 
         const perUserWithProducts = perUser.map(user => {
@@ -138,9 +167,16 @@ router.get('/dashboard-stats', requireAdminOrKP, (req, res) => {
             return { ...user, jumlah_produk };
         });
 
-        const allSubs = month
-            ? db.prepare('SELECT items, status, client_name FROM submissions WHERE strftime("%Y-%m", created_at) = ?').all(month)
-            : db.prepare('SELECT items, status, client_name FROM submissions').all();
+        let allSubs;
+        if (isAreaMgr) {
+            allSubs = month
+                ? db.prepare(`SELECT s.items, s.status, s.client_name FROM submissions s JOIN users u ON u.id = s.created_by WHERE strftime('%Y-%m', s.created_at) = ? AND LOWER(TRIM(u.area_kerja)) = ?`).all(month, area)
+                : db.prepare(`SELECT s.items, s.status, s.client_name FROM submissions s JOIN users u ON u.id = s.created_by WHERE LOWER(TRIM(u.area_kerja)) = ?`).all(area);
+        } else {
+            allSubs = month
+                ? db.prepare('SELECT items, status, client_name FROM submissions WHERE strftime("%Y-%m", created_at) = ?').all(month)
+                : db.prepare('SELECT items, status, client_name FROM submissions').all();
+        }
 
         let totalProduk = 0;
         const pelangganSet = new Set();
@@ -231,12 +267,25 @@ router.get('/bulk-pdf-zip', requireAdminOrKP, async (req, res) => {
 
 // GET /api/submissions/bulk-pdf-zip-all  — download semua SPH disetujui sebagai ZIP
 router.get('/bulk-pdf-zip-all', requireLogin, async (req, res) => {
-    const rows = db.prepare(`
-        SELECT s.*, u.full_name as creator_name
-        FROM submissions s LEFT JOIN users u ON s.created_by = u.id
-        WHERE s.status = 'approved' AND (s.submission_type = 'sph' OR s.submission_type IS NULL)
-        ORDER BY s.created_at ASC
-    `).all();
+    const user = req.session.user;
+    let rows;
+    if (user.role === 'area_manager') {
+        const area = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(user.id)?.area_kerja || '';
+        rows = db.prepare(`
+            SELECT s.*, u.full_name as creator_name
+            FROM submissions s LEFT JOIN users u ON s.created_by = u.id
+            WHERE s.status = 'approved' AND (s.submission_type = 'sph' OR s.submission_type IS NULL)
+              AND LOWER(TRIM(u.area_kerja)) = LOWER(TRIM(?))
+            ORDER BY s.created_at ASC
+        `).all(area);
+    } else {
+        rows = db.prepare(`
+            SELECT s.*, u.full_name as creator_name
+            FROM submissions s LEFT JOIN users u ON s.created_by = u.id
+            WHERE s.status = 'approved' AND (s.submission_type = 'sph' OR s.submission_type IS NULL)
+            ORDER BY s.created_at ASC
+        `).all();
+    }
     if (rows.length === 0) return res.status(404).json({ error: 'Belum ada SPH yang disetujui' });
     const settings = {};
     db.prepare('SELECT key, value FROM settings').all().forEach(s => { settings[s.key] = s.value; });
