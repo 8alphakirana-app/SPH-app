@@ -62,6 +62,7 @@
           <ul class="nav-group-items" id="nav-group-items-sph">
             <li><a href="#" onclick="showPage('new-submission')" class="menu-item" data-page="new-submission" id="menu-new-submission"><span class="icon">✏️</span> Buat Pengajuan</a></li>
             <li><a href="#" onclick="showPage('my-submissions')" class="menu-item" data-page="my-submissions"><span class="icon">📄</span> Pengajuan Saya</a></li>
+            <li class="sph-approver" style="display:none"><a href="#" onclick="showPage('sph-approvals')" class="menu-item" data-page="sph-approvals"><span class="icon">✅</span> Persetujuan SPH</a></li>
             <li class="admin-or-kp" style="display:none"><a href="#" onclick="showPage('admin-submissions')" class="menu-item" data-page="admin-submissions"><span class="icon">🗂️</span> Semua Pengajuan</a></li>
           </ul>
         </li>
@@ -423,6 +424,7 @@
           </form>
         </div>
         <div id="content-my-submissions" class="content-page" style="display:none"><div class="page-header"><h1 class="page-title">Pengajuan Saya</h1><button onclick="showPage('new-submission')" class="btn btn-primary">+ Buat Pengajuan</button></div><div class="card"><div id="my-submissions-list"></div></div></div>
+        <div id="content-sph-approvals" class="content-page" style="display:none"><div class="page-header"><h1 class="page-title">Persetujuan SPH</h1><div class="filter-bar"><select id="sph-approval-filter-status" onchange="loadSPHApprovals()"><option value="pending">Menunggu</option><option value="">Semua Status</option><option value="approved">Disetujui</option><option value="rejected">Ditolak</option></select></div></div><div class="card"><div id="sph-approvals-list"></div></div></div>
         <div id="content-admin-submissions" class="content-page" style="display:none"><div class="page-header"><h1 class="page-title">Semua Pengajuan</h1><div class="filter-bar"><select id="filter-status" onchange="loadAdminSubmissions()"><option value="">Semua Status</option><option value="pending">Menunggu</option><option value="approved">Disetujui</option><option value="rejected">Ditolak</option></select><button onclick="downloadAllSPHZip()" class="btn btn-pdf btn-sm">⬇️ Download Semua PDF (ZIP)</button></div></div><div class="card"><div id="admin-submissions-list"></div></div></div>
         <div id="content-admin-users" class="content-page" style="display:none"><div class="page-header"><h1 class="page-title">Kelola Pengguna</h1><button onclick="openAddUserModal()" class="btn btn-primary">+ Tambah Pengguna</button></div><div class="card"><div id="users-list"></div></div></div>
         <div id="content-admin-settings" class="content-page" style="display:none">

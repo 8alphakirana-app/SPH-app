@@ -84,6 +84,15 @@ router.get('/', requireLogin, (req, res) => {
                                   LEFT JOIN users a ON s.approved_by = a.id
                                         ORDER BY s.created_at DESC
                                             `).all();
+    } else if (user.role === 'gm' || user.role === 'gm2') {
+          rows = db.prepare(`
+                SELECT s.*, u.full_name as creator_name, a.full_name as approver_name
+                      FROM submissions s
+                            LEFT JOIN users u ON s.created_by = u.id
+                                  LEFT JOIN users a ON s.approved_by = a.id
+                                        WHERE (s.submission_type = 'sph' OR s.submission_type IS NULL)
+                                              ORDER BY s.created_at DESC
+                                                  `).all();
     } else if (user.role === 'area_manager') {
           const area = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(user.id)?.area_kerja || '';
           rows = db.prepare(`

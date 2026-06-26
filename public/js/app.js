@@ -126,6 +126,11 @@ function setUser(user) {
               document.querySelectorAll('.admin-or-kp').forEach(el => el.style.display = '');
        }
 
+       // GM1 + GM2: Persetujuan SPH
+       if (user.role === 'gm' || user.role === 'gm2') {
+              document.querySelectorAll('.sph-approver').forEach(el => el.style.display = '');
+       }
+
        // KK menu visibility
        document.querySelectorAll('.kk-menu').forEach(el => el.style.display = '');
        if (['staff', 'admin', 'marketing', 'supervisor'].includes(user.role)) {
@@ -217,11 +222,13 @@ function showPage(page) {
               'laporan-rekap': 'Rekap Laporan Bulanan',
               'backup': 'Backup Database',
               'sales-target': 'Target & Penjualan',
+              'sph-approvals': 'Persetujuan SPH',
        };
        document.getElementById('top-bar-title').textContent = titles[page] || page;
        if (page === 'dashboard') loadDashboard();
        else if (page === 'new-submission') initNewSubmission();
        else if (page === 'my-submissions') loadMySubmissions();
+       else if (page === 'sph-approvals') loadSPHApprovals();
        else if (page === 'admin-submissions') loadAdminSubmissions();
        else if (page === 'admin-users') loadUsers();
        else if (page === 'admin-settings') loadSettings();
@@ -1234,6 +1241,24 @@ async function loadMySubmissions() {
                      container.innerHTML = emptyState('Belum ada pengajuan. Klik "+ Buat Pengajuan" untuk memulai.');
               } else {
                      container.innerHTML = renderSubmissionTable(submissions, true);
+              }
+       } catch (e) {
+              container.innerHTML = '<div class="alert alert-error">Gagal memuat data</div>';
+       }
+}
+
+async function loadSPHApprovals() {
+       const container = document.getElementById('sph-approvals-list');
+       container.innerHTML = '<div class="loading">⏳ Memuat data...</div>';
+       const filterStatus = document.getElementById('sph-approval-filter-status')?.value ?? 'pending';
+       try {
+              const res = await api('/api/submissions');
+              let submissions = await res.json();
+              if (filterStatus) submissions = submissions.filter(s => s.status === filterStatus);
+              if (submissions.length === 0) {
+                     container.innerHTML = emptyState('Tidak ada SPH' + (filterStatus === 'pending' ? ' yang menunggu persetujuan' : ''));
+              } else {
+                     container.innerHTML = renderSubmissionTable(submissions, true, true);
               }
        } catch (e) {
               container.innerHTML = '<div class="alert alert-error">Gagal memuat data</div>';
