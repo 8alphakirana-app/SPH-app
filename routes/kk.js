@@ -99,7 +99,8 @@ router.post('/', requireLogin, (req, res) => {
   const nomorSurat     = generateNomorKK();
 
   const creator = db.prepare('SELECT area_kerja, role FROM users WHERE id=?').get(req.session.user.id);
-  const noAMKK = !hasAreaManagerForArea(creator?.area_kerja);
+  // Level 1 (AM) di-skip jika: tidak ada AM di area ini, ATAU creator sendiri adalah AM
+  const noAMKK = !hasAreaManagerForArea(creator?.area_kerja) || creator?.role === 'area_manager';
   const kkInitLevel = noAMKK ? 2 : 1;
 
   const subResult = db.prepare(`
@@ -129,8 +130,11 @@ router.post('/', requireLogin, (req, res) => {
 
   for (let level = 1; level <= MAX_LEVEL; level++) {
     if (level === 1 && noAMKK) {
-      db.prepare("INSERT INTO kk_approvals (submission_id, level, status, note, acted_at) VALUES (?, 1, 'approved', 'Auto: tidak ada Area Manager di area ini', datetime('now','localtime'))")
-        .run(submissionId);
+      const autoNote = creator?.role === 'area_manager'
+        ? 'Auto: dibuat oleh Area Manager'
+        : 'Auto: tidak ada Area Manager di area ini';
+      db.prepare("INSERT INTO kk_approvals (submission_id, level, status, note, acted_at) VALUES (?, 1, 'approved', ?, datetime('now','localtime'))")
+        .run(submissionId, autoNote);
     } else {
       db.prepare("INSERT INTO kk_approvals (submission_id, level, status) VALUES (?, ?, 'pending')").run(submissionId, level);
     }
@@ -154,7 +158,8 @@ router.get('/', requireLogin, (req, res) => {
            kk.term_payment_supplier, kk.term_payment_pelanggan, kk.sumber_anggaran,
            u.full_name as creator_name,
            (SELECT COUNT(*) FROM kk_approvals ka WHERE ka.submission_id = s.id AND ka.level = 3 AND ka.status = 'approved') as gm1_approved,
-           (SELECT COUNT(*) FROM kk_approvals ka WHERE ka.submission_id = s.id AND ka.level = 4 AND ka.status = 'approved') as gm2_approved
+           (SELECT COUNT(*) FROM kk_approvals ka WHERE ka.submission_id = s.id AND ka.level = 4 AND ka.status = 'approved') as gm2_approved,
+           (SELECT COUNT(*) FROM kk_approvals ka WHERE ka.submission_id = s.id AND ka.level = 1 AND ka.status = 'approved' AND ka.approver_user_id IS NULL) as am_auto_skipped
     FROM submissions s
     JOIN kertas_kerja kk ON kk.submission_id = s.id
     LEFT JOIN users u ON s.created_by = u.id
@@ -333,6 +338,8 @@ router.post('/:id/approve', requireLogin, (req, res) => {
 
   if (user.role === 'area_manager') {
     if (currentLevel !== 1) return res.status(403).json({ error: 'Bukan giliran Area Manager' });
+    // AM tidak boleh approve KK yang dia buat sendiri
+    if (sub.created_by === user.id) return res.status(403).json({ error: 'Anda tidak dapat menyetujui KK yang Anda buat sendiri' });
     const creator = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sub.created_by);
     if ((creator?.area_kerja || '').trim().toLowerCase() !== (user.area_kerja || '').trim().toLowerCase()) {
       return res.status(403).json({ error: 'Area Anda tidak sesuai dengan area pembuat KK' });
@@ -418,6 +425,7 @@ router.post('/:id/reject', requireLogin, (req, res) => {
 
   if (user.role === 'area_manager') {
     if (currentLevel !== 1) return res.status(403).json({ error: `Anda tidak berwenang reject level ${currentLevel}` });
+    if (sub.created_by === user.id) return res.status(403).json({ error: 'Anda tidak dapat menolak KK yang Anda buat sendiri' });
     const creator = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sub.created_by);
     if ((creator?.area_kerja || '').trim().toLowerCase() !== (user.area_kerja || '').trim().toLowerCase()) {
       return res.status(403).json({ error: 'Area Anda tidak sesuai dengan area pembuat KK' });
@@ -457,6 +465,7 @@ router.get('/:id/export-excel', requireLogin, async (req, res) => {
     WHERE s.id = ? AND s.submission_type = 'kk'
   `).get(req.params.id);
   if (!row) return res.status(404).json({ error: 'KK tidak ditemukan' });
+  if (row.status !== 'approved') return res.status(403).json({ error: 'Excel hanya tersedia untuk KK yang sudah disetujui' });
 
   const user = req.session.user;
   if (user.role === 'staff' && row.created_by !== user.id) return res.status(403).json({ error: 'Akses ditolak' });

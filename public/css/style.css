@@ -555,6 +555,7 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
 .kk-ps-rejected { color: #b91c1c; background: #fee2e2; }
 .kk-ps-current  { color: #92400e; background: #fef3c7; }
 .kk-ps-waiting  { color: var(--text-light); }
+.kk-ps-skipped  { color: #1d4ed8; background: #dbeafe; }
 .kk-ps-sep      { color: var(--text-light); font-size: 10px; }
 
 /* Badge info (untuk kantor_pusat) */

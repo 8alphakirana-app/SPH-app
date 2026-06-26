@@ -2213,25 +2213,30 @@ function renderKKProgressBadge(r) {
        const lvl = r.kk_approval_level;
        const status = r.status;
        const short = ['AM', 'MK', 'GM1', 'GM2', 'DO', 'DU'];
+       // Level 1 dianggap di-skip (bukan approval nyata) jika lvl > 1 atau status=approved dan am_auto_skipped
+       const amAutoSkipped = !!r.am_auto_skipped;
+       const gm1ok = !!r.gm1_approved;
+       const gm2ok = !!r.gm2_approved;
+
        const steps = [1, 2, 3, 4, 5, 6].map(i => {
               let icon, cls;
-              // GM1 (3) dan GM2 (4) paralel: keduanya aktif saat kk_approval_level == 3
               const atGmStage = lvl === 3 && (i === 3 || i === 4);
-              const gm1ok = !!r.gm1_approved;
-              const gm2ok = !!r.gm2_approved;
+
               if (status === 'approved') {
-                     icon = '✅'; cls = 'approved';
+                     // Level 1 yg di-auto-skip tampilkan berbeda
+                     if (i === 1 && amAutoSkipped) { icon = '⏭️'; cls = 'skipped'; }
+                     else { icon = '✅'; cls = 'approved'; }
               } else if (status === 'rejected') {
-                     if (atGmStage) {
-                            // Determine which GM rejected based on who approved
+                     if (i === 1 && amAutoSkipped) { icon = '⏭️'; cls = 'skipped'; }
+                     else if (atGmStage) {
                             if (i === 3) { icon = gm1ok ? '✅' : '❌'; cls = gm1ok ? 'approved' : 'rejected'; }
                             else         { icon = gm2ok ? '✅' : '❌'; cls = gm2ok ? 'approved' : 'rejected'; }
                      } else if (i < lvl) { icon = '✅'; cls = 'approved'; }
                      else if (i === lvl) { icon = '❌'; cls = 'rejected'; }
                      else { icon = '○'; cls = 'waiting'; }
               } else {
-                     if (lvl === 3 && (i === 3 || i === 4)) {
-                            // Pending GM stage: show individual approval state
+                     if (i === 1 && amAutoSkipped) { icon = '⏭️'; cls = 'skipped'; }
+                     else if (lvl === 3 && (i === 3 || i === 4)) {
                             if (i === 3) { icon = gm1ok ? '✅' : '⏳'; cls = gm1ok ? 'approved' : 'current'; }
                             else         { icon = gm2ok ? '✅' : '⏳'; cls = gm2ok ? 'approved' : 'current'; }
                      } else if (i < lvl) { icon = '✅'; cls = 'approved'; }
@@ -2352,8 +2357,12 @@ async function viewKKDetail(id) {
 
               const approvalSteps = [1, 2, 3, 4, 5, 6].map(lvl => {
                      const a = approvals.find(x => x.level === lvl);
-                     const icon = !a || a.status === 'pending' ? '⬜' : a.status === 'approved' ? '✅' : '❌';
-                     const color = !a || a.status === 'pending' ? 'var(--text-light)' : a.status === 'approved' ? 'var(--green)' : 'var(--red)';
+                     const isAutoSkip = a?.status === 'approved' && !a?.approver_user_id;
+                     let icon, color;
+                     if (!a || a.status === 'pending') { icon = '⬜'; color = 'var(--text-light)'; }
+                     else if (a.status === 'approved' && isAutoSkip) { icon = '⏭️'; color = 'var(--blue)'; }
+                     else if (a.status === 'approved') { icon = '✅'; color = 'var(--green)'; }
+                     else { icon = '❌'; color = 'var(--red)'; }
                      const isGmParallel = lvl === 4 ? ' <small style="color:var(--blue)">(paralel)</small>' : '';
                      return `<div class="kk-step">
                             <div class="kk-step-icon" style="color:${color}">${icon}</div>
