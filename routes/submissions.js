@@ -350,7 +350,9 @@ router.get('/:id', requireLogin, (req, res) => {
                         WHERE s.id = ?
                           `).get(req.params.id);
     if (!row) return res.status(404).json({ error: 'Tidak ditemukan' });
-    if (!isAdminOrKP(req.session.user) && row.created_by !== req.session.user.id) {
+    const u = req.session.user;
+    const canView = isAdminOrKP(u) || ['gm', 'gm2'].includes(u.role) || row.created_by === u.id;
+    if (!canView) {
           return res.status(403).json({ error: 'Akses ditolak' });
     }
     res.json({ ...row, items: JSON.parse(row.items) });
