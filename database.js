@@ -564,32 +564,59 @@ if (pendingKKSubs.length > 0) {
   console.log(`✅ Migrasi KK: ${pendingKKSubs.length} KK pending diupgrade ke sistem approval 6 level`);
 }
 
-// ── FIX: KK dengan semua 6 level approved tapi status masih 'pending' ──────────
-// Terjadi karena migrasi lama memetakan semua level sekaligus tanpa update status submission
+// ── FIX: Reset level approval KK yang di-auto-approve oleh migrasi tanpa approver nyata ──
+// Kondisi: status='pending' tapi ada level 2-6 yang approved dengan approver_user_id NULL
+// (artinya di-set oleh sistem/migrasi, bukan oleh manusia)
+// Level 1 NULL = sah (AM skip bisnis rule)
+// Level 4 NULL = sah HANYA jika level 3 sudah di-approve manusia (GM paralel)
 {
-  const inconsistentKKs = db.prepare(`
+  const kkToFix = db.prepare(`
     SELECT s.id
     FROM submissions s
     WHERE s.submission_type = 'kk' AND s.status = 'pending'
-      AND (SELECT COUNT(*) FROM kk_approvals a WHERE a.submission_id = s.id AND a.status = 'approved') = 6
-      AND (SELECT COUNT(*) FROM kk_approvals a WHERE a.submission_id = s.id) = 6
+      AND EXISTS (
+        SELECT 1 FROM kk_approvals a
+        WHERE a.submission_id = s.id
+          AND a.level > 1
+          AND a.status = 'approved'
+          AND a.approver_user_id IS NULL
+      )
   `).all();
 
-  for (const sub of inconsistentKKs) {
-    const finalApproval = db.prepare(
-      "SELECT approver_user_id, acted_at FROM kk_approvals WHERE submission_id=? AND level=6"
-    ).get(sub.id);
-    db.prepare(`
-      UPDATE submissions SET status='approved', kk_approval_level=7,
-        approved_by=?, approved_at=? WHERE id=?
-    `).run(
-      finalApproval?.approver_user_id || null,
-      finalApproval?.acted_at || new Date().toISOString(),
-      sub.id
-    );
+  let fixedCount = 0;
+  for (const sub of kkToFix) {
+    const approvals = db.prepare('SELECT * FROM kk_approvals WHERE submission_id=? ORDER BY level').all(sub.id);
+    const lvl3 = approvals.find(a => a.level === 3);
+    const lvl3HumanApproved = lvl3?.status === 'approved' && lvl3?.approver_user_id != null;
+
+    let nextLevel = 2; // Default mulai dari MK jika semuanya perlu diulang
+
+    for (const a of approvals) {
+      if (a.level === 1) continue; // Level 1 (AM skip) tetap — ini bisnis rule
+      // Level 4 boleh tetap auto-approved HANYA jika level 3 sudah di-approve manusia
+      if (a.level === 4 && a.approver_user_id == null && !lvl3HumanApproved) {
+        db.prepare("UPDATE kk_approvals SET status='pending', approver_user_id=NULL, note=NULL, acted_at=NULL WHERE submission_id=? AND level=4").run(sub.id);
+        continue;
+      }
+      // Level 2,3,5,6 yang NULL approver = di-set sistem, reset ke pending
+      if (a.level > 1 && a.status === 'approved' && a.approver_user_id == null) {
+        db.prepare("UPDATE kk_approvals SET status='pending', approver_user_id=NULL, note=NULL, acted_at=NULL WHERE submission_id=? AND level=?").run(sub.id, a.level);
+      }
+    }
+
+    // Hitung ulang kk_approval_level = level pertama yang masih pending
+    const updatedApprovals = db.prepare('SELECT * FROM kk_approvals WHERE submission_id=? ORDER BY level').all(sub.id);
+    const firstPending = updatedApprovals.find(a => a.status === 'pending');
+    if (firstPending) {
+      // GM stage: level 3 dan 4 paralel — jika level 3 pending, set ke 3
+      nextLevel = firstPending.level;
+      db.prepare('UPDATE submissions SET kk_approval_level=? WHERE id=?').run(nextLevel, sub.id);
+      fixedCount++;
+    }
   }
-  if (inconsistentKKs.length > 0) {
-    console.log(`✅ Fix KK: ${inconsistentKKs.length} KK diperbaiki (semua level approved → status disetujui)`);
+
+  if (fixedCount > 0) {
+    console.log(`✅ Fix KK: ${fixedCount} KK direset — level yang di-auto-approve sistem dikembalikan ke pending`);
   }
 }
 
