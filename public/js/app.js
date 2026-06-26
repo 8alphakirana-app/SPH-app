@@ -140,7 +140,7 @@ function setUser(user) {
        if (APPROVER_ROLES.includes(user.role) || user.role === 'admin') {
               document.querySelectorAll('.kk-approver').forEach(el => el.style.display = '');
        }
-       if (user.role === 'admin' || user.role === 'direktur_utama' || user.role === 'kantor_pusat') {
+       if (['admin', 'direktur_utama', 'kantor_pusat', 'gm', 'gm2', 'direktur_ops'].includes(user.role)) {
               document.querySelectorAll('.kk-all').forEach(el => el.style.display = '');
        }
 
@@ -2238,35 +2238,24 @@ function renderKKProgressBadge(r) {
        const lvl = r.kk_approval_level;
        const status = r.status;
        const short = ['AM', 'MK', 'GM1', 'GM2', 'DO', 'DU'];
-       // Level 1 dianggap di-skip (bukan approval nyata) jika lvl > 1 atau status=approved dan am_auto_skipped
-       const amAutoSkipped = !!r.am_auto_skipped;
-       const gm1ok = !!r.gm1_approved;
-       const gm2ok = !!r.gm2_approved;
+       // Gunakan data status aktual per level (bukan inferensi dari kk_approval_level)
+       const lvlStatus = [null, r.lvl1_status, r.lvl2_status, r.lvl3_status, r.lvl4_status, r.lvl5_status, r.lvl6_status];
 
        const steps = [1, 2, 3, 4, 5, 6].map(i => {
               let icon, cls;
-              const atGmStage = lvl === 3 && (i === 3 || i === 4);
+              const actualStatus = lvlStatus[i]; // 'approved' | 'pending' | 'rejected' | null
+              const isAutoSkip = i === 1 && !!r.am_auto_skipped;
 
-              if (status === 'approved') {
-                     // Level 1 yg di-auto-skip tampilkan berbeda
-                     if (i === 1 && amAutoSkipped) { icon = '⏭️'; cls = 'skipped'; }
+              if (!actualStatus || actualStatus === 'pending') {
+                     // Belum ada data atau masih pending
+                     if (status !== 'rejected' && lvl === i) { icon = '⏳'; cls = 'current'; }
+                     else { icon = '○'; cls = 'waiting'; }
+              } else if (actualStatus === 'approved') {
+                     if (isAutoSkip) { icon = '⏭️'; cls = 'skipped'; }
                      else { icon = '✅'; cls = 'approved'; }
-              } else if (status === 'rejected') {
-                     if (i === 1 && amAutoSkipped) { icon = '⏭️'; cls = 'skipped'; }
-                     else if (atGmStage) {
-                            if (i === 3) { icon = gm1ok ? '✅' : '❌'; cls = gm1ok ? 'approved' : 'rejected'; }
-                            else         { icon = gm2ok ? '✅' : '❌'; cls = gm2ok ? 'approved' : 'rejected'; }
-                     } else if (i < lvl) { icon = '✅'; cls = 'approved'; }
-                     else if (i === lvl) { icon = '❌'; cls = 'rejected'; }
-                     else { icon = '○'; cls = 'waiting'; }
               } else {
-                     if (i === 1 && amAutoSkipped) { icon = '⏭️'; cls = 'skipped'; }
-                     else if (lvl === 3 && (i === 3 || i === 4)) {
-                            if (i === 3) { icon = gm1ok ? '✅' : '⏳'; cls = gm1ok ? 'approved' : 'current'; }
-                            else         { icon = gm2ok ? '✅' : '⏳'; cls = gm2ok ? 'approved' : 'current'; }
-                     } else if (i < lvl) { icon = '✅'; cls = 'approved'; }
-                     else if (i === lvl) { icon = '⏳'; cls = 'current'; }
-                     else { icon = '○'; cls = 'waiting'; }
+                     // rejected
+                     icon = '❌'; cls = 'rejected';
               }
               return `<span class="kk-ps kk-ps-${cls}" title="${KK_LEVEL_LABELS[i]}">${icon} ${short[i - 1]}</span>`;
        }).join('<span class="kk-ps-sep">›</span>');

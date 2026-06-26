@@ -564,6 +564,35 @@ if (pendingKKSubs.length > 0) {
   console.log(`✅ Migrasi KK: ${pendingKKSubs.length} KK pending diupgrade ke sistem approval 6 level`);
 }
 
+// ── FIX: KK dengan semua 6 level approved tapi status masih 'pending' ──────────
+// Terjadi karena migrasi lama memetakan semua level sekaligus tanpa update status submission
+{
+  const inconsistentKKs = db.prepare(`
+    SELECT s.id
+    FROM submissions s
+    WHERE s.submission_type = 'kk' AND s.status = 'pending'
+      AND (SELECT COUNT(*) FROM kk_approvals a WHERE a.submission_id = s.id AND a.status = 'approved') = 6
+      AND (SELECT COUNT(*) FROM kk_approvals a WHERE a.submission_id = s.id) = 6
+  `).all();
+
+  for (const sub of inconsistentKKs) {
+    const finalApproval = db.prepare(
+      "SELECT approver_user_id, acted_at FROM kk_approvals WHERE submission_id=? AND level=6"
+    ).get(sub.id);
+    db.prepare(`
+      UPDATE submissions SET status='approved', kk_approval_level=7,
+        approved_by=?, approved_at=? WHERE id=?
+    `).run(
+      finalApproval?.approver_user_id || null,
+      finalApproval?.acted_at || new Date().toISOString(),
+      sub.id
+    );
+  }
+  if (inconsistentKKs.length > 0) {
+    console.log(`✅ Fix KK: ${inconsistentKKs.length} KK diperbaiki (semua level approved → status disetujui)`);
+  }
+}
+
 // ── Laporan Bulanan tables ────────────────────────────────────────────────────
 db.exec(`
   CREATE TABLE IF NOT EXISTS laporan_bulanan (

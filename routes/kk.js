@@ -157,16 +157,22 @@ router.get('/', requireLogin, (req, res) => {
            kk.nomor_surat, kk.perihal, kk.satker, kk.prinsipal, kk.nama_barang,
            kk.term_payment_supplier, kk.term_payment_pelanggan, kk.sumber_anggaran,
            u.full_name as creator_name,
-           (SELECT COUNT(*) FROM kk_approvals ka WHERE ka.submission_id = s.id AND ka.level = 3 AND ka.status = 'approved') as gm1_approved,
-           (SELECT COUNT(*) FROM kk_approvals ka WHERE ka.submission_id = s.id AND ka.level = 4 AND ka.status = 'approved') as gm2_approved,
-           (SELECT COUNT(*) FROM kk_approvals ka WHERE ka.submission_id = s.id AND ka.level = 1 AND ka.status = 'approved' AND ka.approver_user_id IS NULL) as am_auto_skipped
+           (SELECT COUNT(*) FROM kk_approvals ka WHERE ka.submission_id = s.id AND ka.level = 1 AND ka.status = 'approved' AND ka.approver_user_id IS NULL) as am_auto_skipped,
+           (SELECT ka.status FROM kk_approvals ka WHERE ka.submission_id = s.id AND ka.level = 1) as lvl1_status,
+           (SELECT ka.status FROM kk_approvals ka WHERE ka.submission_id = s.id AND ka.level = 2) as lvl2_status,
+           (SELECT ka.status FROM kk_approvals ka WHERE ka.submission_id = s.id AND ka.level = 3) as lvl3_status,
+           (SELECT ka.status FROM kk_approvals ka WHERE ka.submission_id = s.id AND ka.level = 4) as lvl4_status,
+           (SELECT ka.status FROM kk_approvals ka WHERE ka.submission_id = s.id AND ka.level = 5) as lvl5_status,
+           (SELECT ka.status FROM kk_approvals ka WHERE ka.submission_id = s.id AND ka.level = 6) as lvl6_status
     FROM submissions s
     JOIN kertas_kerja kk ON kk.submission_id = s.id
     LEFT JOIN users u ON s.created_by = u.id
     WHERE s.submission_type = 'kk'
   `;
 
-  if (user.role === 'admin' || user.role === 'direktur_utama' || user.role === 'kantor_pusat') {
+  // Roles yang bisa melihat SEMUA KK (bisa approve atau perlu visibilitas penuh)
+  const canSeeAllRoles = ['admin', 'direktur_utama', 'kantor_pusat', 'gm', 'gm2', 'direktur_ops'];
+  if (canSeeAllRoles.includes(user.role)) {
     rows = db.prepare(base + ' ORDER BY s.created_at DESC').all();
   } else if (user.role === 'area_manager') {
     const area = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(user.id)?.area_kerja || '';
@@ -177,19 +183,8 @@ router.get('/', requireLogin, (req, res) => {
       )
       ORDER BY s.created_at DESC
     `).all(area);
-  } else if (user.role === 'gm') {
-    rows = db.prepare(base + `
-      AND (s.kk_approval_level = 3
-           OR EXISTS (SELECT 1 FROM kk_approvals a WHERE a.submission_id=s.id AND a.level=3 AND a.approver_user_id=?))
-      ORDER BY s.created_at DESC
-    `).all(user.id);
-  } else if (user.role === 'gm2') {
-    rows = db.prepare(base + `
-      AND (s.kk_approval_level = 3
-           OR EXISTS (SELECT 1 FROM kk_approvals a WHERE a.submission_id=s.id AND a.level=4 AND a.approver_user_id=?))
-      ORDER BY s.created_at DESC
-    `).all(user.id);
   } else if (ROLE_LEVELS[user.role]) {
+    // manager_keuangan: hanya KK di level mereka atau yang sudah mereka approve
     const myLevel = ROLE_LEVELS[user.role];
     rows = db.prepare(base + `
       AND (s.kk_approval_level = ?
@@ -250,7 +245,7 @@ router.get('/:id', requireLogin, (req, res) => {
   `).get(req.params.id);
 
   if (!row) return res.status(404).json({ error: 'KK tidak ditemukan' });
-  const canSeeAll = ['admin','direktur_utama','kantor_pusat'].includes(user.role);
+  const canSeeAll = ['admin','direktur_utama','kantor_pusat','gm','gm2','direktur_ops'].includes(user.role);
   if (!canSeeAll && !ROLE_LEVELS[user.role] && row.created_by !== user.id) return res.status(403).json({ error: 'Akses ditolak' });
 
   const approvals = db.prepare(`
