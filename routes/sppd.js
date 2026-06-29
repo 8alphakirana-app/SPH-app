@@ -133,7 +133,6 @@ router.get('/dashboard-stats', (req, res) => {
   let per_user = [];
   if (canSeeAll(role) || role === 'area_manager') {
     const area = (req.session.user.area_kerja || db.prepare('SELECT area_kerja FROM users WHERE id=?').get(req.session.user.id)?.area_kerja || '').trim().toLowerCase();
-    const areaFilter = role === 'area_manager' ? ` WHERE LOWER(TRIM(u.area_kerja)) = '${area.replace(/'/g, "''")}'` : '';
     const perUserBase = `
       SELECT u.id, u.full_name, u.username, u.area_kerja,
         COUNT(s.id) as total,
@@ -141,13 +140,17 @@ router.get('/dashboard-stats', (req, res) => {
         SUM(CASE WHEN s.status = 'completed' THEN 1 ELSE 0 END) as selesai,
         COALESCE(SUM(b.total), 0) as total_biaya_usulan,
         COALESCE(SUM(CASE WHEN p.status = 'sudah_cair' THEN p.jumlah_dicairkan ELSE 0 END), 0) as total_biaya_dicairkan
-      FROM users u${areaFilter}`;
-    const perUserJoinMonth = month ? ` AND strftime('%Y-%m', s.created_at) = '${month.replace(/'/g, '')}'` : '';
+      FROM users u`;
+    const perUserMonthCond = month ? ` AND strftime('%Y-%m', s.created_at) = ?` : '';
+    const perUserWhere = role === 'area_manager' ? ` WHERE LOWER(TRIM(u.area_kerja)) = ?` : '';
+    const perUserParams = [];
+    if (month) perUserParams.push(month);
+    if (role === 'area_manager') perUserParams.push(area);
     per_user = db.prepare(perUserBase + `
-      LEFT JOIN sppd s ON s.created_by = u.id${perUserJoinMonth}
+      LEFT JOIN sppd s ON s.created_by = u.id${perUserMonthCond}
       LEFT JOIN sppd_biaya b ON b.sppd_id = s.id
-      LEFT JOIN sppd_pencairan p ON p.sppd_id = s.id
-      GROUP BY u.id HAVING total > 0 ORDER BY total DESC, u.full_name ASC`).all();
+      LEFT JOIN sppd_pencairan p ON p.sppd_id = s.id${perUserWhere}
+      GROUP BY u.id HAVING total > 0 ORDER BY total DESC, u.full_name ASC`).all(perUserParams);
   }
 
   const available_months = db.prepare(
