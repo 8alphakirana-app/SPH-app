@@ -395,13 +395,14 @@ router.post('/:id/approve', requireLogin, (req, res) => {
   }
 
   db.prepare('UPDATE submissions SET kk_approval_level=? WHERE id=?').run(nextLevel, req.params.id);
-  // Notifikasi approver berikutnya (level 3 = GM stage tetap notif gm dan gm2)
+  const creatorArea = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sub.created_by)?.area_kerja || '';
   if (nextLevel === 3) {
-    const creatorArea = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sub.created_by)?.area_kerja || '';
-    notifyKKNextLevel(req.params.id, 3, creatorArea);
-    notifyKKNextLevel(req.params.id, 4, creatorArea);
+    // GM stage: notifikasi hanya ke yang belum approve (hindari notif ganda)
+    const lvl3 = db.prepare("SELECT status FROM kk_approvals WHERE submission_id=? AND level=3").get(req.params.id);
+    const lvl4 = db.prepare("SELECT status FROM kk_approvals WHERE submission_id=? AND level=4").get(req.params.id);
+    if (lvl3?.status !== 'approved') notifyKKNextLevel(req.params.id, 3, creatorArea);
+    if (lvl4?.status !== 'approved') notifyKKNextLevel(req.params.id, 4, creatorArea);
   } else {
-    const creatorArea = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sub.created_by)?.area_kerja || '';
     notifyKKNextLevel(req.params.id, nextLevel, creatorArea);
   }
   res.json({ success: true, nextLevel });

@@ -107,7 +107,7 @@ const SPPD_APPROVER_ROLES = ['area_manager', 'gm', 'gm2'];
 const LAPORAN_APPROVER_ROLES = ['area_manager', 'manager_keuangan', 'gm', 'gm2', 'direktur_ops', 'direktur_utama'];
 const PENCAIRAN_APPROVER_ROLES = ['area_manager', 'manager_keuangan', 'gm', 'gm2', 'direktur_ops', 'direktur_utama'];
 const SPPD_ALL_ROLES = ['admin', 'kantor_pusat', 'manager_keuangan', 'area_manager', 'gm', 'gm2', 'direktur_ops', 'direktur_utama'];
-const SPPD_CREATE_ROLES = ['marketing', 'supervisor', 'staff', 'admin'];
+const SPPD_CREATE_ROLES = ['marketing', 'supervisor', 'staff', 'admin', 'area_manager'];
 
 function setUser(user) {
        currentUser = user;
@@ -133,7 +133,7 @@ function setUser(user) {
 
        // KK menu visibility
        document.querySelectorAll('.kk-menu').forEach(el => el.style.display = '');
-       if (['staff', 'admin', 'marketing', 'supervisor'].includes(user.role)) {
+       if (['staff', 'admin', 'marketing', 'supervisor', 'area_manager'].includes(user.role)) {
               document.querySelectorAll('.kk-create').forEach(el => el.style.display = '');
               document.querySelectorAll('.kk-mine').forEach(el => el.style.display = '');
        }
@@ -2238,23 +2238,29 @@ function renderKKProgressBadge(r) {
        const lvl = r.kk_approval_level;
        const status = r.status;
        const short = ['AM', 'MK', 'GM1', 'GM2', 'DO', 'DU'];
-       // Gunakan data status aktual per level (bukan inferensi dari kk_approval_level)
        const lvlStatus = [null, r.lvl1_status, r.lvl2_status, r.lvl3_status, r.lvl4_status, r.lvl5_status, r.lvl6_status];
 
        const steps = [1, 2, 3, 4, 5, 6].map(i => {
               let icon, cls;
-              const actualStatus = lvlStatus[i]; // 'approved' | 'pending' | 'rejected' | null
+              const actualStatus = lvlStatus[i];
               const isAutoSkip = i === 1 && !!r.am_auto_skipped;
+              // Level 4 (GM2) paralel dengan level 3 (GM1) di GM stage
+              const isGmParallel = (i === 4) && (lvl === 3);
 
               if (!actualStatus || actualStatus === 'pending') {
-                     // Belum ada data atau masih pending
-                     if (status !== 'rejected' && lvl === i) { icon = '⏳'; cls = 'current'; }
-                     else { icon = '○'; cls = 'waiting'; }
+                     if (status === 'approved') {
+                            // Level tanpa data di KK yang sudah disetujui (sistem lama 4 level)
+                            icon = '○'; cls = 'waiting';
+                     } else if (status !== 'rejected' && (lvl === i || isGmParallel)) {
+                            // Level ini sedang menunggu approval (termasuk GM2 yang paralel)
+                            icon = '⏳'; cls = 'current';
+                     } else {
+                            icon = '○'; cls = 'waiting';
+                     }
               } else if (actualStatus === 'approved') {
                      if (isAutoSkip) { icon = '⏭️'; cls = 'skipped'; }
                      else { icon = '✅'; cls = 'approved'; }
               } else {
-                     // rejected
                      icon = '❌'; cls = 'rejected';
               }
               return `<span class="kk-ps kk-ps-${cls}" title="${KK_LEVEL_LABELS[i]}">${icon} ${short[i - 1]}</span>`;
@@ -2275,12 +2281,20 @@ function renderKKTable(rows, { showCreator = false, showApproveBtn = false } = {
        const tableRows = rows.map(r => {
               const lvl = r.kk_approval_level;
               const approvalBadge = renderKKProgressBadge(r);
-              // gm2 dapat approve saat kk_approval_level == 3 (paralel dengan gm)
-              const canAct = showApproveBtn && r.status === 'pending' && (
-                     currentUser.role === 'admin' ||
-                     (currentUser.role === 'gm2' && lvl === 3) ||
-                     myLvl === lvl
-              );
+              let canAct = false;
+              if (showApproveBtn && r.status === 'pending') {
+                     if (currentUser.role === 'admin') {
+                            canAct = true;
+                     } else if (currentUser.role === 'gm') {
+                            // GM1 approve level 3 paralel, cek belum approve
+                            canAct = lvl === 3 && r.lvl3_status !== 'approved';
+                     } else if (currentUser.role === 'gm2') {
+                            // GM2 approve level 4 paralel, cek belum approve
+                            canAct = lvl === 3 && r.lvl4_status !== 'approved';
+                     } else if (myLvl) {
+                            canAct = myLvl === lvl;
+                     }
+              }
               return `<tr>
                    <td><div class="fw-bold">${escHtml(r.nama_pekerjaan)}</div>
                        <div style="font-size:11px;color:var(--text-light)">${escHtml(r.pelanggan)}</div></td>
@@ -2326,6 +2340,8 @@ async function loadMyKK() {
        try {
               const res = await api('/api/kk');
               let rows = await res.json();
+              // Halaman "Saya": hanya tampilkan KK yang dibuat oleh user ini
+              rows = rows.filter(r => r.created_by === currentUser.id);
               if (filterStatus) rows = rows.filter(r => r.status === filterStatus);
               container.innerHTML = renderKKTable(rows);
        } catch { container.innerHTML = '<div class="alert alert-error">Gagal memuat data</div>'; }
@@ -2377,7 +2393,7 @@ async function viewKKDetail(id) {
                      else if (a.status === 'approved' && isAutoSkip) { icon = '⏭️'; color = 'var(--blue)'; }
                      else if (a.status === 'approved') { icon = '✅'; color = 'var(--green)'; }
                      else { icon = '❌'; color = 'var(--red)'; }
-                     const isGmParallel = lvl === 4 ? ' <small style="color:var(--blue)">(paralel)</small>' : '';
+                     const isGmParallel = (lvl === 3 || lvl === 4) ? ' <small style="color:var(--blue)">(paralel)</small>' : '';
                      return `<div class="kk-step">
                             <div class="kk-step-icon" style="color:${color}">${icon}</div>
                             <div class="kk-step-label">
