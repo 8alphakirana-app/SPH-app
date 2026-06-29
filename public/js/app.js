@@ -131,12 +131,10 @@ function setUser(user) {
               document.querySelectorAll('.sph-approver').forEach(el => el.style.display = '');
        }
 
-       // KK menu visibility
+       // KK menu visibility — semua role bisa membuat KK
        document.querySelectorAll('.kk-menu').forEach(el => el.style.display = '');
-       if (['staff', 'admin', 'marketing', 'supervisor', 'area_manager'].includes(user.role)) {
-              document.querySelectorAll('.kk-create').forEach(el => el.style.display = '');
-              document.querySelectorAll('.kk-mine').forEach(el => el.style.display = '');
-       }
+       document.querySelectorAll('.kk-create').forEach(el => el.style.display = '');
+       document.querySelectorAll('.kk-mine').forEach(el => el.style.display = '');
        if (APPROVER_ROLES.includes(user.role) || user.role === 'admin') {
               document.querySelectorAll('.kk-approver').forEach(el => el.style.display = '');
        }
@@ -150,8 +148,8 @@ function setUser(user) {
               document.querySelectorAll('.laporan-admin').forEach(el => el.style.display = '');
        }
 
-       // SPPD menu visibility
-       const isSppdCreator = SPPD_CREATE_ROLES.includes(user.role);
+       // SPPD menu visibility — semua role bisa membuat SPPD
+       const isSppdCreator = true;
        const isSppdApprover = SPPD_APPROVER_ROLES.includes(user.role) || user.role === 'admin';
        const isLaporanApprover = LAPORAN_APPROVER_ROLES.includes(user.role) || user.role === 'admin' || user.role === 'kantor_pusat';
        const isPencairanMgr = PENCAIRAN_APPROVER_ROLES.includes(user.role) || user.role === 'admin';
