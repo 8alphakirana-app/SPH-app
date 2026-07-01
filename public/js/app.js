@@ -4372,12 +4372,15 @@ function editLaporan(periode) {
        }, 60);
 }
 
-async function deleteLaporan(id) {
+async function deleteLaporan(id, onSuccess) {
        if (!confirm('Hapus laporan ini?')) return;
        try {
               const res = await api(`/api/laporan/${id}`, 'DELETE');
-              if (res.ok) { showToast('Laporan dihapus'); loadMyLaporan(); }
-              else { const d = await res.json(); showToast(d.error || 'Gagal hapus', 'error'); }
+              if (res.ok) {
+                     showToast('Laporan dihapus');
+                     if (typeof onSuccess === 'function') onSuccess();
+                     else loadMyLaporan();
+              } else { const d = await res.json(); showToast(d.error || 'Gagal hapus', 'error'); }
        } catch { showToast('Koneksi gagal', 'error'); }
 }
 
@@ -4413,8 +4416,10 @@ function _renderLaporanTable(rows, containerId) {
               container.innerHTML = '<div class="empty-state" style="padding:24px"><div class="empty-icon">📈</div><p>Tidak ada data laporan untuk filter ini</p></div>';
               return;
        }
+       const isAdmin = currentUser?.role === 'admin';
+       const refreshFn = containerId === 'rekap-laporan-container' ? 'loadLaporanRekap' : 'loadLaporanDashboard';
        container.innerHTML = `<table class="table">
-              <thead><tr><th>User</th><th>Area</th><th>Periode</th><th>Project</th><th>Total Nilai</th><th>Prognosa Bulan Depan</th><th>Terakhir Update</th></tr></thead>
+              <thead><tr><th>User</th><th>Area</th><th>Periode</th><th>Project</th><th>Total Nilai</th><th>Prognosa Bulan Depan</th><th>Terakhir Update</th>${isAdmin ? '<th>Aksi</th>' : ''}</tr></thead>
               <tbody>${rows.map(r => `<tr>
                      <td><strong>${r.full_name}</strong></td>
                      <td>${r.area_kerja || '-'}</td>
@@ -4423,6 +4428,7 @@ function _renderLaporanTable(rows, containerId) {
                      <td>Rp ${fmtNumStr(r.total_nilai)}</td>
                      <td>Rp ${fmtNumStr(r.prognosa_bulan_depan)}</td>
                      <td style="font-size:12px;color:var(--text-light)">${r.updated_at || '-'}</td>
+                     ${isAdmin ? `<td><button onclick="deleteLaporan(${r.id}, ${refreshFn})" class="btn btn-danger btn-sm">🗑️ Hapus</button></td>` : ''}
               </tr>`).join('')}</tbody></table>`;
 }
 
