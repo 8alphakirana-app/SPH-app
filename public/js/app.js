@@ -126,6 +126,11 @@ function setUser(user) {
               document.querySelectorAll('.admin-or-kp').forEach(el => el.style.display = '');
        }
 
+       // Admin + Manager Keuangan: Target & Penjualan
+       if (user.role === 'admin' || user.role === 'manager_keuangan') {
+              document.querySelectorAll('.admin-or-mk').forEach(el => el.style.display = '');
+       }
+
        // GM1 + GM2: Persetujuan SPH
        if (user.role === 'gm' || user.role === 'gm2') {
               document.querySelectorAll('.sph-approver').forEach(el => el.style.display = '');
