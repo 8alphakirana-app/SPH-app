@@ -129,15 +129,13 @@ router.get('/dashboard-stats', requireLogin, (req, res) => {
         const isAreaMgr = role === 'area_manager';
         const area = isAreaMgr
             ? (db.prepare('SELECT area_kerja FROM users WHERE id=?').get(req.session.user.id)?.area_kerja || '').trim().toLowerCase()
-            : null;
+            : (req.query.area ? req.query.area.trim().toLowerCase() : null);
 
-        // WHERE clause snippets for area filter
-        const areaJoin   = isAreaMgr ? ' AND LOWER(TRIM(u.area_kerja)) = ?' : '';
-        const areaWhere  = isAreaMgr ? ' AND LOWER(TRIM(u.area_kerja)) = ?' : '';
+        const areaWhere = area ? ' AND LOWER(TRIM(u.area_kerja)) = ?' : '';
 
         let perUser;
         if (month) {
-            const params = isAreaMgr ? [month, area] : [month];
+            const params = area ? [month, area] : [month];
             perUser = db.prepare(`
                 SELECT u.id, u.full_name, u.username,
                     COUNT(s.id) as total,
@@ -152,7 +150,7 @@ router.get('/dashboard-stats', requireLogin, (req, res) => {
                 GROUP BY u.id ORDER BY total DESC, u.full_name ASC
             `).all(...params);
         } else {
-            const params = isAreaMgr ? [area] : [];
+            const params = area ? [area] : [];
             perUser = db.prepare(`
                 SELECT u.id, u.full_name, u.username,
                     COUNT(s.id) as total,
@@ -177,7 +175,7 @@ router.get('/dashboard-stats', requireLogin, (req, res) => {
         });
 
         let allSubs;
-        if (isAreaMgr) {
+        if (area) {
             allSubs = month
                 ? db.prepare(`SELECT s.items, s.status, s.client_name FROM submissions s JOIN users u ON u.id = s.created_by WHERE strftime('%Y-%m', s.created_at) = ? AND LOWER(TRIM(u.area_kerja)) = ?`).all(month, area)
                 : db.prepare(`SELECT s.items, s.status, s.client_name FROM submissions s JOIN users u ON u.id = s.created_by WHERE LOWER(TRIM(u.area_kerja)) = ?`).all(area);

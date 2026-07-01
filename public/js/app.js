@@ -335,10 +335,12 @@ async function loadDashboard() {
                      const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
               })();
 
+              const moduleQS = (() => { const p = new URLSearchParams(); if (month) p.set('month', month); if (area) p.set('area', area); const s = p.toString(); return s ? '?' + s : ''; })();
+
               const [sphR, kkR, sppdR, lapR, recentR, salesR, salesMonthlyR] = await Promise.allSettled([
-                     api('/api/submissions/dashboard-stats' + (month ? '?month=' + month : '')).then(r => r.ok ? r.json() : null),
-                     api('/api/kk/stats' + (month ? '?month=' + month : '')).then(r => r.ok ? r.json() : null),
-                     api('/api/sppd/dashboard-stats' + (month ? '?month=' + month : '')).then(r => r.ok ? r.json() : null),
+                     api('/api/submissions/dashboard-stats' + moduleQS).then(r => r.ok ? r.json() : null),
+                     api('/api/kk/stats' + moduleQS).then(r => r.ok ? r.json() : null),
+                     api('/api/sppd/dashboard-stats' + moduleQS).then(r => r.ok ? r.json() : null),
                      api(`/api/laporan/dashboard?${lapParams}`).then(r => r.ok ? r.json() : []),
                      api('/api/submissions').then(r => r.ok ? r.json() : []),
                      api(`/api/sales-target?periode=${salesPeriode}`).then(r => r.ok ? r.json() : []),
