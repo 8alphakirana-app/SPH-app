@@ -4478,7 +4478,7 @@ async function onRekaplaporanAreaChange() {
        loadLaporanRekap();
 }
 
-async function downloadLaporanRekapExcel() {
+function downloadLaporanRekapExcel() {
        const periode = document.getElementById('rekap-laporan-periode')?.value || '';
        const area    = document.getElementById('rekap-laporan-area')?.value || '';
        const uid     = document.getElementById('rekap-laporan-user')?.value || '';
@@ -4487,27 +4487,12 @@ async function downloadLaporanRekapExcel() {
        if (area)    p.set('area_kerja', area);
        if (uid)     p.set('user_id', uid);
        const qs = p.toString() ? '?' + p.toString() : '';
-       try {
-              const r = await fetch('/api/laporan/rekap-excel' + qs);
-              if (!r.ok) {
-                     const err = await r.json().catch(() => ({ error: 'Terjadi kesalahan' }));
-                     alert(err.error || 'Gagal mengunduh file');
-                     return;
-              }
-              const blob = await r.blob();
-              const url  = URL.createObjectURL(blob);
-              const a    = document.createElement('a');
-              const disp = r.headers.get('content-disposition') || '';
-              const match = disp.match(/filename="([^"]+)"/);
-              a.download = match ? match[1] : 'rekap-project.xlsx';
-              a.href = url;
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-              URL.revokeObjectURL(url);
-       } catch(e) {
-              alert('Gagal mengunduh: ' + e.message);
-       }
+       const a = document.createElement('a');
+       a.href = '/api/laporan/rekap-excel' + qs;
+       a.download = 'rekap-project.xlsx';
+       document.body.appendChild(a);
+       a.click();
+       document.body.removeChild(a);
 }
 
 async function loadLaporanDashboard() {

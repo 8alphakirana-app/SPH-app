@@ -250,7 +250,6 @@ router.get('/rekap-excel', (req, res) => {
   let rows;
   try {
     rows = db.prepare(sql).all(...params);
-    if (!rows.length) return res.status(404).json({ error: 'Tidak ada data untuk diunduh' });
     attachDetails(rows);
   } catch (e) {
     return res.status(500).json({ error: e.message });
@@ -260,6 +259,18 @@ router.get('/rekap-excel', (req, res) => {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'DMS LAK';
   wb.created = new Date();
+
+  const safePeriode = (periode || 'semua').replace(/[^a-zA-Z0-9-]/g, '');
+  const safeArea   = (area_kerja || 'semua-area').replace(/[^a-zA-Z0-9-]/g, '_');
+  const filename   = `rekap-project_${safeArea}_${safePeriode}.xlsx`;
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+  if (!rows.length) {
+    const ws = wb.addWorksheet('Rekap Project');
+    ws.addRow(['Tidak ada data laporan untuk filter yang dipilih.']);
+    return wb.xlsx.write(res).then(() => res.end()).catch(e => res.end());
+  }
 
   // Kelompokkan per area
   const byArea = {};
@@ -397,13 +408,7 @@ router.get('/rekap-excel', (req, res) => {
     buildAreaSheet(ws, areaName, laporanList);
   });
 
-  const safePeriode = (periode || 'semua').replace(/[^a-zA-Z0-9-]/g, '');
-  const safeArea   = (area_kerja || 'semua-area').replace(/[^a-zA-Z0-9-]/g, '_');
-  const filename   = `rekap-project_${safeArea}_${safePeriode}.xlsx`;
-
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-  wb.xlsx.write(res).then(() => res.end()).catch(e => res.status(500).json({ error: e.message }));
+  wb.xlsx.write(res).then(() => res.end()).catch(e => res.end());
 });
 
 // POST /api/laporan
