@@ -701,8 +701,10 @@ function _renderSalesHero(monthly, currentRows, periode) {
 
        // Update KPI boxes (angka singkat agar tidak wrap)
        const _s = id => document.getElementById(id);
+       const curLaba = (currentRows || []).reduce((s, r) => s + (r.laba_kotor || 0), 0);
        if (_s('sh-target')) _s('sh-target').textContent = 'Rp ' + formatRupiahShort(curTarget);
        if (_s('sh-real'))   _s('sh-real').textContent   = 'Rp ' + formatRupiahShort(curPenj);
+       if (_s('sh-laba'))   _s('sh-laba').textContent   = 'Rp ' + formatRupiahShort(curLaba);
 
        const pctEl = _s('sh-pct');
        if (pctEl) {
@@ -870,17 +872,19 @@ function _renderDashSalesTarget(rows) {
        const tbody    = document.getElementById('dash-sales-tbody');
        const totTgt   = document.getElementById('dash-sales-total-target');
        const totPenj  = document.getElementById('dash-sales-total-penjualan');
+       const totLaba  = document.getElementById('dash-sales-total-laba');
        const totPct   = document.getElementById('dash-sales-total-pct');
        if (!section || !tbody) return;
 
-       const meaningful = (rows || []).filter(r => r.target > 0 || r.penjualan > 0);
+       const meaningful = (rows || []).filter(r => r.target > 0 || r.penjualan > 0 || r.laba_kotor > 0);
        if (!meaningful.length) { section.style.display = 'none'; return; }
        section.style.display = '';
 
-       let sumTarget = 0, sumPenj = 0;
+       let sumTarget = 0, sumPenj = 0, sumLaba = 0;
        tbody.innerHTML = meaningful.map(r => {
               sumTarget += r.target || 0;
               sumPenj   += r.penjualan || 0;
+              sumLaba   += r.laba_kotor || 0;
               const pct = r.target > 0 ? Math.round((r.penjualan / r.target) * 100) : 0;
               const barColor = pct >= 100 ? '#0e9f6e' : pct >= 75 ? '#3b82f6' : pct >= 50 ? '#e3a008' : '#f05252';
               const pctText  = r.target > 0 ? `${pct}%` : '—';
@@ -888,6 +892,7 @@ function _renderDashSalesTarget(rows) {
                      <td><strong>${escHtml(r.area_kerja)}</strong></td>
                      <td class="text-right">Rp ${fmtNumStr(r.target)}</td>
                      <td class="text-right">Rp ${fmtNumStr(r.penjualan)}</td>
+                     <td class="text-right" style="color:#0e9f6e">Rp ${fmtNumStr(r.laba_kotor || 0)}</td>
                      <td class="text-right">
                             <span class="sales-pct-badge" style="color:${barColor}">${pctText}</span>
                      </td>
@@ -903,6 +908,7 @@ function _renderDashSalesTarget(rows) {
        const totColor = totalPct >= 100 ? '#0e9f6e' : totalPct >= 75 ? '#3b82f6' : totalPct >= 50 ? '#e3a008' : '#f05252';
        if (totTgt)  totTgt.textContent  = 'Rp ' + fmtNumStr(sumTarget);
        if (totPenj) totPenj.textContent = 'Rp ' + fmtNumStr(sumPenj);
+       if (totLaba) totLaba.textContent = 'Rp ' + fmtNumStr(sumLaba);
        if (totPct)  { totPct.textContent = sumTarget > 0 ? `${totalPct}%` : '—'; totPct.style.color = totColor; }
 }
 
@@ -4584,6 +4590,7 @@ function _renderSalesAreaAccordion(data, container) {
        }
        const year = document.getElementById('st-tahun')?.value || new Date().getFullYear();
        container.innerHTML = data.areas.map((area, ai) => {
+              const totLaba = area.total_laba_kotor || 0;
               const pct = _stPct(area.total_target, area.total_penjualan);
               const col = _stColor(pct);
               const monthRows = area.months.map((d, mi) => {
@@ -4602,6 +4609,13 @@ function _renderSalesAreaAccordion(data, container) {
                                    <input type="text" inputmode="numeric" class="table-input num-fmt st-inp-p"
                                           data-area="${escHtml(area.area_kerja)}" data-periode="${d.periode}"
                                           value="${d.penjualan ? fmtNumStr(d.penjualan) : ''}" placeholder="0"
+                                          oninput="formatNumInput(this);_stUpdateCard(this)"
+                                          style="text-align:right;width:100%;min-width:130px">
+                            </td>
+                            <td>
+                                   <input type="text" inputmode="numeric" class="table-input num-fmt st-inp-l"
+                                          data-area="${escHtml(area.area_kerja)}" data-periode="${d.periode}"
+                                          value="${d.laba_kotor ? fmtNumStr(d.laba_kotor) : ''}" placeholder="0"
                                           oninput="formatNumInput(this);_stUpdateCard(this)"
                                           style="text-align:right;width:100%;min-width:130px">
                             </td>
@@ -4629,6 +4643,10 @@ function _renderSalesAreaAccordion(data, container) {
                                           <div class="st-sum-val st-hdr-p" style="color:#0e9f6e">Rp ${fmtNumStr(area.total_penjualan)}</div>
                                    </div>
                                    <div class="st-sum-item">
+                                          <div class="st-sum-lbl">Laba Kotor</div>
+                                          <div class="st-sum-val st-hdr-l" style="color:#0e9f6e">Rp ${fmtNumStr(totLaba)}</div>
+                                   </div>
+                                   <div class="st-sum-item">
                                           <div class="st-sum-lbl">Pencapaian</div>
                                           <div class="st-sum-val st-hdr-pct" style="color:${col}">${pct}%</div>
                                    </div>
@@ -4647,6 +4665,7 @@ function _renderSalesAreaAccordion(data, container) {
                                                  <th>Bulan</th>
                                                  <th>Target (Rp)</th>
                                                  <th>Penjualan / Realisasi (Rp)</th>
+                                                 <th>Laba Kotor (Rp)</th>
                                                  <th style="min-width:130px">Pencapaian</th>
                                           </tr>
                                    </thead>
@@ -4656,6 +4675,7 @@ function _renderSalesAreaAccordion(data, container) {
                                                  <td><strong>Total ${year}</strong></td>
                                                  <td class="st-foot-t"><strong>Rp ${fmtNumStr(area.total_target)}</strong></td>
                                                  <td class="st-foot-p"><strong>Rp ${fmtNumStr(area.total_penjualan)}</strong></td>
+                                                 <td class="st-foot-l" style="color:#0e9f6e"><strong>Rp ${fmtNumStr(totLaba)}</strong></td>
                                                  <td class="st-foot-pct" style="color:${col}"><strong>${pct}%</strong></td>
                                           </tr>
                                    </tfoot>
@@ -4675,11 +4695,12 @@ function toggleSalesArea(ai) {
 function _stUpdateCard(inp) {
        const card = inp.closest('.st-area-card');
        if (!card) return;
-       let totT = 0, totP = 0;
+       let totT = 0, totP = 0, totL = 0;
        card.querySelectorAll('tbody tr').forEach(tr => {
               const t = parseNum(tr.querySelector('.st-inp-t')?.value || '0');
               const p = parseNum(tr.querySelector('.st-inp-p')?.value || '0');
-              totT += t; totP += p;
+              const l = parseNum(tr.querySelector('.st-inp-l')?.value || '0');
+              totT += t; totP += p; totL += l;
               const pct = _stPct(t, p);
               const col = _stColor(pct);
               const bar = tr.querySelector('.st-m-bar');
@@ -4692,10 +4713,12 @@ function _stUpdateCard(inp) {
        const q = s => card.querySelector(s);
        if (q('.st-hdr-t'))           { q('.st-hdr-t').textContent = 'Rp ' + fmtNumStr(totT); }
        if (q('.st-hdr-p'))           { q('.st-hdr-p').textContent = 'Rp ' + fmtNumStr(totP); }
+       if (q('.st-hdr-l'))           { q('.st-hdr-l').textContent = 'Rp ' + fmtNumStr(totL); }
        if (q('.st-hdr-pct'))         { q('.st-hdr-pct').textContent = pct + '%'; q('.st-hdr-pct').style.color = col; }
        if (q('.st-sum-bar-fill'))    { q('.st-sum-bar-fill').style.width = Math.min(100,pct)+'%'; q('.st-sum-bar-fill').style.background = col; }
        if (q('.st-foot-t'))          { q('.st-foot-t').innerHTML = `<strong>Rp ${fmtNumStr(totT)}</strong>`; }
        if (q('.st-foot-p'))          { q('.st-foot-p').innerHTML = `<strong>Rp ${fmtNumStr(totP)}</strong>`; }
+       if (q('.st-foot-l'))          { q('.st-foot-l').innerHTML = `<strong>Rp ${fmtNumStr(totL)}</strong>`; }
        if (q('.st-foot-pct'))        { q('.st-foot-pct').innerHTML = `<strong>${pct}%</strong>`; q('.st-foot-pct').style.color = col; }
 }
 
@@ -4705,8 +4728,10 @@ async function saveSalesTarget() {
               const area = inp.dataset.area;
               const periode = inp.dataset.periode;
               const target = parseNum(inp.value || '0');
-              const penjualan = parseNum(inp.closest('tr')?.querySelector('.st-inp-p')?.value || '0');
-              if (area && periode) items.push({ area_kerja: area, periode, target, penjualan });
+              const tr = inp.closest('tr');
+              const penjualan = parseNum(tr?.querySelector('.st-inp-p')?.value || '0');
+              const laba_kotor = parseNum(tr?.querySelector('.st-inp-l')?.value || '0');
+              if (area && periode) items.push({ area_kerja: area, periode, target, penjualan, laba_kotor });
        });
        if (!items.length) return;
 
