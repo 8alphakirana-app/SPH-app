@@ -37,7 +37,7 @@ router.get('/', requireLogin, (req, res) => {
   const existing = db.prepare('SELECT * FROM sales_target WHERE periode = ?').all(periode);
   const byArea   = Object.fromEntries(existing.map(r => [r.area_kerja, r]));
 
-  const rows = areas.map(area => byArea[area] || { id: null, area_kerja: area, periode, target: 0, penjualan: 0, laba_kotor: 0 });
+  const rows = areas.map(area => byArea[area] || { id: null, area_kerja: area, periode, target: 0, penjualan: 0, laba_kotor: 0, pendapatan_lain: 0 });
   res.json(rows);
 });
 
@@ -61,8 +61,8 @@ router.get('/monthly', requireLogin, (req, res) => {
   }
 
   const rows = areaFilter
-    ? db.prepare('SELECT periode, SUM(target) AS target, SUM(penjualan) AS penjualan, SUM(laba_kotor) AS laba_kotor FROM sales_target WHERE area_kerja=? GROUP BY periode').all(areaFilter)
-    : db.prepare('SELECT periode, SUM(target) AS target, SUM(penjualan) AS penjualan, SUM(laba_kotor) AS laba_kotor FROM sales_target GROUP BY periode').all();
+    ? db.prepare('SELECT periode, SUM(target) AS target, SUM(penjualan) AS penjualan, SUM(laba_kotor) AS laba_kotor, SUM(pendapatan_lain) AS pendapatan_lain FROM sales_target WHERE area_kerja=? GROUP BY periode').all(areaFilter)
+    : db.prepare('SELECT periode, SUM(target) AS target, SUM(penjualan) AS penjualan, SUM(laba_kotor) AS laba_kotor, SUM(pendapatan_lain) AS pendapatan_lain FROM sales_target GROUP BY periode').all();
 
   const byPeriode = Object.fromEntries(rows.map(r => [r.periode, r]));
   const result = list.map(p => ({
@@ -119,12 +119,14 @@ router.get('/by-area', requireLogin, (req, res) => {
       periode:    p,
       target:     lookup[area]?.[p]?.target     || 0,
       penjualan:  lookup[area]?.[p]?.penjualan  || 0,
-      laba_kotor: lookup[area]?.[p]?.laba_kotor || 0,
+      laba_kotor:     lookup[area]?.[p]?.laba_kotor     || 0,
+      pendapatan_lain: lookup[area]?.[p]?.pendapatan_lain || 0,
     }));
-    const totT = monthData.reduce((s, d) => s + d.target,     0);
-    const totP = monthData.reduce((s, d) => s + d.penjualan,  0);
-    const totL = monthData.reduce((s, d) => s + d.laba_kotor, 0);
-    return { area_kerja: area, months: monthData, total_target: totT, total_penjualan: totP, total_laba_kotor: totL };
+    const totT  = monthData.reduce((s, d) => s + d.target,          0);
+    const totP  = monthData.reduce((s, d) => s + d.penjualan,       0);
+    const totL  = monthData.reduce((s, d) => s + d.laba_kotor,      0);
+    const totPL = monthData.reduce((s, d) => s + d.pendapatan_lain, 0);
+    return { area_kerja: area, months: monthData, total_target: totT, total_penjualan: totP, total_laba_kotor: totL, total_pendapatan_lain: totPL };
   });
 
   res.json({ months, areas: result });
@@ -136,16 +138,16 @@ router.post('/bulk-multi', requireAdmin, (req, res) => {
   if (!Array.isArray(items) || !items.length) return res.status(400).json({ error: 'Data tidak valid' });
 
   const upsert = db.prepare(`
-    INSERT INTO sales_target (area_kerja, periode, target, penjualan, laba_kotor, updated_at)
-    VALUES (?, ?, ?, ?, ?, datetime('now','localtime'))
+    INSERT INTO sales_target (area_kerja, periode, target, penjualan, laba_kotor, pendapatan_lain, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, datetime('now','localtime'))
     ON CONFLICT(area_kerja, periode)
-    DO UPDATE SET target=excluded.target, penjualan=excluded.penjualan, laba_kotor=excluded.laba_kotor, updated_at=excluded.updated_at
+    DO UPDATE SET target=excluded.target, penjualan=excluded.penjualan, laba_kotor=excluded.laba_kotor, pendapatan_lain=excluded.pendapatan_lain, updated_at=excluded.updated_at
   `);
 
   const txn = db.transaction(() => {
     items.forEach(item => {
       if (item.area_kerja && item.periode && /^\d{4}-\d{2}$/.test(item.periode)) {
-        upsert.run(item.area_kerja, item.periode, parseFloat(item.target) || 0, parseFloat(item.penjualan) || 0, parseFloat(item.laba_kotor) || 0);
+        upsert.run(item.area_kerja, item.periode, parseFloat(item.target) || 0, parseFloat(item.penjualan) || 0, parseFloat(item.laba_kotor) || 0, parseFloat(item.pendapatan_lain) || 0);
       }
     });
   });
@@ -160,16 +162,16 @@ router.post('/bulk-multi', requireAdmin, (req, res) => {
 
 // POST /api/sales-target — upsert satu baris (area + periode)
 router.post('/', requireAdmin, (req, res) => {
-  const { area_kerja, periode, target, penjualan, laba_kotor } = req.body;
+  const { area_kerja, periode, target, penjualan, laba_kotor, pendapatan_lain } = req.body;
   if (!area_kerja || !periode) return res.status(400).json({ error: 'area_kerja dan periode wajib diisi' });
   if (!/^\d{4}-\d{2}$/.test(periode)) return res.status(400).json({ error: 'Format periode: YYYY-MM' });
 
   db.prepare(`
-    INSERT INTO sales_target (area_kerja, periode, target, penjualan, laba_kotor, updated_at)
-    VALUES (?, ?, ?, ?, ?, datetime('now','localtime'))
+    INSERT INTO sales_target (area_kerja, periode, target, penjualan, laba_kotor, pendapatan_lain, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, datetime('now','localtime'))
     ON CONFLICT(area_kerja, periode)
-    DO UPDATE SET target=excluded.target, penjualan=excluded.penjualan, laba_kotor=excluded.laba_kotor, updated_at=excluded.updated_at
-  `).run(area_kerja, periode, parseFloat(target) || 0, parseFloat(penjualan) || 0, parseFloat(laba_kotor) || 0);
+    DO UPDATE SET target=excluded.target, penjualan=excluded.penjualan, laba_kotor=excluded.laba_kotor, pendapatan_lain=excluded.pendapatan_lain, updated_at=excluded.updated_at
+  `).run(area_kerja, periode, parseFloat(target) || 0, parseFloat(penjualan) || 0, parseFloat(laba_kotor) || 0, parseFloat(pendapatan_lain) || 0);
 
   res.json({ success: true });
 });
@@ -180,15 +182,15 @@ router.post('/bulk', requireAdmin, (req, res) => {
   if (!periode || !Array.isArray(rows)) return res.status(400).json({ error: 'Data tidak valid' });
 
   const upsert = db.prepare(`
-    INSERT INTO sales_target (area_kerja, periode, target, penjualan, laba_kotor, updated_at)
-    VALUES (?, ?, ?, ?, ?, datetime('now','localtime'))
+    INSERT INTO sales_target (area_kerja, periode, target, penjualan, laba_kotor, pendapatan_lain, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, datetime('now','localtime'))
     ON CONFLICT(area_kerja, periode)
-    DO UPDATE SET target=excluded.target, penjualan=excluded.penjualan, laba_kotor=excluded.laba_kotor, updated_at=excluded.updated_at
+    DO UPDATE SET target=excluded.target, penjualan=excluded.penjualan, laba_kotor=excluded.laba_kotor, pendapatan_lain=excluded.pendapatan_lain, updated_at=excluded.updated_at
   `);
 
   const txn = db.transaction(() => {
     rows.forEach(r => {
-      if (r.area_kerja) upsert.run(r.area_kerja, periode, parseFloat(r.target) || 0, parseFloat(r.penjualan) || 0, parseFloat(r.laba_kotor) || 0);
+      if (r.area_kerja) upsert.run(r.area_kerja, periode, parseFloat(r.target) || 0, parseFloat(r.penjualan) || 0, parseFloat(r.laba_kotor) || 0, parseFloat(r.pendapatan_lain) || 0);
     });
   });
 

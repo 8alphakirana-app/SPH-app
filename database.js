@@ -695,6 +695,8 @@ db.exec(`
 
 // ── MIGRATION: laba_kotor on sales_target ────────────────────────────────────
 try { db.exec("ALTER TABLE sales_target ADD COLUMN laba_kotor REAL DEFAULT 0"); } catch {}
+// ── MIGRATION: pendapatan_lain on sales_target ───────────────────────────────
+try { db.exec("ALTER TABLE sales_target ADD COLUMN pendapatan_lain REAL DEFAULT 0"); } catch {}
 
 // ── MIGRATION: notifications table ───────────────────────────────────────────
 db.exec(`
