@@ -217,6 +217,195 @@ router.post('/support-item/:sid/tanggapan', (req, res) => {
   res.json({ success: true, reviewer_name: user.full_name });
 });
 
+// GET /api/laporan/rekap-excel — unduh rekap project per area dalam format Excel
+router.get('/rekap-excel', (req, res) => {
+  const user = req.session.user;
+  const { periode, area_kerja, user_id } = req.query;
+
+  let sql = `
+    SELECT lb.id, lb.user_id, lb.periode, lb.prognosa_bulan_depan,
+           u.full_name, u.area_kerja
+    FROM laporan_bulanan lb
+    JOIN users u ON lb.user_id = u.id
+    WHERE 1=1
+  `;
+  const params = [];
+
+  if (canSeeAllAreas(user.role)) {
+    if (user_id)    { sql += ' AND lb.user_id = ?';                              params.push(parseInt(user_id)); }
+    if (area_kerja) { sql += ' AND LOWER(TRIM(u.area_kerja)) = LOWER(TRIM(?))'; params.push(area_kerja); }
+  } else if (user.role === 'area_manager') {
+    const myArea = getUserArea(user.id).toLowerCase();
+    sql += ` AND (lb.user_id = ? OR (LOWER(TRIM(u.area_kerja)) = ? AND u.role IN ('supervisor','marketing')))`;
+    params.push(user.id, myArea);
+    if (user_id) { sql += ' AND lb.user_id = ?'; params.push(parseInt(user_id)); }
+  } else {
+    sql += ' AND lb.user_id = ?';
+    params.push(user.id);
+  }
+
+  if (periode) { sql += ' AND lb.periode = ?'; params.push(periode); }
+  sql += ' ORDER BY u.area_kerja ASC, u.full_name ASC';
+
+  let rows;
+  try {
+    rows = db.prepare(sql).all(...params);
+    if (!rows.length) return res.status(404).json({ error: 'Tidak ada data untuk diunduh' });
+    attachDetails(rows);
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+
+  const ExcelJS = require('exceljs');
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'DMS LAK';
+  wb.created = new Date();
+
+  // Kelompokkan per area
+  const byArea = {};
+  rows.forEach(r => {
+    const key = r.area_kerja || 'Tanpa Area';
+    if (!byArea[key]) byArea[key] = [];
+    byArea[key].push(r);
+  });
+
+  const periodeLabel = periode
+    ? new Date(periode + '-01').toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
+    : 'Semua Periode';
+
+  const HDR_FILL  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+  const HDR_FONT  = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+  const SUB_FILL  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } };
+  const SUB_FONT  = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+  const TOT_FILL  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
+  const TOT_FONT  = { bold: true, size: 10 };
+  const THIN      = { style: 'thin', color: { argb: 'FFCBD5E1' } };
+  const BORDER    = { top: THIN, left: THIN, bottom: THIN, right: THIN };
+  const COLS      = ['A','B','C','D','E','F','G','H'];
+
+  function applyBorder(row) {
+    row.eachCell({ includeEmpty: true }, cell => { cell.border = BORDER; });
+  }
+
+  function buildAreaSheet(ws, areaName, laporanList) {
+    ws.columns = [
+      { key: 'no',       width: 5  },
+      { key: 'salesman', width: 22 },
+      { key: 'pelanggan',width: 24 },
+      { key: 'principal',width: 18 },
+      { key: 'produk',   width: 20 },
+      { key: 'nilai',    width: 18 },
+      { key: 'prob',     width: 12 },
+      { key: 'prognosa', width: 20 },
+    ];
+    const titleRow = ws.addRow([`REKAP PROJECT - ${areaName.toUpperCase()}`]);
+    ws.mergeCells(`A${titleRow.number}:H${titleRow.number}`);
+    titleRow.getCell('A').font = { bold: true, size: 13, color: { argb: 'FF1E3A5F' } };
+    titleRow.getCell('A').alignment = { horizontal: 'center' };
+    titleRow.height = 22;
+    const subTitle = ws.addRow([`Periode: ${periodeLabel}   |   Dicetak: ${new Date().toLocaleDateString('id-ID', { day:'2-digit', month:'long', year:'numeric' })}`]);
+    ws.mergeCells(`A${subTitle.number}:H${subTitle.number}`);
+    subTitle.getCell('A').font = { italic: true, size: 10, color: { argb: 'FF64748B' } };
+    subTitle.getCell('A').alignment = { horizontal: 'center' };
+    ws.addRow([]);
+    const hdr = ws.addRow(['No', 'Salesman', 'Pelanggan', 'Principal', 'Produk', 'Nilai Project (Rp)', 'Prob (%)', 'Prognosa Bln Depan (Rp)']);
+    hdr.eachCell(cell => { cell.fill = HDR_FILL; cell.font = HDR_FONT; cell.alignment = { horizontal: 'center', wrapText: true }; cell.border = BORDER; });
+    hdr.height = 28;
+
+    let no = 1, totalNilai = 0, totalPrognosa = 0;
+    laporanList.forEach(lap => {
+      const prognosa = lap.prognosa_bulan_depan || 0;
+      totalPrognosa += prognosa;
+      const projects = lap.projects || [];
+      if (!projects.length) {
+        const r = ws.addRow([no++, lap.full_name, '-', '-', '-', 0, '-', prognosa]);
+        r.getCell('F').numFmt = '#,##0'; r.getCell('H').numFmt = '#,##0';
+        r.getCell('F').alignment = { horizontal: 'right' }; r.getCell('H').alignment = { horizontal: 'right' };
+        applyBorder(r);
+      } else {
+        projects.forEach((p, i) => {
+          const nilai = p.nilai || 0;
+          totalNilai += nilai;
+          const r = ws.addRow([
+            i === 0 ? no++ : '', i === 0 ? lap.full_name : '',
+            p.pelanggan || '', p.principal || '', p.produk || '',
+            nilai, p.probability != null ? p.probability : '', i === 0 ? prognosa : '',
+          ]);
+          r.getCell('F').numFmt = '#,##0'; r.getCell('H').numFmt = '#,##0';
+          r.getCell('F').alignment = { horizontal: 'right' };
+          r.getCell('G').alignment = { horizontal: 'center' };
+          r.getCell('H').alignment = { horizontal: 'right' };
+          applyBorder(r);
+        });
+      }
+    });
+    const totRow = ws.addRow(['', 'TOTAL', '', '', '', totalNilai, '', totalPrognosa]);
+    ws.mergeCells(`B${totRow.number}:E${totRow.number}`);
+    totRow.eachCell({ includeEmpty: true }, cell => { cell.fill = TOT_FILL; cell.font = TOT_FONT; cell.border = BORDER; });
+    totRow.getCell('F').numFmt = '#,##0'; totRow.getCell('H').numFmt = '#,##0';
+    totRow.getCell('B').alignment = { horizontal: 'center' };
+    totRow.getCell('F').alignment = { horizontal: 'right' };
+    totRow.getCell('H').alignment = { horizontal: 'right' };
+    totRow.height = 20;
+    return { totalNilai, totalPrognosa };
+  }
+
+  const areaEntries = Object.entries(byArea);
+
+  // Sheet Ringkasan duluan jika lebih dari 1 area
+  if (areaEntries.length > 1) {
+    const wsSummary = wb.addWorksheet('Ringkasan');
+    wsSummary.columns = [
+      { key: 'area',    width: 22 }, { key: 'jml', width: 12 },
+      { key: 'project', width: 12 }, { key: 'nilai', width: 22 }, { key: 'prognosa', width: 22 },
+    ];
+    const titleS = wsSummary.addRow(['RINGKASAN REKAP PROJECT SEMUA AREA']);
+    wsSummary.mergeCells(`A${titleS.number}:E${titleS.number}`);
+    titleS.getCell('A').font = { bold: true, size: 13, color: { argb: 'FF1E3A5F' } };
+    titleS.getCell('A').alignment = { horizontal: 'center' };
+    titleS.height = 22;
+    const subS = wsSummary.addRow([`Periode: ${periodeLabel}`]);
+    wsSummary.mergeCells(`A${subS.number}:E${subS.number}`);
+    subS.getCell('A').font = { italic: true, size: 10, color: { argb: 'FF64748B' } };
+    subS.getCell('A').alignment = { horizontal: 'center' };
+    wsSummary.addRow([]);
+    const hdrS = wsSummary.addRow(['Area Kerja', 'Jml Laporan', 'Jml Project', 'Total Nilai (Rp)', 'Total Prognosa (Rp)']);
+    hdrS.eachCell(cell => { cell.fill = HDR_FILL; cell.font = HDR_FONT; cell.border = BORDER; cell.alignment = { horizontal: 'center' }; });
+    hdrS.height = 28;
+
+    let grandNilai = 0, grandPrognosa = 0;
+    areaEntries.forEach(([areaName, laporanList]) => {
+      const jmlProject  = laporanList.reduce((s, l) => s + (l.projects || []).length, 0);
+      const sumNilai    = laporanList.reduce((s, l) => s + (l.projects || []).reduce((ss, p) => ss + (p.nilai || 0), 0), 0);
+      const sumPrognosa = laporanList.reduce((s, l) => s + (l.prognosa_bulan_depan || 0), 0);
+      grandNilai += sumNilai; grandPrognosa += sumPrognosa;
+      const r = wsSummary.addRow([areaName, laporanList.length, jmlProject, sumNilai, sumPrognosa]);
+      r.getCell('D').numFmt = '#,##0'; r.getCell('E').numFmt = '#,##0';
+      r.getCell('D').alignment = { horizontal: 'right' }; r.getCell('E').alignment = { horizontal: 'right' };
+      applyBorder(r);
+    });
+    const totS = wsSummary.addRow(['TOTAL', '', '', grandNilai, grandPrognosa]);
+    totS.eachCell({ includeEmpty: true }, cell => { cell.fill = TOT_FILL; cell.font = TOT_FONT; cell.border = BORDER; });
+    totS.getCell('D').numFmt = '#,##0'; totS.getCell('E').numFmt = '#,##0';
+    totS.getCell('D').alignment = { horizontal: 'right' }; totS.getCell('E').alignment = { horizontal: 'right' };
+    totS.height = 20;
+  }
+
+  // Sheet per area
+  areaEntries.forEach(([areaName, laporanList]) => {
+    const ws = wb.addWorksheet(areaName.substring(0, 31));
+    buildAreaSheet(ws, areaName, laporanList);
+  });
+
+  const safePeriode = (periode || 'semua').replace(/[^a-zA-Z0-9-]/g, '');
+  const safeArea   = (area_kerja || 'semua-area').replace(/[^a-zA-Z0-9-]/g, '_');
+  const filename   = `rekap-project_${safeArea}_${safePeriode}.xlsx`;
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  wb.xlsx.write(res).then(() => res.end()).catch(e => res.status(500).json({ error: e.message }));
+});
+
 // POST /api/laporan
 router.post('/', (req, res) => {
   const userId = req.session.user.id;

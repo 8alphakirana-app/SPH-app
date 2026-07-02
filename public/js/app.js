@@ -4478,6 +4478,18 @@ async function onRekaplaporanAreaChange() {
        loadLaporanRekap();
 }
 
+function downloadLaporanRekapExcel() {
+       const periode = document.getElementById('rekap-laporan-periode')?.value || '';
+       const area    = document.getElementById('rekap-laporan-area')?.value || '';
+       const uid     = document.getElementById('rekap-laporan-user')?.value || '';
+       const p = new URLSearchParams();
+       if (periode) p.set('periode', periode);
+       if (area)    p.set('area_kerja', area);
+       if (uid)     p.set('user_id', uid);
+       const qs = p.toString() ? '?' + p.toString() : '';
+       window.location.href = '/api/laporan/rekap-excel' + qs;
+}
+
 async function loadLaporanDashboard() {
        const section = document.getElementById('laporan-dashboard-section');
        if (!section) return;
