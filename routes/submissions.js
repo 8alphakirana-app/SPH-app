@@ -180,7 +180,7 @@ router.get('/dashboard-stats', requireLogin, (req, res) => {
 
         const perUserWithProducts = perUser.map(user => {
             const subs = month
-                ? db.prepare('SELECT items FROM submissions WHERE created_by = ? AND strftime("%Y-%m", created_at) = ?').all(user.id, month)
+                ? db.prepare(`SELECT items FROM submissions WHERE created_by = ? AND strftime('%Y-%m', created_at) = ?`).all(user.id, month)
                 : db.prepare('SELECT items FROM submissions WHERE created_by = ?').all(user.id);
             let jumlah_produk = 0;
             for (const s of subs) { try { jumlah_produk += JSON.parse(s.items).length; } catch {} }
@@ -194,7 +194,7 @@ router.get('/dashboard-stats', requireLogin, (req, res) => {
                 : db.prepare(`SELECT s.items, s.status, s.client_name FROM submissions s JOIN users u ON u.id = s.created_by WHERE LOWER(TRIM(u.area_kerja)) = ?`).all(area);
         } else {
             allSubs = month
-                ? db.prepare('SELECT items, status, client_name FROM submissions WHERE strftime("%Y-%m", created_at) = ?').all(month)
+                ? db.prepare(`SELECT items, status, client_name FROM submissions WHERE strftime('%Y-%m', created_at) = ?`).all(month)
                 : db.prepare('SELECT items, status, client_name FROM submissions').all();
         }
 
