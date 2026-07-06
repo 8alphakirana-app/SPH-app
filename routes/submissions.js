@@ -45,6 +45,19 @@ function isAdminOrKP(user) {
     return user.role === 'admin' || user.role === 'kantor_pusat';
 }
 
+// Viewer: hanya bisa melihat semua area, tanpa approval/admin actions
+function canViewAllSPH(user) {
+    return isAdminOrKP(user) || user.role === 'viewer';
+}
+
+// Middleware: viewer hanya boleh melihat, tidak boleh membuat data
+function blockViewer(req, res, next) {
+    if (req.session.user?.role === 'viewer') {
+        return res.status(403).json({ error: 'Viewer hanya dapat melihat data' });
+    }
+    next();
+}
+
 // Middleware: approve/reject SPH — admin, kantor_pusat, gm, gm2
 function requireSPHApprover(req, res, next) {
     const role = req.session.user?.role;
@@ -76,7 +89,7 @@ function generateNomor() {
 router.get('/', requireLogin, (req, res) => {
     let rows;
     const user = req.session.user;
-    if (isAdminOrKP(user)) {
+    if (canViewAllSPH(user)) {
           rows = db.prepare(`
                 SELECT s.*, u.full_name as creator_name, a.full_name as approver_name
                       FROM submissions s
@@ -121,7 +134,7 @@ router.get('/', requireLogin, (req, res) => {
 // GET /api/submissions/dashboard-stats?month=YYYY-MM
 router.get('/dashboard-stats', requireLogin, (req, res) => {
     const role = req.session.user.role;
-    if (role !== 'admin' && role !== 'kantor_pusat' && role !== 'area_manager') {
+    if (role !== 'admin' && role !== 'kantor_pusat' && role !== 'area_manager' && role !== 'viewer') {
         return res.status(403).json({ error: 'Akses ditolak' });
     }
     const month = req.query.month || null;
@@ -349,7 +362,7 @@ router.get('/:id', requireLogin, (req, res) => {
                           `).get(req.params.id);
     if (!row) return res.status(404).json({ error: 'Tidak ditemukan' });
     const u = req.session.user;
-    const canView = isAdminOrKP(u) || ['gm', 'gm2'].includes(u.role) || row.created_by === u.id;
+    const canView = canViewAllSPH(u) || ['gm', 'gm2'].includes(u.role) || row.created_by === u.id;
     if (!canView) {
           return res.status(403).json({ error: 'Akses ditolak' });
     }
@@ -357,7 +370,7 @@ router.get('/:id', requireLogin, (req, res) => {
 });
 
 // POST /api/submissions - buat pengajuan baru
-router.post('/', requireLogin, (req, res) => {
+router.post('/', requireLogin, blockViewer, (req, res) => {
     const { client_title, client_name, client_address, client_city, items, ppn_included, ongkir_included, notes, lampiran } = req.body;
     if (!client_name || !client_address || !items || !Array.isArray(items) || items.length === 0) {
           return res.status(400).json({ error: 'Data tidak lengkap' });

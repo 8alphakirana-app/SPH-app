@@ -15,6 +15,13 @@ function requireLogin(req, res, next) {
 
 router.use(requireLogin);
 
+function blockViewer(req, res, next) {
+  if (req.session.user?.role === 'viewer') {
+    return res.status(403).json({ error: 'Viewer hanya dapat melihat data' });
+  }
+  next();
+}
+
 // ── Approval level definitions ────────────────────────────────────────────────
 // SPPD: sppd_approval_level=0 waiting AM, 1=AM done waiting GM1+GM2, 2=all approved
 const SPPD_APPROVER_ROLES = ['area_manager', 'gm', 'gm2'];
@@ -25,7 +32,7 @@ const PENCAIRAN_LEVEL_ROLES = { 1:'area_manager', 2:'manager_keuangan', 3:'gm', 
 const LP_MAX = 6;
 
 function canSeeAll(role) {
-  return ['admin', 'kantor_pusat', 'gm', 'gm2', 'manager_keuangan', 'direktur_ops', 'direktur_utama'].includes(role);
+  return ['admin', 'kantor_pusat', 'gm', 'gm2', 'manager_keuangan', 'direktur_ops', 'direktur_utama', 'viewer'].includes(role);
 }
 
 // ── Helper: cek apakah ada Area Manager untuk area tertentu ──────────────────
@@ -253,7 +260,7 @@ router.get('/', (req, res) => {
 });
 
 // ── Create SPPD ───────────────────────────────────────────────────────────────
-router.post('/', (req, res) => {
+router.post('/', blockViewer, (req, res) => {
   const { id: userId } = req.session.user;
   const creatorUser = db.prepare('SELECT full_name, role, jabatan_detail, area_kerja FROM users WHERE id = ?').get(userId);
   const nama_pegawai = creatorUser.full_name;

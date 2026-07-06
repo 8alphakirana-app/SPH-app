@@ -227,6 +227,29 @@ if (userTableDef3 && !userTableDef3.sql.includes('gm2')) {
   console.log('✅ Users table upgraded: SPPD roles + area_kerja/jabatan_detail added');
 }
 
+// ── MIGRATION v5: add 'viewer' role (view-only, semua area, tanpa approval) ──
+const userTableDef4 = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get();
+if (userTableDef4 && !userTableDef4.sql.includes('viewer')) {
+  db.pragma('foreign_keys = OFF');
+  db.exec(`
+    CREATE TABLE users_v5 (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      full_name TEXT NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('admin','staff','gm','manager_keuangan','direktur_ops','direktur_utama','kantor_pusat','marketing','supervisor','area_manager','gm2','viewer')),
+      area_kerja TEXT DEFAULT '',
+      jabatan_detail TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now', 'localtime'))
+    );
+    INSERT INTO users_v5 SELECT id, username, password, full_name, role, area_kerja, jabatan_detail, created_at FROM users;
+    DROP TABLE users;
+    ALTER TABLE users_v5 RENAME TO users;
+  `);
+  db.pragma('foreign_keys = ON');
+  console.log('✅ Users table upgraded: role viewer ditambahkan');
+}
+
 // ── Add sppd_approval_level to submissions ────────────────────────────────────
 try { db.exec("ALTER TABLE submissions ADD COLUMN sppd_approval_level INTEGER DEFAULT 0"); } catch {}
 

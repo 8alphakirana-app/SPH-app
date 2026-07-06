@@ -8,8 +8,15 @@ function requireLogin(req, res, next) {
 }
 router.use(requireLogin);
 
+function blockViewer(req, res, next) {
+  if (req.session.user?.role === 'viewer') {
+    return res.status(403).json({ error: 'Viewer hanya dapat melihat data' });
+  }
+  next();
+}
+
 function canSeeAllAreas(role) {
-  return ['admin', 'kantor_pusat', 'gm', 'gm2', 'manager_keuangan', 'direktur_ops', 'direktur_utama'].includes(role);
+  return ['admin', 'kantor_pusat', 'gm', 'gm2', 'manager_keuangan', 'direktur_ops', 'direktur_utama', 'viewer'].includes(role);
 }
 function canSeeAll(role) {
   return canSeeAllAreas(role) || role === 'area_manager';
@@ -412,7 +419,7 @@ router.get('/rekap-excel', (req, res) => {
 });
 
 // POST /api/laporan
-router.post('/', (req, res) => {
+router.post('/', blockViewer, (req, res) => {
   const userId = req.session.user.id;
   const { periode, alasan, aktivitas_bulan_ini, rencana_bulan_depan, prognosa_bulan_depan, support, projects } = req.body;
 

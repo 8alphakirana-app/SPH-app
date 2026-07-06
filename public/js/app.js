@@ -95,7 +95,7 @@ const ROLE_LABELS = {
        gm: '⭐ GM 1', gm2: '⭐ GM 2', manager_keuangan: '💼 Mgr. Keuangan',
        direktur_ops: '🏭 Dir. Ops', direktur_utama: '🎯 Dir. Utama',
        marketing: '📣 Marketing', supervisor: '🔍 Supervisor',
-       area_manager: '🗺️ Area Manager',
+       area_manager: '🗺️ Area Manager', viewer: '👁️ Viewer',
 };
 const APPROVER_ROLES = ['area_manager', 'gm', 'gm2', 'manager_keuangan', 'direktur_ops', 'direktur_utama'];
 const KK_LEVEL_LABELS = { 1: 'Area Manager', 2: 'Manager Keuangan', 3: 'GM 1', 4: 'GM 2', 5: 'Direktur Operasional', 6: 'Direktur Utama' };
@@ -106,7 +106,7 @@ const PENCAIRAN_LEVEL_LABELS = { 1: 'Area Manager', 2: 'Manager Keuangan', 3: 'G
 const SPPD_APPROVER_ROLES = ['area_manager', 'gm', 'gm2'];
 const LAPORAN_APPROVER_ROLES = ['area_manager', 'manager_keuangan', 'gm', 'gm2', 'direktur_ops', 'direktur_utama'];
 const PENCAIRAN_APPROVER_ROLES = ['area_manager', 'manager_keuangan', 'gm', 'gm2', 'direktur_ops', 'direktur_utama'];
-const SPPD_ALL_ROLES = ['admin', 'kantor_pusat', 'manager_keuangan', 'area_manager', 'gm', 'gm2', 'direktur_ops', 'direktur_utama'];
+const SPPD_ALL_ROLES = ['admin', 'kantor_pusat', 'manager_keuangan', 'area_manager', 'gm', 'gm2', 'direktur_ops', 'direktur_utama', 'viewer'];
 const SPPD_CREATE_ROLES = ['marketing', 'supervisor', 'staff', 'admin', 'area_manager'];
 
 function setUser(user) {
@@ -126,6 +126,11 @@ function setUser(user) {
               document.querySelectorAll('.admin-or-kp').forEach(el => el.style.display = '');
        }
 
+       // Viewer: hanya lihat semua area, tanpa approval/creation
+       if (user.role === 'viewer') {
+              document.querySelectorAll('.sph-view-all').forEach(el => el.style.display = '');
+       }
+
        // Admin + Manager Keuangan: Target & Penjualan
        if (user.role === 'admin' || user.role === 'manager_keuangan') {
               document.querySelectorAll('.admin-or-mk').forEach(el => el.style.display = '');
@@ -136,25 +141,27 @@ function setUser(user) {
               document.querySelectorAll('.sph-approver').forEach(el => el.style.display = '');
        }
 
-       // KK menu visibility — semua role bisa membuat KK
+       // KK menu visibility — semua role bisa membuat KK (kecuali viewer)
        document.querySelectorAll('.kk-menu').forEach(el => el.style.display = '');
-       document.querySelectorAll('.kk-create').forEach(el => el.style.display = '');
-       document.querySelectorAll('.kk-mine').forEach(el => el.style.display = '');
+       if (user.role !== 'viewer') {
+              document.querySelectorAll('.kk-create').forEach(el => el.style.display = '');
+              document.querySelectorAll('.kk-mine').forEach(el => el.style.display = '');
+       }
        if (APPROVER_ROLES.includes(user.role) || user.role === 'admin') {
               document.querySelectorAll('.kk-approver').forEach(el => el.style.display = '');
        }
-       if (['admin', 'direktur_utama', 'kantor_pusat', 'gm', 'gm2', 'direktur_ops'].includes(user.role)) {
+       if (['admin', 'direktur_utama', 'kantor_pusat', 'gm', 'gm2', 'direktur_ops', 'viewer'].includes(user.role)) {
               document.querySelectorAll('.kk-all').forEach(el => el.style.display = '');
        }
 
        // Laporan Bulanan: semua user bisa akses, hanya admin/manajemen lihat rekap semua
-       const LAPORAN_ADMIN_ROLES = ['admin','kantor_pusat','gm','gm2','manager_keuangan','direktur_ops','direktur_utama','area_manager'];
+       const LAPORAN_ADMIN_ROLES = ['admin','kantor_pusat','gm','gm2','manager_keuangan','direktur_ops','direktur_utama','area_manager','viewer'];
        if (LAPORAN_ADMIN_ROLES.includes(user.role)) {
               document.querySelectorAll('.laporan-admin').forEach(el => el.style.display = '');
        }
 
-       // SPPD menu visibility — semua role bisa membuat SPPD
-       const isSppdCreator = true;
+       // SPPD menu visibility — semua role bisa membuat SPPD (kecuali viewer)
+       const isSppdCreator = user.role !== 'viewer';
        const isSppdApprover = SPPD_APPROVER_ROLES.includes(user.role) || user.role === 'admin';
        const isLaporanApprover = LAPORAN_APPROVER_ROLES.includes(user.role) || user.role === 'admin' || user.role === 'kantor_pusat';
        const isPencairanMgr = PENCAIRAN_APPROVER_ROLES.includes(user.role) || user.role === 'admin';
@@ -177,6 +184,11 @@ function setUser(user) {
        }
        if (isSppdAll) {
               document.querySelectorAll('.sppd-all').forEach(el => el.style.display = '');
+       }
+
+       // Viewer: tidak boleh membuat/mengelola apa pun, hanya melihat
+       if (user.role === 'viewer') {
+              document.querySelectorAll('.creator-only').forEach(el => el.style.display = 'none');
        }
 }
 
@@ -4074,8 +4086,8 @@ async function submitEditSPPD() {
 
 // ===================== LAPORAN BULANAN =====================
 
-const LAPORAN_ADMIN_ROLES_FE  = ['admin','kantor_pusat','gm','gm2','manager_keuangan','direktur_ops','direktur_utama','area_manager'];
-const LAPORAN_PUSAT_ROLES_FE  = ['admin','kantor_pusat','gm','gm2','manager_keuangan','direktur_ops','direktur_utama'];
+const LAPORAN_ADMIN_ROLES_FE  = ['admin','kantor_pusat','gm','gm2','manager_keuangan','direktur_ops','direktur_utama','area_manager','viewer'];
+const LAPORAN_PUSAT_ROLES_FE  = ['admin','kantor_pusat','gm','gm2','manager_keuangan','direktur_ops','direktur_utama','viewer'];
 const LAPORAN_REVIEWER_ROLES  = ['admin','gm','gm2'];
 
 function formatPeriode(periode) {

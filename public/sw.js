@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v3';  // Bump → hapus cache lama, paksa ambil file baru
+const CACHE_VERSION = 'v4';  // Bump → hapus cache lama, paksa ambil file baru
 const SHELL_CACHE = 'dms-shell-' + CACHE_VERSION;
 const API_CACHE   = 'dms-api-'   + CACHE_VERSION;
 

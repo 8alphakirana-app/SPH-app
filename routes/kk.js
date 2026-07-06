@@ -22,6 +22,13 @@ function requireLogin(req, res, next) {
   next();
 }
 
+function blockViewer(req, res, next) {
+  if (req.session.user?.role === 'viewer') {
+    return res.status(403).json({ error: 'Viewer hanya dapat melihat data' });
+  }
+  next();
+}
+
 function calcKK(kk) {
   let products = [];
   try { products = JSON.parse(kk.products || '[]'); } catch {}
@@ -68,7 +75,7 @@ function generateNomorKK() {
 }
 
 // ── POST /api/kk ─────────────────────────────────────────────────────────────
-router.post('/', requireLogin, (req, res) => {
+router.post('/', requireLogin, blockViewer, (req, res) => {
   const {
     perihal, satker, prinsipal, nama_barang,
     nama_pekerjaan, pelanggan, nilai_kontrak_total, dpp_beli, b_distribusi, ongkir,
@@ -171,7 +178,7 @@ router.get('/', requireLogin, (req, res) => {
   `;
 
   // Roles yang bisa melihat SEMUA KK (bisa approve atau perlu visibilitas penuh)
-  const canSeeAllRoles = ['admin', 'direktur_utama', 'kantor_pusat', 'gm', 'gm2', 'direktur_ops'];
+  const canSeeAllRoles = ['admin', 'direktur_utama', 'kantor_pusat', 'gm', 'gm2', 'direktur_ops', 'viewer'];
   if (canSeeAllRoles.includes(user.role)) {
     rows = db.prepare(base + ' ORDER BY s.created_at DESC').all();
   } else if (user.role === 'area_manager') {
@@ -243,7 +250,7 @@ router.get('/:id', requireLogin, (req, res) => {
   `).get(req.params.id);
 
   if (!row) return res.status(404).json({ error: 'KK tidak ditemukan' });
-  const canSeeAll = ['admin','direktur_utama','kantor_pusat','gm','gm2','direktur_ops'].includes(user.role);
+  const canSeeAll = ['admin','direktur_utama','kantor_pusat','gm','gm2','direktur_ops','viewer'].includes(user.role);
   if (!canSeeAll && !ROLE_LEVELS[user.role] && row.created_by !== user.id) return res.status(403).json({ error: 'Akses ditolak' });
 
   const approvals = db.prepare(`
