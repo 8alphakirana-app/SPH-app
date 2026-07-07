@@ -43,6 +43,7 @@ app.use('/api/backup', require('./routes/backup'));
 app.use('/api/laporan', require('./routes/laporan'));
 app.use('/api/sales-target', require('./routes/sales-target'));
 app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/media-monitoring', require('./routes/media-monitoring'));
 
 // SPA fallback - semua route ke index.html
 app.get('*', (req, res) => {

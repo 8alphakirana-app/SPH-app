@@ -113,6 +113,13 @@
           </ul>
         </li>
 
+        <li class="menu-divider mm-menu" style="display:none"></li>
+        <li class="mm-menu" style="display:none">
+          <a href="#" onclick="showPage('media-monitoring')" class="menu-item" data-page="media-monitoring">
+            <span class="icon">📡</span> Media Monitoring
+          </a>
+        </li>
+
         <li class="menu-divider"></li>
 
         <!-- Standalone admin/kp items -->
@@ -270,6 +277,14 @@
                 <div class="dash-mod-num-item"><span id="d-lap-prognosa" class="dash-big-sm dash-blue">-</span><span class="dash-lbl">Total Prognosa</span></div>
               </div>
             </div>
+          </div>
+
+          <!-- Media Monitoring dashboard widget -->
+          <div id="mm-dashboard-section" style="display:none">
+            <div class="section-divider">
+              <h2>📡 Media Monitoring — Status Pembayaran</h2>
+            </div>
+            <div id="mm-dashboard-cards" class="mm-dashboard-grid"></div>
           </div>
 
           <!-- Charts row -->
@@ -746,6 +761,63 @@
           <div class="card">
             <div class="card-header"><h3>📋 Daftar Backup</h3></div>
             <div class="card-body" id="backup-list-container"><div class="loading">⏳ Memuat...</div></div>
+          </div>
+        </div>
+
+        <!-- ═══════════ MEDIA MONITORING INVESTASI ═══════════ -->
+        <div id="content-media-monitoring" class="content-page" style="display:none">
+          <div class="page-header">
+            <h1 class="page-title">📡 Media Monitoring Investasi</h1>
+            <button id="btn-add-mm" onclick="openMMForm()" class="btn btn-primary" style="display:none">+ Tambah Entry</button>
+          </div>
+
+          <div class="mm-summary-row" id="mm-summary-row">
+            <div class="mm-sum-card">
+              <div class="mm-sum-label">Total Investasi</div>
+              <div class="mm-sum-val" id="mm-sum-investasi">Rp 0</div>
+            </div>
+            <div class="mm-sum-card">
+              <div class="mm-sum-label">Total Terbayar</div>
+              <div class="mm-sum-val mm-green" id="mm-sum-terbayar">Rp 0</div>
+            </div>
+            <div class="mm-sum-card">
+              <div class="mm-sum-label">Sisa Tagihan</div>
+              <div class="mm-sum-val mm-red" id="mm-sum-sisa">Rp 0</div>
+            </div>
+          </div>
+
+          <div class="filter-bar" style="margin-bottom:12px">
+            <input type="text" id="mm-search" placeholder="🔍 Cari perusahaan..." oninput="filterMMList()" style="max-width:240px">
+            <select id="mm-filter-status" onchange="filterMMList()">
+              <option value="">Semua Status</option>
+              <option value="ada_telat">Ada Keterlambatan</option>
+              <option value="lunas">Semua Lunas</option>
+              <option value="berjalan">Masih Berjalan</option>
+            </select>
+          </div>
+
+          <div class="card">
+            <div class="card-body no-padding">
+              <div class="table-responsive">
+                <table class="table" id="mm-table">
+                  <thead>
+                    <tr>
+                      <th>Perusahaan</th>
+                      <th>Pekerjaan</th>
+                      <th>Lama Kontrak</th>
+                      <th class="text-right">Investasi</th>
+                      <th class="text-right">Uang Kembali</th>
+                      <th class="text-right">Margin</th>
+                      <th class="text-right">Terbayar</th>
+                      <th class="text-right">Sisa</th>
+                      <th>Status Bayar</th>
+                      <th width="80">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody id="mm-tbody"></tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1293,6 +1365,105 @@
       <button onclick="submitPengembalian()" class="btn btn-primary">💾 Simpan & Hitung</button>
       <button onclick="closeModal('modal-pengembalian')" class="btn btn-outline">Batal</button>
     </div>
+  </div>
+</div>
+
+<!-- ═══════════ MODAL FORM MEDIA MONITORING ═══════════ -->
+<div id="modal-mm-form" class="modal" style="display:none">
+  <div class="modal-backdrop" onclick="closeModal('modal-mm-form')"></div>
+  <div class="modal-dialog modal-lg">
+    <div class="modal-header">
+      <h3 id="mm-form-title">Tambah Entry Media Monitoring</h3>
+      <button onclick="closeModal('modal-mm-form')" class="btn-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-header"><h3>📋 Informasi Kontrak</h3></div>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Nama Perusahaan <span class="required">*</span></label>
+              <input type="text" id="mm-nama-perusahaan" placeholder="PT. Contoh Maju">
+            </div>
+            <div class="form-group">
+              <label>Pekerjaan</label>
+              <input type="text" id="mm-pekerjaan" placeholder="Pengadaan Alat Kesehatan">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Lama Kontrak</label>
+              <input type="text" id="mm-lama-kontrak" placeholder="Cth: 12 Bulan / 1 Tahun">
+            </div>
+            <div class="form-group">
+              <label>Catatan</label>
+              <input type="text" id="mm-catatan" placeholder="Opsional...">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Nilai Investasi (Rp) <span class="required">*</span></label>
+              <input type="text" inputmode="numeric" id="mm-nilai-investasi" class="num-fmt" placeholder="0"
+                     oninput="formatNumInput(this);calcMMMargin()">
+            </div>
+            <div class="form-group">
+              <label>Nilai Uang Kembali (Rp) <span class="required">*</span></label>
+              <input type="text" inputmode="numeric" id="mm-nilai-kembali" class="num-fmt" placeholder="0"
+                     oninput="formatNumInput(this);calcMMMargin()">
+            </div>
+          </div>
+          <div style="background:var(--bg-alt);border-radius:8px;padding:10px 16px;margin-top:4px;display:flex;align-items:center;gap:12px">
+            <span style="font-size:13px;color:var(--text-light)">Persentase Margin:</span>
+            <span id="mm-margin-display" style="font-size:18px;font-weight:700;color:var(--green)">0.00%</span>
+            <span style="font-size:12px;color:var(--text-light)">(dihitung otomatis dari Uang Kembali − Investasi)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+          <h3>📅 Jadwal Pembayaran <span style="font-size:12px;font-weight:400;color:var(--text-light)">(opsional)</span></h3>
+          <button type="button" onclick="addMMPembayaranRow()" class="btn btn-secondary btn-sm">+ Tambah Jadwal</button>
+        </div>
+        <div class="card-body no-padding">
+          <table class="table" style="min-width:520px">
+            <thead>
+              <tr>
+                <th style="width:30px">No</th>
+                <th style="width:160px">Tanggal Pembayaran</th>
+                <th>Nilai Pembayaran (Rp)</th>
+                <th>Catatan</th>
+                <th style="width:32px"></th>
+              </tr>
+            </thead>
+            <tbody id="mm-pembayaran-tbody"></tbody>
+          </table>
+          <div style="padding:10px 16px;text-align:right;font-size:13px;border-top:1px solid var(--gray-border)">
+            Total Dijadwalkan: <strong id="mm-total-jadwal">Rp 0</strong>
+            <span id="mm-jadwal-warning" style="display:none;margin-left:8px;color:var(--red);font-size:12px">⚠️ Berbeda dari nilai investasi</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="mm-form-error" class="alert alert-error" style="display:none;margin-top:12px"></div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="saveMMForm()" class="btn btn-primary" id="btn-save-mm">💾 Simpan</button>
+      <button onclick="closeModal('modal-mm-form')" class="btn btn-outline">Batal</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ MODAL DETAIL MEDIA MONITORING ═══════════ -->
+<div id="modal-mm-detail" class="modal" style="display:none">
+  <div class="modal-backdrop" onclick="closeModal('modal-mm-detail')"></div>
+  <div class="modal-dialog modal-lg">
+    <div class="modal-header">
+      <h3 id="mm-detail-title">Detail Media Monitoring</h3>
+      <button onclick="closeModal('modal-mm-detail')" class="btn-close">✕</button>
+    </div>
+    <div class="modal-body" id="mm-detail-body"></div>
+    <div class="modal-footer" id="mm-detail-footer"></div>
   </div>
 </div>
 

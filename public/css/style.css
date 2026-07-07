@@ -1210,3 +1210,45 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
     white-space: nowrap;
   }
 }
+
+/* ── Media Monitoring ─────────────────── */
+.mm-summary-row {
+  display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.mm-sum-card {
+  flex: 1; min-width: 160px; background: white;
+  border: 1px solid var(--gray-border); border-radius: 10px;
+  padding: 14px 18px;
+}
+.mm-sum-label { font-size: 12px; color: var(--text-light); margin-bottom: 4px; }
+.mm-sum-val   { font-size: 20px; font-weight: 700; }
+.mm-green     { color: var(--green); }
+.mm-red       { color: var(--red); }
+
+.mm-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px; margin-bottom: 20px;
+}
+.mm-dash-card {
+  background: white; border: 1px solid var(--gray-border);
+  border-radius: 10px; padding: 14px 16px; cursor: pointer;
+  transition: box-shadow .2s;
+}
+.mm-dash-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.12); }
+.mm-dash-card.mm-telat { border-color: var(--red); border-width: 2px; }
+.mm-dash-card-name { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+.mm-dash-card-job  { font-size: 12px; color: var(--text-light); margin-bottom: 10px; }
+.mm-dash-row {
+  display: flex; justify-content: space-between;
+  font-size: 13px; margin-bottom: 4px;
+}
+.mm-dash-row .lbl { color: var(--text-light); }
+.mm-progress-bar {
+  height: 6px; background: var(--gray-border); border-radius: 3px;
+  margin: 8px 0; overflow: hidden;
+}
+.mm-progress-fill {
+  height: 100%; background: var(--green); border-radius: 3px;
+  transition: width .4s;
+}

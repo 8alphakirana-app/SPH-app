@@ -186,6 +186,17 @@ function setUser(user) {
               document.querySelectorAll('.sppd-all').forEach(el => el.style.display = '');
        }
 
+       // Media Monitoring Investasi: view = admin/kantor_pusat/manager_keuangan, edit = manager_keuangan
+       const canViewMM = ['admin', 'kantor_pusat', 'manager_keuangan'].includes(user.role);
+       const canEditMM = user.role === 'manager_keuangan';
+       if (canViewMM) {
+              document.querySelectorAll('.mm-menu').forEach(el => el.style.display = '');
+       }
+       if (canEditMM) {
+              const btnAdd = document.getElementById('btn-add-mm');
+              if (btnAdd) btnAdd.style.display = '';
+       }
+
        // Viewer: tidak boleh membuat/mengelola apa pun, hanya melihat
        if (user.role === 'viewer') {
               document.querySelectorAll('.creator-only').forEach(el => el.style.display = 'none');
@@ -238,6 +249,7 @@ function showPage(page) {
               'backup': 'Backup Database',
               'sales-target': 'Target & Penjualan',
               'sph-approvals': 'Persetujuan SPH',
+              'media-monitoring': 'Media Monitoring Investasi',
        };
        document.getElementById('top-bar-title').textContent = titles[page] || page;
        if (page === 'dashboard') loadDashboard();
@@ -263,6 +275,7 @@ function showPage(page) {
        else if (page === 'new-laporan') initLaporanForm();
        else if (page === 'my-laporan') loadMyLaporan();
        else if (page === 'laporan-rekap') loadLaporanRekap();
+       else if (page === 'media-monitoring') loadMediaMonitoring();
        if (window.innerWidth <= 768) {
               closeSidebar();
        }
@@ -435,6 +448,11 @@ async function loadDashboard() {
               // ZIP button
               const zipBtn = document.getElementById('btn-download-zip');
               if (zipBtn) zipBtn.style.display = (month && (sph.disetujui > 0)) ? '' : 'none';
+
+              // Media Monitoring widget
+              if (['admin', 'kantor_pusat', 'manager_keuangan'].includes(currentUser.role)) {
+                     loadMMDashboardWidget();
+              }
 
        } catch (e) {
               console.error('Dashboard error:', e);
@@ -4969,5 +4987,344 @@ function _sendWebNotif(title, body) {
     navigator.serviceWorker.controller.postMessage({ type: 'SHOW_NOTIFICATION', title, body });
   } else {
     new Notification(title, { body, icon: '/icons/icon-192.png' });
+  }
+}
+
+// ===================== MEDIA MONITORING INVESTASI =====================
+let mmData = [];
+let mmEditId = null;
+
+function mmStatusBadge(entry) {
+  if (entry.ada_keterlambatan) return `<span class="badge" style="background:#fde8e8;color:var(--red)">⚠️ Telat ${entry.max_telat_hari} hari</span>`;
+  if (!entry.pembayaran || entry.pembayaran.length === 0) return `<span class="badge" style="background:var(--gray-light);color:var(--text-light)">—</span>`;
+  const allLunas = entry.pembayaran.every(p => p.status === 'lunas');
+  if (allLunas) return `<span class="badge" style="background:#def7ec;color:var(--green)">✅ Lunas</span>`;
+  return `<span class="badge" style="background:var(--blue-light);color:var(--blue)">🔵 Berjalan</span>`;
+}
+
+async function loadMediaMonitoring() {
+  const tbody = document.getElementById('mm-tbody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="10" class="loading">⏳ Memuat...</td></tr>';
+  try {
+    const res = await api('/api/media-monitoring');
+    if (!res.ok) { if (tbody) tbody.innerHTML = '<tr><td colspan="10">Gagal memuat data</td></tr>'; return; }
+    mmData = await res.json();
+
+    const totInvestasi = mmData.reduce((s, e) => s + (parseFloat(e.nilai_investasi) || 0), 0);
+    const totTerbayar  = mmData.reduce((s, e) => s + (parseFloat(e.terbayar) || 0), 0);
+    const totSisa      = mmData.reduce((s, e) => s + (parseFloat(e.sisa) || 0), 0);
+    const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    setTxt('mm-sum-investasi', 'Rp ' + formatRupiah(totInvestasi));
+    setTxt('mm-sum-terbayar',  'Rp ' + formatRupiah(totTerbayar));
+    setTxt('mm-sum-sisa',      'Rp ' + formatRupiah(totSisa));
+
+    renderMMTable(mmData);
+  } catch {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="10">Gagal memuat data</td></tr>';
+  }
+}
+
+function filterMMList() {
+  const q = (document.getElementById('mm-search')?.value || '').toLowerCase().trim();
+  const status = document.getElementById('mm-filter-status')?.value || '';
+  const filtered = mmData.filter(e => {
+    if (q && !(e.nama_perusahaan || '').toLowerCase().includes(q)) return false;
+    if (status === 'ada_telat' && !e.ada_keterlambatan) return false;
+    if (status === 'lunas') {
+      const allLunas = e.pembayaran?.length > 0 && e.pembayaran.every(p => p.status === 'lunas');
+      if (!allLunas) return false;
+    }
+    if (status === 'berjalan') {
+      const allLunas = e.pembayaran?.length > 0 && e.pembayaran.every(p => p.status === 'lunas');
+      if (e.ada_keterlambatan || allLunas || !e.pembayaran?.length) return false;
+    }
+    return true;
+  });
+  renderMMTable(filtered);
+}
+
+function renderMMTable(data) {
+  const tbody = document.getElementById('mm-tbody');
+  if (!tbody) return;
+  if (data.length === 0) { tbody.innerHTML = `<tr><td colspan="10">${emptyState('Belum ada data Media Monitoring')}</td></tr>`; return; }
+  const canEdit = currentUser?.role === 'manager_keuangan';
+  tbody.innerHTML = data.map(e => `
+    <tr>
+      <td class="fw-bold">${escHtml(e.nama_perusahaan)}</td>
+      <td>${escHtml(e.pekerjaan || '-')}</td>
+      <td>${escHtml(e.lama_kontrak || '-')}</td>
+      <td class="text-right">Rp ${formatRupiah(e.nilai_investasi)}</td>
+      <td class="text-right">Rp ${formatRupiah(e.nilai_uang_kembali)}</td>
+      <td class="text-right" style="color:${e.margin_pct >= 0 ? 'var(--green)' : 'var(--red)'}">${e.margin_pct.toFixed(2)}%</td>
+      <td class="text-right">Rp ${formatRupiah(e.terbayar)}</td>
+      <td class="text-right">Rp ${formatRupiah(e.sisa)}</td>
+      <td>${mmStatusBadge(e)}</td>
+      <td>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          <button onclick="openMMDetail(${e.id})" class="btn btn-secondary btn-sm">🔍</button>
+          ${canEdit ? `<button onclick="openMMEdit(${e.id})" class="btn btn-secondary btn-sm">✏️</button>
+          <button onclick="deleteMMEntry(${e.id})" class="btn btn-danger btn-sm">🗑️</button>` : ''}
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+function calcMMMargin() {
+  const inv   = parseNum(document.getElementById('mm-nilai-investasi')?.value);
+  const balik = parseNum(document.getElementById('mm-nilai-kembali')?.value);
+  const margin = inv > 0 ? ((balik - inv) / inv) * 100 : 0;
+  const el = document.getElementById('mm-margin-display');
+  if (el) {
+    el.textContent = margin.toFixed(2) + '%';
+    el.style.color = margin >= 0 ? 'var(--green)' : 'var(--red)';
+  }
+}
+
+function addMMPembayaranRow(data = {}) {
+  const tbody = document.getElementById('mm-pembayaran-tbody');
+  if (!tbody) return;
+  const idx = tbody.querySelectorAll('tr').length + 1;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td style="text-align:center;font-size:12px">${idx}</td>
+    <td><input type="date" class="mm-tgl-bayar" value="${data.tanggal_pembayaran || ''}"></td>
+    <td><input type="text" inputmode="numeric" class="mm-nilai-bayar num-fmt" value="${data.nilai_pembayaran ? fmtNumStr(data.nilai_pembayaran) : ''}" oninput="formatNumInput(this);updateMMTotalJadwal()" onfocus="if(this.value==='0')this.value=''"></td>
+    <td><input type="text" class="mm-catatan-bayar" value="${escHtml(data.catatan || '')}"></td>
+    <td><button type="button" onclick="this.closest('tr').remove();updateMMTotalJadwal()" class="btn-remove-row">✕</button></td>`;
+  tbody.appendChild(tr);
+  document.querySelectorAll('#mm-pembayaran-tbody tr').forEach((r, i) => { r.querySelector('td:first-child').textContent = i + 1; });
+  updateMMTotalJadwal();
+}
+
+function updateMMTotalJadwal() {
+  let total = 0;
+  document.querySelectorAll('#mm-pembayaran-tbody .mm-nilai-bayar').forEach(inp => { total += parseNum(inp.value); });
+  const el = document.getElementById('mm-total-jadwal');
+  if (el) el.textContent = 'Rp ' + formatRupiah(total);
+  const investasi = parseNum(document.getElementById('mm-nilai-investasi')?.value);
+  const warning = document.getElementById('mm-jadwal-warning');
+  if (warning) warning.style.display = Math.abs(total - investasi) > 1000 ? '' : 'none';
+}
+
+function getMMPembayaranFromDOM() {
+  return Array.from(document.querySelectorAll('#mm-pembayaran-tbody tr')).map((row, idx) => ({
+    tanggal_pembayaran: row.querySelector('.mm-tgl-bayar')?.value || '',
+    nilai_pembayaran: parseNum(row.querySelector('.mm-nilai-bayar')?.value),
+    catatan: row.querySelector('.mm-catatan-bayar')?.value || '',
+    urutan: idx,
+  }));
+}
+
+async function openMMForm(id = null) {
+  mmEditId = id;
+  document.getElementById('mm-form-error').style.display = 'none';
+  document.getElementById('mm-form-title').textContent = id ? 'Edit Entry Media Monitoring' : 'Tambah Entry Media Monitoring';
+  document.getElementById('mm-pembayaran-tbody').innerHTML = '';
+
+  if (id) {
+    try {
+      const res = await api(`/api/media-monitoring/${id}`);
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error || 'Gagal memuat data', 'error'); return; }
+      document.getElementById('mm-nama-perusahaan').value = data.nama_perusahaan || '';
+      document.getElementById('mm-pekerjaan').value = data.pekerjaan || '';
+      document.getElementById('mm-lama-kontrak').value = data.lama_kontrak || '';
+      document.getElementById('mm-catatan').value = data.catatan || '';
+      document.getElementById('mm-nilai-investasi').value = data.nilai_investasi ? fmtNumStr(data.nilai_investasi) : '';
+      document.getElementById('mm-nilai-kembali').value = data.nilai_uang_kembali ? fmtNumStr(data.nilai_uang_kembali) : '';
+      (data.pembayaran || []).forEach(p => addMMPembayaranRow(p));
+    } catch { showToast('Gagal memuat data', 'error'); return; }
+  } else {
+    document.getElementById('mm-nama-perusahaan').value = '';
+    document.getElementById('mm-pekerjaan').value = '';
+    document.getElementById('mm-lama-kontrak').value = '';
+    document.getElementById('mm-catatan').value = '';
+    document.getElementById('mm-nilai-investasi').value = '';
+    document.getElementById('mm-nilai-kembali').value = '';
+  }
+  calcMMMargin();
+  updateMMTotalJadwal();
+  showModal('modal-mm-form');
+}
+
+function openMMEdit(id) {
+  openMMForm(id);
+}
+
+async function saveMMForm() {
+  const errEl = document.getElementById('mm-form-error');
+  errEl.style.display = 'none';
+  const nama_perusahaan = document.getElementById('mm-nama-perusahaan').value.trim();
+  const nilai_investasi = parseNum(document.getElementById('mm-nilai-investasi').value);
+  if (!nama_perusahaan) { errEl.textContent = 'Nama perusahaan wajib diisi'; errEl.style.display = 'block'; return; }
+  if (nilai_investasi <= 0) { errEl.textContent = 'Nilai investasi harus lebih dari 0'; errEl.style.display = 'block'; return; }
+
+  const payload = {
+    nama_perusahaan,
+    pekerjaan: document.getElementById('mm-pekerjaan').value.trim(),
+    lama_kontrak: document.getElementById('mm-lama-kontrak').value.trim(),
+    nilai_investasi,
+    nilai_uang_kembali: parseNum(document.getElementById('mm-nilai-kembali').value),
+    catatan: document.getElementById('mm-catatan').value.trim(),
+    pembayaran: getMMPembayaranFromDOM(),
+  };
+
+  try {
+    const btn = document.getElementById('btn-save-mm');
+    btn.disabled = true;
+    const res = mmEditId
+      ? await api(`/api/media-monitoring/${mmEditId}`, 'PUT', payload)
+      : await api('/api/media-monitoring', 'POST', payload);
+    const data = await res.json();
+    btn.disabled = false;
+    if (res.ok) {
+      closeModal('modal-mm-form');
+      showToast('✅ Data Media Monitoring berhasil disimpan', 'success');
+      loadMediaMonitoring();
+    } else {
+      errEl.textContent = data.error || 'Gagal menyimpan';
+      errEl.style.display = 'block';
+    }
+  } catch {
+    errEl.textContent = 'Koneksi ke server gagal';
+    errEl.style.display = 'block';
+  }
+}
+
+async function deleteMMEntry(id) {
+  if (!confirm('Hapus entry ini beserta semua jadwal pembayarannya?')) return;
+  try {
+    const res = await api(`/api/media-monitoring/${id}`, 'DELETE');
+    if (res.ok) {
+      showToast('✅ Data berhasil dihapus', 'success');
+      closeModal('modal-mm-detail');
+      loadMediaMonitoring();
+    } else {
+      const data = await res.json();
+      showToast(data.error || 'Gagal menghapus', 'error');
+    }
+  } catch { showToast('Koneksi ke server gagal', 'error'); }
+}
+
+function mmPembayaranStatusBadge(p) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  if (p.status === 'lunas') return `<span class="badge" style="background:#def7ec;color:var(--green)">✅ Lunas</span>`;
+  const tgl = p.tanggal_pembayaran ? new Date(p.tanggal_pembayaran) : null;
+  if (tgl) { tgl.setHours(0, 0, 0, 0); }
+  if (tgl && tgl < today) {
+    const hari = Math.floor((today - tgl) / 86400000);
+    return `<span class="badge" style="background:#fde8e8;color:var(--red)">⚠️ Telat ${hari} hari</span>`;
+  }
+  return `<span class="badge" style="background:#fdf6b2;color:#8a6d00">⏳ Belum</span>`;
+}
+
+async function openMMDetail(id) {
+  try {
+    const res = await api(`/api/media-monitoring/${id}`);
+    const data = await res.json();
+    if (!res.ok) { showToast(data.error || 'Gagal memuat detail', 'error'); return; }
+    const canEdit = currentUser?.role === 'manager_keuangan';
+
+    document.getElementById('mm-detail-title').textContent = `📡 ${data.nama_perusahaan}`;
+    const pembayaranRows = (data.pembayaran || []).map((p, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${p.tanggal_pembayaran ? formatDate(p.tanggal_pembayaran) : '-'}</td>
+        <td class="text-right">Rp ${formatRupiah(p.nilai_pembayaran)}</td>
+        <td>${mmPembayaranStatusBadge(p)}</td>
+        <td>${escHtml(p.catatan || '-')}</td>
+        <td>${canEdit ? `<button onclick="toggleMMPembayaranStatus(${p.id}, '${p.status === 'lunas' ? 'belum' : 'lunas'}', ${id})" class="btn btn-secondary btn-sm">${p.status === 'lunas' ? 'Tandai Belum' : 'Tandai Lunas'}</button>` : ''}</td>
+      </tr>`).join('');
+
+    document.getElementById('mm-detail-body').innerHTML = `
+      <div class="detail-section-title">📋 Info Kontrak</div>
+      <div class="detail-grid" style="grid-template-columns:1fr 1fr">
+        <div class="detail-item"><label>Nama Perusahaan</label><div class="value">${escHtml(data.nama_perusahaan)}</div></div>
+        <div class="detail-item"><label>Pekerjaan</label><div class="value">${escHtml(data.pekerjaan || '-')}</div></div>
+        <div class="detail-item"><label>Lama Kontrak</label><div class="value">${escHtml(data.lama_kontrak || '-')}</div></div>
+        <div class="detail-item"><label>Catatan</label><div class="value">${escHtml(data.catatan || '-')}</div></div>
+      </div>
+
+      <div class="detail-section-title">💰 Nilai Keuangan</div>
+      <table class="table" style="margin-bottom:16px">
+        <thead><tr><th>Nilai Investasi</th><th>Nilai Uang Kembali</th><th>Margin %</th></tr></thead>
+        <tbody><tr>
+          <td>Rp ${formatRupiah(data.nilai_investasi)}</td>
+          <td>Rp ${formatRupiah(data.nilai_uang_kembali)}</td>
+          <td style="color:${data.margin_pct >= 0 ? 'var(--green)' : 'var(--red)'}">${data.margin_pct.toFixed(2)}%</td>
+        </tr></tbody>
+      </table>
+
+      <div class="detail-section-title">📅 Status Pembayaran</div>
+      <div style="margin-bottom:10px;font-size:13px">
+        Total Investasi: <strong>Rp ${formatRupiah(data.nilai_investasi)}</strong> &nbsp;|&nbsp;
+        Terbayar: <strong style="color:var(--green)">Rp ${formatRupiah(data.terbayar)}</strong> &nbsp;|&nbsp;
+        Sisa: <strong style="color:var(--red)">Rp ${formatRupiah(data.sisa)}</strong>
+      </div>
+      <table class="table">
+        <thead><tr><th>No</th><th>Tanggal</th><th class="text-right">Nilai</th><th>Status</th><th>Catatan</th><th></th></tr></thead>
+        <tbody>${pembayaranRows || '<tr><td colspan="6">Belum ada jadwal pembayaran</td></tr>'}</tbody>
+      </table>
+    `;
+
+    let footer = '';
+    if (canEdit) {
+      footer += `<button onclick="closeModal('modal-mm-detail');setTimeout(()=>openMMEdit(${id}),200)" class="btn btn-secondary">✏️ Edit</button>`;
+      footer += `<button onclick="deleteMMEntry(${id})" class="btn btn-danger">🗑️ Hapus</button>`;
+    }
+    footer += `<button onclick="closeModal('modal-mm-detail')" class="btn btn-outline">Tutup</button>`;
+    document.getElementById('mm-detail-footer').innerHTML = footer;
+
+    showModal('modal-mm-detail');
+  } catch { showToast('Gagal memuat detail', 'error'); }
+}
+
+async function toggleMMPembayaranStatus(pid, newStatus, monitoringId) {
+  try {
+    const res = await api(`/api/media-monitoring/pembayaran/${pid}/status`, 'PATCH', { status: newStatus });
+    if (res.ok) {
+      showToast('✅ Status pembayaran diperbarui', 'success');
+      openMMDetail(monitoringId);
+      loadMediaMonitoring();
+    } else {
+      const data = await res.json();
+      showToast(data.error || 'Gagal memperbarui status', 'error');
+    }
+  } catch { showToast('Koneksi ke server gagal', 'error'); }
+}
+
+async function loadMMDashboardWidget() {
+  const section = document.getElementById('mm-dashboard-section');
+  const cardsEl = document.getElementById('mm-dashboard-cards');
+  if (!section || !cardsEl) return;
+  try {
+    const res = await api('/api/media-monitoring/dashboard');
+    if (!res.ok) { section.style.display = 'none'; return; }
+    const data = await res.json();
+    if (!data.entries || data.entries.length === 0) { section.style.display = 'none'; return; }
+
+    section.style.display = '';
+    cardsEl.innerHTML = data.entries.map(e => {
+      const pct = e.nilai_investasi > 0 ? Math.min(100, (e.terbayar / e.nilai_investasi) * 100) : 0;
+      let badge;
+      if (e.ada_keterlambatan) badge = `<span class="badge" style="background:#fde8e8;color:var(--red);font-weight:700">⚠️ Telat ${e.max_telat_hari} hari</span>`;
+      else if (e.semua_lunas) badge = `<span class="badge" style="background:#def7ec;color:var(--green)">✅ Semua Lunas</span>`;
+      else if (!e.ada_jadwal) badge = `<span class="badge" style="background:var(--gray-light);color:var(--text-light)">—</span>`;
+      else badge = `<span class="badge" style="background:var(--blue-light);color:var(--blue)">🔵 Berjalan</span>`;
+
+      return `
+      <div class="mm-dash-card ${e.ada_keterlambatan ? 'mm-telat' : ''}" onclick="openMMDetail(${e.id})">
+        <div class="mm-dash-card-name">📡 ${escHtml(e.nama_perusahaan)}</div>
+        <div class="mm-dash-card-job">${escHtml(e.pekerjaan || '-')}</div>
+        <div class="mm-dash-row"><span class="lbl">Investasi</span><span>Rp ${formatRupiah(e.nilai_investasi)}</span></div>
+        <div class="mm-dash-row"><span class="lbl">Terbayar</span><span>Rp ${formatRupiah(e.terbayar)}</span></div>
+        <div class="mm-progress-bar"><div class="mm-progress-fill" style="width:${pct}%"></div></div>
+        <div class="mm-dash-row"><span class="lbl">Sisa</span><span>Rp ${formatRupiah(e.sisa)}</span></div>
+        <div class="mm-dash-row"><span class="lbl">Margin</span><span style="color:${e.margin_pct >= 0 ? 'var(--green)' : 'var(--red)'}">${e.margin_pct.toFixed(2)}%</span></div>
+        <div style="margin-top:8px">${badge}</div>
+      </div>`;
+    }).join('');
+  } catch {
+    section.style.display = 'none';
   }
 }

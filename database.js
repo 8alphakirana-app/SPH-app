@@ -738,6 +738,37 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, is_read);
 `);
 
+// ── Media Monitoring Investasi tables ─────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS media_monitoring (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nama_perusahaan TEXT NOT NULL DEFAULT '',
+    pekerjaan TEXT DEFAULT '',
+    lama_kontrak TEXT DEFAULT '',
+    nilai_investasi REAL DEFAULT 0,
+    nilai_uang_kembali REAL DEFAULT 0,
+    catatan TEXT DEFAULT '',
+    created_by INTEGER,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    updated_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (created_by) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS media_monitoring_pembayaran (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    monitoring_id INTEGER NOT NULL,
+    urutan INTEGER DEFAULT 0,
+    tanggal_pembayaran TEXT NOT NULL,
+    nilai_pembayaran REAL DEFAULT 0,
+    status TEXT DEFAULT 'belum' CHECK(status IN ('belum','lunas')),
+    catatan TEXT DEFAULT '',
+    updated_by INTEGER,
+    updated_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (monitoring_id) REFERENCES media_monitoring(id),
+    FOREIGN KEY (updated_by) REFERENCES users(id)
+  );
+`);
+
 // ── Auto-backup saat server start ────────────────────────────────────────────
 (async () => {
   try {
