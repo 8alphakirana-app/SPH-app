@@ -2119,7 +2119,9 @@ function renderKKProductRow(idx) {
        return `<tr>
          <td style="text-align:center;font-size:12px;color:var(--text-light);vertical-align:middle">${idx + 1}</td>
          <td><input type="text" class="table-input kk-prod-nama" placeholder="Nama produk..." oninput="updateKKCalc()"></td>
-         <td><input type="text" inputmode="numeric" class="table-input kk-prod-nkt num-fmt" placeholder="0" oninput="formatNumInput(this);updateKKCalc()" style="text-align:right" onfocus="if(this.value==='0')this.value=''"></td>
+         <td><input type="number" class="table-input kk-prod-qty" placeholder="0" min="0" step="1" oninput="updateKKCalc()" style="text-align:right;width:100%"></td>
+         <td><input type="text" inputmode="numeric" class="table-input kk-prod-harga num-fmt" placeholder="0" oninput="formatNumInput(this);updateKKCalc()" style="text-align:right" onfocus="if(this.value==='0')this.value=''"></td>
+         <td class="kk-prod-nkt" style="text-align:right;padding:6px 8px;background:var(--bg-alt);font-size:13px">Rp 0</td>
          <td><input type="text" inputmode="numeric" class="table-input kk-prod-dpp num-fmt" placeholder="0" oninput="formatNumInput(this);updateKKCalc()" style="text-align:right" onfocus="if(this.value==='0')this.value=''"></td>
          <td><input type="text" inputmode="numeric" class="table-input kk-prod-dist num-fmt" value="0" oninput="formatNumInput(this);updateKKCalc()" style="text-align:right" onfocus="if(this.value==='0')this.value=''"></td>
          <td class="kk-pct-display">0%</td>
@@ -2145,13 +2147,19 @@ function removeKKProduct(btn) {
 }
 
 function getKKProductsFromDOM() {
-       return Array.from(document.querySelectorAll('#kk-products-tbody tr')).map(row => ({
-              nama: row.querySelector('.kk-prod-nama').value.trim(),
-              nilai_kontrak: parseNum(row.querySelector('.kk-prod-nkt').value),
-              dpp_beli: parseNum(row.querySelector('.kk-prod-dpp').value),
-              b_distribusi: parseNum(row.querySelector('.kk-prod-dist').value),
-              ongkir: parseNum(row.querySelector('.kk-prod-ongkir').value),
-       }));
+       return Array.from(document.querySelectorAll('#kk-products-tbody tr')).map(row => {
+              const qty          = parseFloat(row.querySelector('.kk-prod-qty')?.value) || 0;
+              const harga_satuan = parseNum(row.querySelector('.kk-prod-harga')?.value);
+              return {
+                     nama:         row.querySelector('.kk-prod-nama').value.trim(),
+                     qty,
+                     harga_satuan,
+                     nilai_kontrak: qty * harga_satuan,
+                     dpp_beli:     parseNum(row.querySelector('.kk-prod-dpp').value),
+                     b_distribusi: parseNum(row.querySelector('.kk-prod-dist').value),
+                     ongkir:       parseNum(row.querySelector('.kk-prod-ongkir').value),
+              };
+       });
 }
 
 function initKKForm() {
@@ -2181,6 +2189,8 @@ function updateKKCalc() {
        const products = getKKProductsFromDOM();
        document.querySelectorAll('#kk-products-tbody tr').forEach((row, i) => {
               const p = products[i];
+              const nktEl = row.querySelector('.kk-prod-nkt');
+              if (nktEl) nktEl.textContent = 'Rp ' + formatRupiah(p.nilai_kontrak);
               const dppK = p.nilai_kontrak / 1.11;
               const pen = p.nilai_kontrak - dppK * 0.11 - dppK * 0.015;
               const pctDist = pen > 0 ? (p.b_distribusi / pen) * 100 : 0;
@@ -2467,6 +2477,9 @@ async function viewKKDetail(id) {
                                        <span style="font-weight:600">${i + 1}. ${escHtml(p.nama || '-')}</span>
                                        <span style="font-size:11px;color:var(--text-light)">Rp ${formatRupiah(p.nilai_kontrak)}</span>
                                      </div>
+                                     ${(p.qty || p.harga_satuan) ? `
+                                     <div class="kk-finance-row"><span style="padding-left:10px">Qty</span><span>${p.qty || 0}</span></div>
+                                     <div class="kk-finance-row"><span style="padding-left:10px">Harga Satuan</span><span>Rp ${formatRupiah(p.harga_satuan || 0)}</span></div>` : ''}
                                      <div class="kk-finance-row"><span style="padding-left:10px">DPP Beli</span><span>Rp ${formatRupiah(p.dpp_beli || 0)}</span></div>
                                      <div class="kk-finance-row"><span style="padding-left:10px">B. Distribusi <small style="color:var(--blue)">${pDist}</small></span><span>Rp ${formatRupiah(p.b_distribusi || 0)}</span></div>
                                      <div class="kk-finance-row" style="margin-bottom:6px"><span style="padding-left:10px">Ongkir <small style="color:var(--blue)">${pOngk}</small></span><span>Rp ${formatRupiah(p.ongkir || 0)}</span></div>`;
@@ -3871,13 +3884,27 @@ async function openEditKK(id) {
               tbody.innerHTML = '';
               let products = [];
               try { products = JSON.parse(kk.products || '[]'); } catch {}
+              // Backward-compatible: data lama tanpa qty/harga_satuan -> default qty=1
+              // agar nilai_kontrak lama tetap terjaga saat form dibuka.
+              const withFallbackQty = p => (!p.qty && !p.harga_satuan && p.nilai_kontrak)
+                     ? { ...p, qty: 1, harga_satuan: p.nilai_kontrak }
+                     : p;
               if (products.length === 0) {
-                     addEKKProduct({ nilai_kontrak: kk.nilai_kontrak_total || 0, dpp_beli: kk.dpp_beli || 0, b_distribusi: kk.b_distribusi || 0, ongkir: kk.ongkir || 0 });
+                     addEKKProduct(withFallbackQty({ nilai_kontrak: kk.nilai_kontrak_total || 0, dpp_beli: kk.dpp_beli || 0, b_distribusi: kk.b_distribusi || 0, ongkir: kk.ongkir || 0 }));
               } else {
-                     products.forEach(p => addEKKProduct(p));
+                     products.forEach(p => addEKKProduct(withFallbackQty(p)));
               }
               showModal('modal-kk-edit');
        } catch { showToast('Gagal memuat data KK', 'error'); }
+}
+
+function updateEKKRowNkt(idx) {
+       const row = document.getElementById(`ekk-row-${idx}`);
+       if (!row) return;
+       const qty   = parseFloat(row.querySelector('[data-field="qty"]')?.value) || 0;
+       const harga = parseNum(row.querySelector('[data-field="harga_satuan"]')?.value);
+       const nktEl = row.querySelector('.ekk-prod-nkt');
+       if (nktEl) nktEl.textContent = 'Rp ' + formatRupiah(qty * harga);
 }
 
 function addEKKProduct(data = {}) {
@@ -3886,10 +3913,15 @@ function addEKKProduct(data = {}) {
        const tbody = document.getElementById('ekk-products-tbody');
        const tr = document.createElement('tr');
        tr.id = `ekk-row-${idx}`;
+       const nilaiKontrak = (data.qty || data.harga_satuan)
+              ? (parseFloat(data.qty) || 0) * (parseFloat(data.harga_satuan) || 0)
+              : (data.nilai_kontrak || 0);
        tr.innerHTML = `
               <td style="text-align:center;font-size:12px">${idx}</td>
               <td><input type="text" class="table-input" placeholder="Nama produk" data-field="nama" value="${escHtml(data.nama || '')}"></td>
-              <td><input type="text" inputmode="numeric" class="table-input num-fmt" data-field="nilai_kontrak" value="${data.nilai_kontrak ? fmtNumStr(data.nilai_kontrak) : '0'}" oninput="formatNumInput(this)" onfocus="if(this.value==='0')this.value=''"></td>
+              <td><input type="number" class="table-input" placeholder="0" min="0" step="1" data-field="qty" value="${data.qty || ''}" oninput="updateEKKRowNkt(${idx})" style="text-align:right;width:100%"></td>
+              <td><input type="text" inputmode="numeric" class="table-input num-fmt" data-field="harga_satuan" value="${data.harga_satuan ? fmtNumStr(data.harga_satuan) : '0'}" oninput="formatNumInput(this);updateEKKRowNkt(${idx})" style="text-align:right" onfocus="if(this.value==='0')this.value=''"></td>
+              <td class="ekk-prod-nkt" style="text-align:right;padding:6px 8px;background:var(--bg-alt);font-size:13px">Rp ${formatRupiah(nilaiKontrak)}</td>
               <td><input type="text" inputmode="numeric" class="table-input num-fmt" data-field="dpp_beli" value="${data.dpp_beli ? fmtNumStr(data.dpp_beli) : '0'}" oninput="formatNumInput(this)" onfocus="if(this.value==='0')this.value=''"></td>
               <td><input type="text" inputmode="numeric" class="table-input num-fmt" data-field="b_distribusi" value="${data.b_distribusi ? fmtNumStr(data.b_distribusi) : '0'}" oninput="formatNumInput(this)" onfocus="if(this.value==='0')this.value=''"></td>
               <td><input type="text" inputmode="numeric" class="table-input num-fmt" data-field="ongkir" value="${data.ongkir ? fmtNumStr(data.ongkir) : '0'}" oninput="formatNumInput(this)" onfocus="if(this.value==='0')this.value=''"></td>
@@ -3900,9 +3932,13 @@ function addEKKProduct(data = {}) {
 function getEKKProductsFromDOM() {
        const products = [];
        document.querySelectorAll('#ekk-products-tbody tr').forEach(row => {
+              const qty          = parseFloat(row.querySelector('[data-field="qty"]')?.value) || 0;
+              const harga_satuan = parseNum(row.querySelector('[data-field="harga_satuan"]')?.value);
               products.push({
                      nama: row.querySelector('[data-field="nama"]')?.value || '',
-                     nilai_kontrak: parseNum(row.querySelector('[data-field="nilai_kontrak"]')?.value),
+                     qty,
+                     harga_satuan,
+                     nilai_kontrak: qty * harga_satuan,
                      dpp_beli: parseNum(row.querySelector('[data-field="dpp_beli"]')?.value),
                      b_distribusi: parseNum(row.querySelector('[data-field="b_distribusi"]')?.value),
                      ongkir: parseNum(row.querySelector('[data-field="ongkir"]')?.value),

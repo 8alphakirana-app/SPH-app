@@ -33,6 +33,14 @@ function calcKK(kk) {
   let products = [];
   try { products = JSON.parse(kk.products || '[]'); } catch {}
 
+  // Backward-compatible: data lama tanpa qty/harga_satuan tetap pakai nilai_kontrak yang tersimpan
+  products = products.map(p => ({
+    ...p,
+    nilai_kontrak: (p.nilai_kontrak && p.nilai_kontrak > 0)
+      ? p.nilai_kontrak
+      : (parseFloat(p.qty) || 0) * (parseFloat(p.harga_satuan) || 0)
+  }));
+
   let nkt, dppBeli, bDistribusi, ongkir;
   if (products.length > 0) {
     nkt          = products.reduce((s, p) => s + (p.nilai_kontrak || 0), 0);
@@ -87,7 +95,16 @@ router.post('/', requireLogin, blockViewer, (req, res) => {
     return res.status(400).json({ error: 'Nama pekerjaan dan pelanggan wajib diisi' });
   }
 
-  const productsArr    = Array.isArray(products) ? products : [];
+  const productsArr    = (Array.isArray(products) ? products : []).map(p => ({
+    nama:          p.nama || '',
+    qty:           parseFloat(p.qty) || 0,
+    harga_satuan:  parseFloat(p.harga_satuan) || 0,
+    nilai_kontrak: (parseFloat(p.qty) || 0) * (parseFloat(p.harga_satuan) || 0)
+                   || parseFloat(p.nilai_kontrak) || 0,
+    dpp_beli:      parseFloat(p.dpp_beli) || 0,
+    b_distribusi:  parseFloat(p.b_distribusi) || 0,
+    ongkir:        parseFloat(p.ongkir) || 0,
+  }));
   const productsJson   = JSON.stringify(productsArr);
   const totNkt         = productsArr.length > 0
     ? productsArr.reduce((s, p) => s + (parseFloat(p.nilai_kontrak) || 0), 0)
@@ -280,7 +297,16 @@ router.put('/:id', requireLogin, (req, res) => {
   if (!nama_pekerjaan || !pelanggan) return res.status(400).json({ error: 'Nama pekerjaan dan pelanggan wajib diisi' });
 
   const existingKK     = db.prepare('SELECT nomor_surat FROM kertas_kerja WHERE submission_id=?').get(req.params.id);
-  const productsArr    = Array.isArray(products) ? products : [];
+  const productsArr    = (Array.isArray(products) ? products : []).map(p => ({
+    nama:          p.nama || '',
+    qty:           parseFloat(p.qty) || 0,
+    harga_satuan:  parseFloat(p.harga_satuan) || 0,
+    nilai_kontrak: (parseFloat(p.qty) || 0) * (parseFloat(p.harga_satuan) || 0)
+                   || parseFloat(p.nilai_kontrak) || 0,
+    dpp_beli:      parseFloat(p.dpp_beli) || 0,
+    b_distribusi:  parseFloat(p.b_distribusi) || 0,
+    ongkir:        parseFloat(p.ongkir) || 0,
+  }));
   const productsJson   = JSON.stringify(productsArr);
   const dppBeliVal     = parseFloat(dpp_beli) || 0;
   const nilaiPembyrVal = dppBeliVal * 1.11;
@@ -657,6 +683,8 @@ function generateKKHTML(row, calc, approvals, settings) {
       financeRows += `<tr style="background:${i % 2 === 0 ? '#f9fafb' : '#fff'}">
         <td style="padding:3px;text-align:center">${i + 1}</td>
         <td style="padding:3px 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.nama || '-'}</td>
+        <td style="padding:3px;text-align:right">${p.qty || '-'}</td>
+        <td style="padding:3px;text-align:right">${p.harga_satuan ? fmtRp(p.harga_satuan) : '-'}</td>
         <td style="padding:3px;text-align:right">${fmtRp(p.nilai_kontrak)}</td>
         <td style="padding:3px;text-align:right">${fmtRp(pDppK)}</td>
         <td style="padding:3px;text-align:right">${fmtRp(pPpnK)}</td>
@@ -671,7 +699,7 @@ function generateKKHTML(row, calc, approvals, settings) {
       </tr>`;
     });
     financeRows += `<tr style="background:#dbeafe;font-weight:700">
-      <td colspan="2" style="padding:3px;text-align:center">TOTAL</td>
+      <td colspan="4" style="padding:3px;text-align:center">TOTAL</td>
       <td style="padding:3px;text-align:right">${fmtRp(products.reduce((s, p) => s + (p.nilai_kontrak || 0), 0))}</td>
       <td style="padding:3px;text-align:right">${fmtRp(calc.dppKontrak)}</td>
       <td style="padding:3px;text-align:right">${fmtRp(calc.ppnKontrak)}</td>
@@ -688,6 +716,8 @@ function generateKKHTML(row, calc, approvals, settings) {
     financeRows = `<tr style="background:#f9fafb">
       <td style="padding:3px;text-align:center">1</td>
       <td style="padding:3px 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${row.pelanggan || '-'}</td>
+      <td style="padding:3px;text-align:right">-</td>
+      <td style="padding:3px;text-align:right">-</td>
       <td style="padding:3px;text-align:right">${fmtRp(row.nilai_kontrak_total)}</td>
       <td style="padding:3px;text-align:right">${fmtRp(calc.dppKontrak)}</td>
       <td style="padding:3px;text-align:right">${fmtRp(calc.ppnKontrak)}</td>
@@ -756,24 +786,28 @@ function generateKKHTML(row, calc, approvals, settings) {
   <div class="section-title">Perhitungan Keuangan</div>
   <table style="font-size:7.5px;border:1px solid #e5e7eb;table-layout:fixed;width:100%">
     <colgroup>
-      <col style="width:22px">
-      <col style="width:13%">
-      <col style="width:8%">
-      <col style="width:8%">
+      <col style="width:20px">
+      <col style="width:10%">
+      <col style="width:5%">
       <col style="width:7%">
       <col style="width:7%">
-      <col style="width:8%">
-      <col style="width:8%">
       <col style="width:7%">
       <col style="width:6%">
-      <col style="width:8%">
-      <col style="width:8%">
       <col style="width:6%">
+      <col style="width:7%">
+      <col style="width:7%">
+      <col style="width:6%">
+      <col style="width:5%">
+      <col style="width:7%">
+      <col style="width:7%">
+      <col style="width:5%">
     </colgroup>
     <thead>
       <tr style="background:#1f4e79;color:#fff">
         <th style="padding:4px 3px;text-align:center" rowspan="2">No</th>
         <th style="padding:4px 3px;text-align:center" rowspan="2">Pelanggan / Produk</th>
+        <th style="padding:4px 3px;text-align:center" rowspan="2">Qty</th>
+        <th style="padding:4px 3px;text-align:center" rowspan="2">Harga Satuan</th>
         <th style="padding:4px 3px;text-align:center" colspan="5">Nilai Kontrak</th>
         <th style="padding:4px 3px;text-align:center" rowspan="2">DPP Beli</th>
         <th style="padding:4px 3px;text-align:center" rowspan="2">B. Distrib.</th>
@@ -810,25 +844,27 @@ async function generateExcel(row, calc, approvals, settings) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Kertas Kerja');
 
-  const COLS = 15; // A..O
-  const lastCol = 'O';
+  const COLS = 17; // A..Q
+  const lastCol = 'Q';
 
   ws.columns = [
     { width: 4  }, // A No
-    { width: 28 }, // B Pelanggan
-    { width: 18 }, // C Total Kontrak
-    { width: 18 }, // D DPP
-    { width: 15 }, // E PPN 11%
-    { width: 15 }, // F PPh 1.5%
-    { width: 18 }, // G Penerimaan Uang
-    { width: 18 }, // H DPP Beli
-    { width: 15 }, // I PPN 11% Beli
-    { width: 18 }, // J Nilai Pembyr
-    { width: 18 }, // K B. Distribusi
-    { width: 15 }, // L Ongkir
-    { width: 18 }, // M Surplus/Defisit
-    { width: 15 }, // N Laba
-    { width: 13 }, // O Net Margin %
+    { width: 24 }, // B Pelanggan
+    { width: 8  }, // C Qty
+    { width: 16 }, // D Harga Satuan
+    { width: 18 }, // E Total Kontrak
+    { width: 18 }, // F DPP
+    { width: 15 }, // G PPN 11%
+    { width: 15 }, // H PPh 1.5%
+    { width: 18 }, // I Penerimaan Uang
+    { width: 18 }, // J DPP Beli
+    { width: 15 }, // K PPN 11% Beli
+    { width: 18 }, // L Nilai Pembyr
+    { width: 18 }, // M B. Distribusi
+    { width: 15 }, // N Ongkir
+    { width: 18 }, // O Surplus/Defisit
+    { width: 15 }, // P Laba
+    { width: 13 }, // Q Net Margin %
   ];
 
   const orangeFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC000' } };
@@ -890,14 +926,16 @@ async function generateExcel(row, calc, approvals, settings) {
   const header1 = [
     ['A11:A12', 'No'],
     ['B11:B12', 'Pelanggan'],
-    ['C11:F11', 'Nilai Kontrak'],
-    ['G11:G12', 'Penerimaan\nUang'],
-    ['H11:J11', 'Pembelian'],
-    ['K11:K12', 'B.\nDistribusi'],
-    ['L11:L12', 'Ongkir'],
-    ['M11:M12', 'Surplus /\nDefisit'],
-    ['N11:N12', 'Laba'],
-    ['O11:O12', 'Net\nMargin %'],
+    ['C11:C12', 'Qty'],
+    ['D11:D12', 'Harga\nSatuan'],
+    ['E11:H11', 'Nilai Kontrak'],
+    ['I11:I12', 'Penerimaan\nUang'],
+    ['J11:L11', 'Pembelian'],
+    ['M11:M12', 'B.\nDistribusi'],
+    ['N11:N12', 'Ongkir'],
+    ['O11:O12', 'Surplus /\nDefisit'],
+    ['P11:P12', 'Laba'],
+    ['Q11:Q12', 'Net\nMargin %'],
   ];
   header1.forEach(([range, val]) => {
     ws.mergeCells(range);
@@ -913,13 +951,13 @@ async function generateExcel(row, calc, approvals, settings) {
 
   const h2 = ws.getRow(12);
   [
-    ['C', 'Total'],
-    ['D', 'DPP'],
-    ['E', 'PPN 11%'],
-    ['F', 'PPh 1,5%'],
-    ['H', 'DPP'],
-    ['I', 'PPN 11%'],
-    ['J', 'Nilai\nPembyr'],
+    ['E', 'Total'],
+    ['F', 'DPP'],
+    ['G', 'PPN 11%'],
+    ['H', 'PPh 1,5%'],
+    ['J', 'DPP'],
+    ['K', 'PPN 11%'],
+    ['L', 'Nilai\nPembyr'],
   ].forEach(([col, val]) => {
     const c = ws.getCell(`${col}12`);
     c.value     = val;
@@ -935,24 +973,26 @@ async function generateExcel(row, calc, approvals, settings) {
   const products = calc.products || [];
   let nextRow    = 13;
 
-  function writeDataRow(rn, no, label, nkt, dppK, ppnK, pphK, pen, dppB, ppnB, nPembyr, bDist, onk, surplus, laba, nm) {
+  function writeDataRow(rn, no, label, qty, harga, nkt, dppK, ppnK, pphK, pen, dppB, ppnB, nPembyr, bDist, onk, surplus, laba, nm) {
     const dr = ws.getRow(rn);
     const vals = [
       [1,  no,              null],
       [2,  label,           null],
-      [3,  Math.round(nkt), numFmt],
-      [4,  Math.round(dppK), numFmt],
-      [5,  Math.round(ppnK), numFmt],
-      [6,  Math.round(pphK), numFmt],
-      [7,  Math.round(pen),  numFmt],
-      [8,  Math.round(dppB), numFmt],
-      [9,  Math.round(ppnB), numFmt],
-      [10, Math.round(nPembyr), numFmt],
-      [11, Math.round(bDist), numFmt],
-      [12, Math.round(onk),  numFmt],
-      [13, Math.round(surplus), numFmt],
-      [14, Math.round(laba), numFmt],
-      [15, parseFloat(nm.toFixed(2)), '0.00"%"'],
+      [3,  qty || null,     null],
+      [4,  harga ? Math.round(harga) : null, numFmt],
+      [5,  Math.round(nkt), numFmt],
+      [6,  Math.round(dppK), numFmt],
+      [7,  Math.round(ppnK), numFmt],
+      [8,  Math.round(pphK), numFmt],
+      [9,  Math.round(pen),  numFmt],
+      [10, Math.round(dppB), numFmt],
+      [11, Math.round(ppnB), numFmt],
+      [12, Math.round(nPembyr), numFmt],
+      [13, Math.round(bDist), numFmt],
+      [14, Math.round(onk),  numFmt],
+      [15, Math.round(surplus), numFmt],
+      [16, Math.round(laba), numFmt],
+      [17, parseFloat(nm.toFixed(2)), '0.00"%"'],
     ];
     vals.forEach(([col, val, fmt]) => {
       const c = dr.getCell(col);
@@ -980,7 +1020,7 @@ async function generateExcel(row, calc, approvals, settings) {
       const pSurp = pPen - (pDppB + pPpnB + pBdo);
       const pLaba = pDppK - pDppB - pBdo;
       const pNM   = pDppK > 0 ? (pLaba / pDppK) * 100 : 0;
-      writeDataRow(nextRow, idx + 1, p.nama || '-', pNkt, pDppK, pPpnK, pPphK, pPen, pDppB, pPpnB, pNPay, pDist, pOnk, pSurp, pLaba, pNM);
+      writeDataRow(nextRow, idx + 1, p.nama || '-', p.qty || 0, p.harga_satuan || 0, pNkt, pDppK, pPpnK, pPphK, pPen, pDppB, pPpnB, pNPay, pDist, pOnk, pSurp, pLaba, pNM);
       nextRow++;
     });
 
@@ -989,19 +1029,21 @@ async function generateExcel(row, calc, approvals, settings) {
     const tVals = [
       [1,  '',    null],
       [2,  'TOTAL', null],
-      [3,  Math.round(products.reduce((s,p)=>s+(p.nilai_kontrak||0),0)), numFmt],
-      [4,  Math.round(calc.dppKontrak),     numFmt],
-      [5,  Math.round(calc.ppnKontrak),     numFmt],
-      [6,  Math.round(calc.pphKontrak),     numFmt],
-      [7,  Math.round(calc.penerimaanUang), numFmt],
-      [8,  Math.round(calc.dppBeli),        numFmt],
-      [9,  Math.round(calc.ppnBeli),        numFmt],
-      [10, Math.round(calc.nilaiPembyr),    numFmt],
-      [11, Math.round(calc.bDistribusi),    numFmt],
-      [12, Math.round(calc.ongkir),         numFmt],
-      [13, Math.round(calc.surplusDefisit), numFmt],
-      [14, Math.round(calc.laba),           numFmt],
-      [15, parseFloat(calc.netMargin.toFixed(2)), '0.00"%"'],
+      [3,  null,  null],
+      [4,  null,  null],
+      [5,  Math.round(products.reduce((s,p)=>s+(p.nilai_kontrak||0),0)), numFmt],
+      [6,  Math.round(calc.dppKontrak),     numFmt],
+      [7,  Math.round(calc.ppnKontrak),     numFmt],
+      [8,  Math.round(calc.pphKontrak),     numFmt],
+      [9,  Math.round(calc.penerimaanUang), numFmt],
+      [10, Math.round(calc.dppBeli),        numFmt],
+      [11, Math.round(calc.ppnBeli),        numFmt],
+      [12, Math.round(calc.nilaiPembyr),    numFmt],
+      [13, Math.round(calc.bDistribusi),    numFmt],
+      [14, Math.round(calc.ongkir),         numFmt],
+      [15, Math.round(calc.surplusDefisit), numFmt],
+      [16, Math.round(calc.laba),           numFmt],
+      [17, parseFloat(calc.netMargin.toFixed(2)), '0.00"%"'],
     ];
     tVals.forEach(([col, val, fmt]) => {
       const c = tr.getCell(col);
@@ -1016,6 +1058,7 @@ async function generateExcel(row, calc, approvals, settings) {
     nextRow++;
   } else {
     writeDataRow(nextRow, 1, row.pelanggan,
+      0, 0,
       row.nilai_kontrak_total || 0,
       calc.dppKontrak, calc.ppnKontrak, calc.pphKontrak,
       calc.penerimaanUang, calc.dppBeli, calc.ppnBeli, calc.nilaiPembyr,
@@ -1059,9 +1102,9 @@ async function generateExcel(row, calc, approvals, settings) {
     : new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
   const city = settings.kk_kota || settings.company_city || 'Jakarta';
 
-  // 7 signature blocks: creator (3 cols) + 6 approvals (2 cols each) = 15 cols total (A-O)
-  const sigCols    = ['A', 'D', 'F', 'H', 'J', 'L', 'N'];
-  const sigEndCols = ['C', 'E', 'G', 'I', 'K', 'M', 'O'];
+  // 7 signature blocks spanning 17 cols total (A-Q): widths 3,3,2,2,2,2,3
+  const sigCols    = ['A', 'D', 'G', 'I', 'K', 'M', 'O'];
+  const sigEndCols = ['C', 'F', 'H', 'J', 'L', 'N', 'Q'];
   const sigTitles  = ['Yang Mengajukan', 'Mengetahui', 'Mengetahui', 'Mengetahui', 'Mengetahui', 'Mengetahui', 'Menyetujui'];
   const sigRoles   = ['', 'Area Manager', 'Manager Keuangan', 'GM 1', 'GM 2', 'Dir. Operasional', 'Direktur Utama'];
   const sigNames   = [
