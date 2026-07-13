@@ -420,6 +420,9 @@ try { db.exec("ALTER TABLE sppd_laporan ADD COLUMN catatan_umum TEXT DEFAULT ''"
   "ALTER TABLE sppd_laporan_kunjungan ADD COLUMN laporan_kunjungan TEXT DEFAULT ''",
 ].forEach(sql => { try { db.exec(sql); } catch {} });
 
+// ── MIGRATION: sppd_laporan_biaya new column (foto bukti pengeluaran) ─────────
+try { db.exec("ALTER TABLE sppd_laporan_biaya ADD COLUMN bukti TEXT DEFAULT NULL"); } catch {}
+
 // ── MIGRATION: recreate sppd_pencairan with new schema ────────────────────────
 const pencairanDef = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='sppd_pencairan'").get();
 if (pencairanDef && !pencairanDef.sql.includes('jumlah_usulan')) {
