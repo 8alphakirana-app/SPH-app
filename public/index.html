@@ -311,8 +311,19 @@
 
           <!-- Project list dari laporan -->
           <div id="dash-project-section" style="display:none">
-            <div class="section-divider"><h2 id="dash-project-title">💼 Project Pipeline</h2></div>
+            <div class="section-divider"><h2 id="dash-project-title">💼 Rincian Prognosa</h2></div>
             <div class="card">
+              <div class="card-header" style="flex-wrap:wrap;gap:8px">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <label class="filter-label" style="margin:0">Probability:</label>
+                  <select id="dash-project-prob-filter" onchange="_renderDashProjects()" style="min-width:170px">
+                    <option value="">Semua Probability</option>
+                    <option value="ge70">≥ 70%</option>
+                    <option value="lt70">&lt; 70%</option>
+                  </select>
+                </div>
+                <button onclick="downloadRincianPrognosaExcel()" class="btn btn-success btn-sm">📊 Download Excel</button>
+              </div>
               <div class="card-body no-padding">
                 <div class="table-responsive">
                   <table class="table" id="dash-project-table">

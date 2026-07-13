@@ -418,6 +418,150 @@ router.get('/rekap-excel', (req, res) => {
   wb.xlsx.write(res).then(() => res.end()).catch(e => res.end());
 });
 
+// GET /api/laporan/rincian-prognosa-excel — unduh rincian prognosa (dashboard) dalam format Excel
+router.get('/rincian-prognosa-excel', (req, res) => {
+  const user = req.session.user;
+  const { periode, area_kerja, user_id, prob } = req.query;
+
+  let sql = `
+    SELECT lb.id, lb.user_id, lb.periode,
+           u.full_name, u.area_kerja
+    FROM laporan_bulanan lb
+    JOIN users u ON lb.user_id = u.id
+    WHERE 1=1
+  `;
+  const params = [];
+
+  if (canSeeAllAreas(user.role)) {
+    if (user_id)    { sql += ' AND lb.user_id = ?';                              params.push(parseInt(user_id)); }
+    if (area_kerja) { sql += ' AND LOWER(TRIM(u.area_kerja)) = LOWER(TRIM(?))'; params.push(area_kerja); }
+  } else if (user.role === 'area_manager') {
+    const myArea = getUserArea(user.id).toLowerCase();
+    sql += ` AND (lb.user_id = ? OR (LOWER(TRIM(u.area_kerja)) = ? AND u.role IN ('supervisor','marketing')))`;
+    params.push(user.id, myArea);
+    if (user_id) { sql += ' AND lb.user_id = ?'; params.push(parseInt(user_id)); }
+  } else {
+    sql += ' AND lb.user_id = ?';
+    params.push(user.id);
+  }
+
+  if (periode) { sql += ' AND lb.periode = ?'; params.push(periode); }
+  sql += ' ORDER BY u.area_kerja ASC, u.full_name ASC';
+
+  let rows;
+  try {
+    rows = db.prepare(sql).all(...params);
+    attachDetails(rows);
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+
+  // Ratakan semua project dari semua laporan, filter probability bila diminta
+  const monthsID = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  function periodeNextLabel(p) {
+    if (!p) return '';
+    const [y, m] = p.split('-').map(Number);
+    const next = new Date(y, m, 1); // m sudah 1-based -> bulan berikutnya
+    return `${monthsID[next.getMonth()]} ${next.getFullYear()}`;
+  }
+
+  let allProjects = [];
+  rows.forEach(r => {
+    (r.projects || []).forEach(p => {
+      allProjects.push({
+        full_name: r.full_name,
+        area_kerja: r.area_kerja,
+        pelanggan: p.pelanggan,
+        principal: p.principal,
+        produk: p.produk,
+        nilai: p.nilai || 0,
+        probability: p.probability != null ? p.probability : 0,
+        periodeNext: periodeNextLabel(r.periode),
+      });
+    });
+  });
+
+  if (prob === 'ge70') allProjects = allProjects.filter(p => p.probability >= 70);
+  else if (prob === 'lt70') allProjects = allProjects.filter(p => p.probability < 70);
+
+  const ExcelJS = require('exceljs');
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'DMS LAK';
+  wb.created = new Date();
+
+  const safePeriode = (periode || 'semua').replace(/[^a-zA-Z0-9-]/g, '');
+  const safeArea    = (area_kerja || 'semua-area').replace(/[^a-zA-Z0-9-]/g, '_');
+  const safeProb     = prob === 'ge70' ? 'prob-ge70' : prob === 'lt70' ? 'prob-lt70' : 'semua-prob';
+  const filename    = `rincian-prognosa_${safeArea}_${safePeriode}_${safeProb}.xlsx`;
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+  const ws = wb.addWorksheet('Rincian Prognosa');
+  ws.columns = [
+    { key: 'no',        width: 5  },
+    { key: 'pelapor',   width: 22 },
+    { key: 'area',      width: 16 },
+    { key: 'pelanggan', width: 24 },
+    { key: 'principal', width: 18 },
+    { key: 'produk',    width: 20 },
+    { key: 'nilai',     width: 18 },
+    { key: 'prob',      width: 12 },
+    { key: 'periode',   width: 16 },
+  ];
+
+  const HDR_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+  const HDR_FONT = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+  const TOT_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
+  const TOT_FONT = { bold: true, size: 10 };
+  const THIN     = { style: 'thin', color: { argb: 'FFCBD5E1' } };
+  const BORDER   = { top: THIN, left: THIN, bottom: THIN, right: THIN };
+
+  const periodeLabel = periode
+    ? new Date(periode + '-01').toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
+    : 'Semua Periode';
+  const probLabel = prob === 'ge70' ? 'Probability ≥ 70%' : prob === 'lt70' ? 'Probability < 70%' : 'Semua Probability';
+
+  const titleRow = ws.addRow(['RINCIAN PROGNOSA']);
+  ws.mergeCells(`A${titleRow.number}:I${titleRow.number}`);
+  titleRow.getCell('A').font = { bold: true, size: 13, color: { argb: 'FF1E3A5F' } };
+  titleRow.getCell('A').alignment = { horizontal: 'center' };
+  titleRow.height = 22;
+
+  const subTitle = ws.addRow([`Periode: ${periodeLabel}   |   Filter: ${probLabel}   |   Dicetak: ${new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}`]);
+  ws.mergeCells(`A${subTitle.number}:I${subTitle.number}`);
+  subTitle.getCell('A').font = { italic: true, size: 10, color: { argb: 'FF64748B' } };
+  subTitle.getCell('A').alignment = { horizontal: 'center' };
+  ws.addRow([]);
+
+  const hdr = ws.addRow(['No', 'Pelapor', 'Area', 'Pelanggan', 'Principal', 'Produk', 'Nilai (Rp)', 'Prob (%)', 'Periode']);
+  hdr.eachCell(cell => { cell.fill = HDR_FILL; cell.font = HDR_FONT; cell.alignment = { horizontal: 'center', wrapText: true }; cell.border = BORDER; });
+  hdr.height = 24;
+
+  if (!allProjects.length) {
+    const r = ws.addRow(['-', 'Tidak ada data untuk filter yang dipilih.']);
+    ws.mergeCells(`B${r.number}:I${r.number}`);
+  } else {
+    let totalNilai = 0;
+    allProjects.forEach((p, i) => {
+      totalNilai += p.nilai;
+      const r = ws.addRow([i + 1, p.full_name, p.area_kerja, p.pelanggan, p.principal, p.produk, p.nilai, p.probability, p.periodeNext]);
+      r.getCell('G').numFmt = '#,##0';
+      r.getCell('G').alignment = { horizontal: 'right' };
+      r.getCell('H').alignment = { horizontal: 'center' };
+      r.eachCell({ includeEmpty: true }, cell => { cell.border = BORDER; });
+    });
+    const totRow = ws.addRow(['', '', '', '', '', 'TOTAL', totalNilai, '', '']);
+    ws.mergeCells(`A${totRow.number}:F${totRow.number}`);
+    totRow.eachCell({ includeEmpty: true }, cell => { cell.fill = TOT_FILL; cell.font = TOT_FONT; cell.border = BORDER; });
+    totRow.getCell('F').alignment = { horizontal: 'center' };
+    totRow.getCell('G').numFmt = '#,##0';
+    totRow.getCell('G').alignment = { horizontal: 'right' };
+    totRow.height = 20;
+  }
+
+  wb.xlsx.write(res).then(() => res.end()).catch(e => res.end());
+});
+
 // POST /api/laporan
 router.post('/', blockViewer, (req, res) => {
   const userId = req.session.user.id;

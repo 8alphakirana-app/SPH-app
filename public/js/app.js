@@ -321,6 +321,7 @@ let _dashChartModul   = null;
 let _dashChartNilai   = null;
 let _dashChartSales   = null;
 let _dashFiltersInited = false;
+let _lastDashLapRows   = [];
 
 async function loadDashboard() {
        try {
@@ -418,9 +419,9 @@ async function loadDashboard() {
               if (narasiH2) narasiH2.textContent = filterLabel ? `📝 Aktivitas & Rencana — ${filterLabel}` : '📝 Aktivitas & Rencana Tim';
               _renderLaporanNarasi(lapRows);
 
-              // Project pipeline
+              // Rincian Prognosa
               const projH2 = document.getElementById('dash-project-title');
-              if (projH2) projH2.textContent = filterLabel ? `💼 Project Pipeline — ${filterLabel}` : '💼 Project Pipeline';
+              if (projH2) projH2.textContent = filterLabel ? `💼 Rincian Prognosa — ${filterLabel}` : '💼 Rincian Prognosa';
               _renderDashProjects(lapRows);
 
               // Sales hero chart
@@ -673,6 +674,10 @@ function _renderDashProjects(lapRows) {
        const totalEl = document.getElementById('dash-project-total');
        if (!section || !tbody) return;
 
+       // Simpan lapRows terakhir supaya filter probability bisa render ulang tanpa fetch
+       if (lapRows) _lastDashLapRows = lapRows;
+       lapRows = _lastDashLapRows;
+
        // Kumpulkan semua project dari semua laporan rows
        const allProjects = [];
        (lapRows || []).forEach(r => {
@@ -684,8 +689,16 @@ function _renderDashProjects(lapRows) {
        if (!allProjects.length) { section.style.display = 'none'; return; }
        section.style.display = '';
 
+       // Filter probability: >=70% atau <70%
+       const probFilter = document.getElementById('dash-project-prob-filter')?.value || '';
+       const filteredProjects = allProjects.filter(p => {
+              if (!probFilter) return true;
+              const pct = p.probability != null && p.probability !== '' ? p.probability : 0;
+              return probFilter === 'ge70' ? pct >= 70 : pct < 70;
+       });
+
        let totalNilai = 0;
-       tbody.innerHTML = allProjects.map(p => {
+       tbody.innerHTML = filteredProjects.length ? filteredProjects.map(p => {
               totalNilai += p.nilai || 0;
               const pct = p.probability != null && p.probability !== '' ? p.probability : 0;
               const barColor = pct >= 75 ? '#0e9f6e' : pct >= 40 ? '#e3a008' : '#f05252';
@@ -704,10 +717,29 @@ function _renderDashProjects(lapRows) {
                                    <span style="font-size:12px;font-weight:600;color:${barColor};min-width:32px">${pct}%</span>
                             </div>
                      </td>
-                     <td style="font-size:12px;color:var(--text-light)">${formatPeriode(p.periode)}</td>
+                     <td style="font-size:12px;color:var(--text-light)">${formatPeriodeNext(p.periode)}</td>
               </tr>`;
-       }).join('');
+       }).join('') : `<tr><td colspan="8" class="text-center" style="color:var(--text-light);padding:16px">Tidak ada project dengan probability ${probFilter === 'ge70' ? '≥ 70%' : '< 70%'}</td></tr>`;
        if (totalEl) totalEl.textContent = 'Rp ' + fmtNumStr(totalNilai);
+}
+
+function downloadRincianPrognosaExcel() {
+       const month = document.getElementById('dash-filter-month')?.value || '';
+       const area  = document.getElementById('dash-filter-area')?.value  || '';
+       const uid   = document.getElementById('dash-filter-user')?.value  || '';
+       const prob  = document.getElementById('dash-project-prob-filter')?.value || '';
+       const p = new URLSearchParams();
+       if (month) p.set('periode', month);
+       if (area)  p.set('area_kerja', area);
+       if (uid)   p.set('user_id', uid);
+       if (prob)  p.set('prob', prob);
+       const qs = p.toString() ? '?' + p.toString() : '';
+       const a = document.createElement('a');
+       a.href = '/api/laporan/rincian-prognosa-excel' + qs;
+       a.download = 'rincian-prognosa.xlsx';
+       document.body.appendChild(a);
+       a.click();
+       document.body.removeChild(a);
 }
 
 function _renderSalesHero(monthly, currentRows, periode) {
