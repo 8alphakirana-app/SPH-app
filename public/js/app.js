@@ -186,8 +186,9 @@ function setUser(user) {
               document.querySelectorAll('.sppd-all').forEach(el => el.style.display = '');
        }
 
-       // Media Monitoring Investasi: view = admin/kantor_pusat/manager_keuangan, edit = manager_keuangan
-       const canViewMM = ['admin', 'kantor_pusat', 'manager_keuangan'].includes(user.role);
+       // Media Monitoring Investasi: view = admin/kantor_pusat/manager_keuangan atau area kerja Kantor Pusat, edit = manager_keuangan
+       const canViewMM = ['admin', 'kantor_pusat', 'manager_keuangan'].includes(user.role)
+              || (user.area_kerja || '').trim().toLowerCase() === 'kantor pusat';
        const canEditMM = user.role === 'manager_keuangan';
        if (canViewMM) {
               document.querySelectorAll('.mm-menu').forEach(el => el.style.display = '');
@@ -2850,6 +2851,7 @@ let sppdItinRowCount = 0;
 let laporanKunjunganRowCount = 0;
 let laporanBiayaRowCount = 0;
 let currentSppdId = null;
+let currentDetailLaporan = null;
 
 // ── Approval progress badge ───────────────────────────────────────────────────
 // sppd_approval_level: 0=waiting AM, 1=AM done/skipped waiting GM1+GM2 parallel, 2=all approved
@@ -3300,6 +3302,7 @@ async function viewSPPDDetail(id) {
               ]);
               const sppd       = await sppdRes.json();
               const laporan    = laporanRes.ok  ? await laporanRes.json()   : null;
+              currentDetailLaporan = laporan;
               const pencairan  = pencairanRes.ok ? await pencairanRes.json() : null;
               const pengembalian = pengembRes.ok ? await pengembRes.json()  : null;
 
@@ -3311,13 +3314,13 @@ async function viewSPPDDetail(id) {
               const isOwner = currentUser.id === sppd.created_by;
               const canApprove = (SPPD_APPROVER_ROLES.includes(role) || role === 'admin') && sppd.status === 'pending';
               const canSubmitLaporan = isOwner && sppd.status === 'approved' && !laporan;
+              const hasLaporanApproval = !!laporan?.approvals?.some(a => a.approver_user_id);
+              const canEditLaporan = isOwner && laporan && laporan.status === 'pending' && !hasLaporanApproval;
 
               // Laporan: check if user's role can act at current laporan level
               const lLvl = laporan?.laporan_approval_level;
               const canApproveLaporan = laporan && laporan.status === 'pending' && (
                      role === 'admin' ||
-                     (role === 'area_manager' && lLvl === 1) ||
-                     (role === 'manager_keuangan' && lLvl === 2) ||
                      ((role === 'gm' || role === 'gm2') && lLvl === 3) ||
                      (role === 'direktur_ops' && lLvl === 5) ||
                      (role === 'direktur_utama' && lLvl === 6)
@@ -3348,6 +3351,7 @@ async function viewSPPDDetail(id) {
                      footer.push(`<a href="/api/sppd/${id}/download/pdf" target="_blank" class="btn btn-pdf">🖨️ Cetak PDF</a>`);
               }
               if (canSubmitLaporan) footer.push(`<button onclick="openLaporanForm(${id})" class="btn btn-primary">📋 Buat Laporan</button>`);
+              if (canEditLaporan) footer.push(`<button onclick="openLaporanForm(${id}, currentDetailLaporan)" class="btn btn-secondary">✏️ Edit Laporan</button>`);
               if (canApproveLaporan) {
                      footer.push(`<button onclick="openLaporanAction(${id},null,'approve')" class="btn btn-success">✅ Setujui Laporan</button>`);
                      footer.push(`<button onclick="openLaporanAction(${id},null,'reject')" class="btn btn-danger">❌ Tolak Laporan</button>`);
@@ -3619,64 +3623,70 @@ async function confirmSPPDAction() {
 // ── Laporan Form ──────────────────────────────────────────────────────────────
 let laporanTargetSppdId = null;
 
-function openLaporanForm(sppdId) {
+let laporanEditMode = false;
+
+function openLaporanForm(sppdId, laporanData = null) {
        laporanTargetSppdId = sppdId;
-       document.getElementById('laporan-tanggal').value = new Date().toISOString().slice(0, 10);
-       document.getElementById('laporan-isi').value = '';
+       laporanEditMode = !!laporanData;
+       document.getElementById('laporan-tanggal').value = laporanData?.tanggal_laporan || new Date().toISOString().slice(0, 10);
+       document.getElementById('laporan-isi').value = laporanData?.isi_laporan || '';
        document.getElementById('laporan-kunjungan-tbody').innerHTML = '';
        document.getElementById('laporan-biaya-tbody').innerHTML = '';
-       document.getElementById('laporan-total-biaya').textContent = 'Rp 0';
        laporanKunjunganRowCount = 0;
        laporanBiayaRowCount = 0;
        document.getElementById('laporan-error').style.display = 'none';
-       document.getElementById('laporan-sppd-title').textContent = 'Laporan Perjalanan Dinas';
+       document.getElementById('laporan-sppd-title').textContent = laporanEditMode ? 'Edit Laporan Perjalanan Dinas' : 'Laporan Perjalanan Dinas';
        document.getElementById('laporan-sppd-footer').innerHTML = `
-              <button onclick="submitLaporanSPPD()" class="btn btn-primary">📤 Kirim Laporan</button>
+              <button onclick="submitLaporanSPPD()" class="btn btn-primary">${laporanEditMode ? '💾 Simpan Perubahan' : '📤 Kirim Laporan'}</button>
               <button onclick="closeModal('modal-laporan-sppd')" class="btn btn-outline">Batal</button>`;
-       addLaporanKunjunganRow();
-       addLaporanBiayaRow();
+       if (laporanData?.kunjungan?.length) laporanData.kunjungan.forEach(k => addLaporanKunjunganRow(k));
+       else addLaporanKunjunganRow();
+       if (laporanData?.biaya?.length) laporanData.biaya.forEach(b => addLaporanBiayaRow(b));
+       else addLaporanBiayaRow();
+       updateLaporanTotal();
        showModal('modal-laporan-sppd');
 }
 
-function addLaporanKunjunganRow() {
+function addLaporanKunjunganRow(data = null) {
        laporanKunjunganRowCount++;
        const n = laporanKunjunganRowCount;
        const tbody = document.getElementById('laporan-kunjungan-tbody');
        const tr = document.createElement('tr');
        tr.id = `lk-row-${n}`;
        tr.innerHTML = `
-              <td><input type="date" class="lk-tgl" style="width:100%"></td>
-              <td><input type="text" class="lk-instansi" placeholder="Nama instansi" style="width:100%"></td>
-              <td><input type="text" class="lk-kontak" placeholder="Nama kontak" style="width:100%"></td>
-              <td><input type="text" class="lk-pelanggan" placeholder="Nama pelanggan" style="width:100%"></td>
-              <td><textarea class="lk-laporan" rows="2" placeholder="Laporan kunjungan..." style="width:100%"></textarea></td>
+              <td><input type="date" class="lk-tgl" style="width:100%" value="${escHtml(data?.tanggal || '')}"></td>
+              <td><input type="text" class="lk-instansi" placeholder="Nama instansi" style="width:100%" value="${escHtml(data?.nama_instansi || '')}"></td>
+              <td><input type="text" class="lk-kontak" placeholder="Nama kontak" style="width:100%" value="${escHtml(data?.nama_kontak || '')}"></td>
+              <td><input type="text" class="lk-pelanggan" placeholder="Nama pelanggan" style="width:100%" value="${escHtml(data?.nama_pelanggan || '')}"></td>
+              <td><textarea class="lk-laporan" rows="2" placeholder="Laporan kunjungan..." style="width:100%">${escHtml(data?.laporan_kunjungan || '')}</textarea></td>
               <td><button type="button" onclick="document.getElementById('lk-row-${n}').remove()" class="btn btn-sm btn-danger">✕</button></td>`;
        tbody.appendChild(tr);
 }
 
-function addLaporanBiayaRow() {
+function addLaporanBiayaRow(data = null) {
        laporanBiayaRowCount++;
        const n = laporanBiayaRowCount;
        const tbody = document.getElementById('laporan-biaya-tbody');
        const tr = document.createElement('tr');
        tr.id = `lb-row-${n}`;
        tr.innerHTML = `
-              <td><input type="text" class="lb-ket" placeholder="Keterangan biaya" style="width:100%"></td>
-              <td><input type="text" inputmode="numeric" class="lb-jml num-fmt" value="0" style="width:100%" oninput="formatNumInput(this);updateLaporanTotal()" onfocus="if(this.value==='0')this.value=''"></td>
+              <td><input type="text" class="lb-ket" placeholder="Keterangan biaya" style="width:100%" value="${escHtml(data?.keterangan || '')}"></td>
+              <td><input type="text" inputmode="numeric" class="lb-jml num-fmt" value="${fmtNumStr(data?.jumlah || 0)}" style="width:100%" oninput="formatNumInput(this);updateLaporanTotal()" onfocus="if(this.value==='0')this.value=''"></td>
               <td>
                 <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">
                   <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--primary);border:1px dashed var(--primary);padding:4px 8px;border-radius:6px;white-space:nowrap">
                     📎 Pilih Foto
                     <input type="file" accept="image/*" class="lb-bukti-input" style="display:none" onchange="previewBukti(this,'lb-preview-${n}')">
                   </label>
-                  <div id="lb-preview-${n}" style="display:none;position:relative">
-                    <img class="lb-bukti-img" style="max-width:120px;max-height:80px;object-fit:contain;border:1px solid #ddd;border-radius:4px;display:block">
+                  <div id="lb-preview-${n}" style="display:${data?.bukti ? 'block' : 'none'};position:relative">
+                    <img class="lb-bukti-img" style="max-width:120px;max-height:80px;object-fit:contain;border:1px solid #ddd;border-radius:4px;display:block" src="${escHtml(data?.bukti || '')}">
                     <button type="button" onclick="clearBukti(this,'lb-preview-${n}')" style="position:absolute;top:-6px;right:-6px;background:#dc2626;color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:18px;padding:0">✕</button>
                   </div>
                 </div>
               </td>
               <td><button type="button" onclick="document.getElementById('lb-row-${n}').remove();updateLaporanTotal();" class="btn btn-sm btn-danger">✕</button></td>`;
        tbody.appendChild(tr);
+       if (data?.bukti) tr.querySelector(`#lb-preview-${n}`).dataset.bukti = data.bukti;
 }
 
 async function previewBukti(input, previewId) {
@@ -3754,11 +3764,11 @@ async function submitLaporanSPPD() {
               kunjungan, biaya,
        };
        try {
-              const res = await api(`/api/sppd/${laporanTargetSppdId}/laporan`, 'POST', body);
+              const res = await api(`/api/sppd/${laporanTargetSppdId}/laporan`, laporanEditMode ? 'PUT' : 'POST', body);
               const data = await res.json();
               if (!res.ok) { errEl.textContent = data.error || 'Gagal'; errEl.style.display = 'block'; return; }
               closeModal('modal-laporan-sppd');
-              showToast('Laporan berhasil dikirim!', 'success');
+              showToast(laporanEditMode ? 'Laporan berhasil diperbarui!' : 'Laporan berhasil dikirim!', 'success');
               viewSPPDDetail(laporanTargetSppdId);
        } catch { errEl.textContent = 'Koneksi gagal'; errEl.style.display = 'block'; }
 }

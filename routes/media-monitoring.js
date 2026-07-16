@@ -8,9 +8,12 @@ function requireLogin(req, res, next) {
 }
 
 function requireViewer(req, res, next) {
-  // kantor_pusat dan admin boleh lihat, manager_keuangan (pengelola) juga boleh lihat
-  const r = req.session.user?.role;
-  if (!['admin', 'kantor_pusat', 'manager_keuangan'].includes(r))
+  // kantor_pusat dan admin boleh lihat, manager_keuangan (pengelola) juga boleh lihat,
+  // begitu juga user dengan area kerja Kantor Pusat apapun role-nya
+  const u = req.session.user;
+  const r = u?.role;
+  const isKantorPusatArea = (u?.area_kerja || '').trim().toLowerCase() === 'kantor pusat';
+  if (!['admin', 'kantor_pusat', 'manager_keuangan'].includes(r) && !isKantorPusatArea)
     return res.status(403).json({ error: 'Akses ditolak' });
   next();
 }

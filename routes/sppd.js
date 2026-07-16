@@ -27,7 +27,7 @@ function blockViewer(req, res, next) {
 const SPPD_APPROVER_ROLES = ['area_manager', 'gm', 'gm2'];
 
 // Laporan/Pencairan: 6-level same as KK
-const LAPORAN_LEVEL_ROLES   = { 1:'area_manager', 2:'manager_keuangan', 3:'gm', 4:'gm2', 5:'direktur_ops', 6:'direktur_utama' };
+const LAPORAN_LEVEL_ROLES   = { 3:'gm', 4:'gm2', 5:'direktur_ops', 6:'direktur_utama' };
 const PENCAIRAN_LEVEL_ROLES = { 1:'area_manager', 2:'manager_keuangan', 3:'gm', 4:'gm2', 5:'direktur_ops', 6:'direktur_utama' };
 const LP_MAX = 6;
 
@@ -1062,19 +1062,13 @@ router.post('/:id/laporan', (req, res) => {
   const { tanggal_laporan, isi_laporan, catatan_umum, kunjungan, biaya } = req.body;
   const totalBiaya = Array.isArray(biaya) ? biaya.reduce((s, b) => s + (Number(b.jumlah) || 0), 0) : 0;
 
-  const noAMLaporan = !hasAreaManagerForArea(sppd.area_kerja);
-  const laporanInitLevel = noAMLaporan ? 2 : 1;
+  const laporanInitLevel = 3; // Approval laporan dimulai langsung dari GM (bukan Area Manager/Manager Keuangan)
 
   const result = db.prepare(`
     INSERT INTO sppd_laporan (sppd_id, tanggal_laporan, isi_laporan, catatan_umum, total_biaya, laporan_approval_level)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(req.params.id, tanggal_laporan || '', isi_laporan || '', catatan_umum || '', totalBiaya, laporanInitLevel);
   const laporanId = result.lastInsertRowid;
-
-  if (noAMLaporan) {
-    db.prepare("INSERT INTO sppd_laporan_approvals (laporan_id,level,approver_user_id,status,note,acted_at) VALUES (?,1,NULL,'approved','Auto: tidak ada Area Manager di area ini',datetime('now','localtime'))")
-      .run(laporanId);
-  }
 
   if (Array.isArray(kunjungan) && kunjungan.length) {
     const ins = db.prepare('INSERT INTO sppd_laporan_kunjungan (laporan_id, tanggal, nama_instansi, nama_kontak, nama_pelanggan, laporan_kunjungan, hasil) VALUES (?, ?, ?, ?, ?, ?, ?)');
@@ -1098,8 +1092,11 @@ router.put('/:id/laporan', (req, res) => {
 
   const laporan = db.prepare('SELECT * FROM sppd_laporan WHERE sppd_id = ?').get(req.params.id);
   if (!laporan) return res.status(404).json({ error: 'Laporan tidak ditemukan' });
-  if (laporan.status !== 'pending' || laporan.laporan_approval_level > 0)
-    return res.status(400).json({ error: 'Tidak bisa diedit setelah proses approval dimulai' });
+  if (laporan.status !== 'pending')
+    return res.status(400).json({ error: 'Tidak bisa diedit setelah laporan diproses' });
+  const hasApproval = db.prepare('SELECT id FROM sppd_laporan_approvals WHERE laporan_id=? AND approver_user_id IS NOT NULL').get(laporan.id);
+  if (hasApproval)
+    return res.status(400).json({ error: 'Tidak bisa diedit setelah ada yang menyetujui' });
 
   const { tanggal_laporan, isi_laporan, catatan_umum, kunjungan, biaya } = req.body;
   const totalBiaya = Array.isArray(biaya) ? biaya.reduce((s, b) => s + (Number(b.jumlah) || 0), 0) : laporan.total_biaya;
@@ -1123,7 +1120,7 @@ router.put('/:id/laporan', (req, res) => {
 });
 
 // ── Approve Laporan (6-level, same as KK) ────────────────────────────────────
-// laporan_approval_level: 1=waiting AM, 2=waiting MK, 3=GM stage, 5=waiting DO, 6=waiting DU
+// laporan_approval_level: 3=GM stage (GM & GM2 paralel), 5=waiting DO, 6=waiting DU
 router.post('/:id/laporan/approve', (req, res) => {
   const user = req.session.user;
   const sppd = db.prepare('SELECT * FROM sppd WHERE id = ?').get(req.params.id);
@@ -1161,18 +1158,7 @@ router.post('/:id/laporan/approve', (req, res) => {
     }
   };
 
-  if (user.role === 'area_manager') {
-    if (currLvl !== 1) return res.status(403).json({ error: 'Bukan giliran Area Manager' });
-    const creator = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sppd.created_by);
-    if ((creator?.area_kerja || '').trim().toLowerCase() !== (user.area_kerja || '').trim().toLowerCase())
-      return res.status(403).json({ error: 'Area tidak sesuai' });
-    ins(1); advance(2);
-
-  } else if (user.role === 'manager_keuangan') {
-    if (currLvl !== 2) return res.status(403).json({ error: 'Bukan giliran Manager Keuangan' });
-    ins(2); advance(3);
-
-  } else if (user.role === 'gm') {
+  if (user.role === 'gm') {
     if (currLvl !== 3) return res.status(403).json({ error: 'Bukan giliran GM' });
     if (db.prepare("SELECT id FROM sppd_laporan_approvals WHERE laporan_id=? AND level=3").get(laporan.id))
       return res.status(400).json({ error: 'Anda sudah menyetujui laporan ini' });
@@ -1199,7 +1185,7 @@ router.post('/:id/laporan/approve', (req, res) => {
       if (!db.prepare("SELECT id FROM sppd_laporan_approvals WHERE laporan_id=? AND level=4").get(laporan.id)) ins(4);
       advance(5);
     } else {
-      const levelMap = { 1:1, 2:2, 5:5, 6:6 };
+      const levelMap = { 5:5, 6:6 };
       const approvalLevel = levelMap[currLvl] || currLvl;
       ins(approvalLevel);
       advance(currLvl === 6 ? 7 : currLvl + 1);
@@ -1225,16 +1211,7 @@ router.post('/:id/laporan/reject', (req, res) => {
   const currLvl = laporan.laporan_approval_level;
   let rejLevel;
 
-  if (user.role === 'area_manager') {
-    if (currLvl !== 1) return res.status(403).json({ error: 'Tidak berwenang' });
-    const creator = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sppd.created_by);
-    if ((creator?.area_kerja || '').trim().toLowerCase() !== (user.area_kerja || '').trim().toLowerCase())
-      return res.status(403).json({ error: 'Area tidak sesuai' });
-    rejLevel = 1;
-  } else if (user.role === 'manager_keuangan') {
-    if (currLvl !== 2) return res.status(403).json({ error: 'Tidak berwenang' });
-    rejLevel = 2;
-  } else if (user.role === 'gm') {
+  if (user.role === 'gm') {
     if (currLvl !== 3) return res.status(403).json({ error: 'Tidak berwenang' });
     rejLevel = 3;
   } else if (user.role === 'gm2') {
@@ -1247,7 +1224,7 @@ router.post('/:id/laporan/reject', (req, res) => {
     if (currLvl !== 6) return res.status(403).json({ error: 'Tidak berwenang' });
     rejLevel = 6;
   } else if (user.role === 'admin') {
-    const lvlMap = { 1:1, 2:2, 3:3, 5:5, 6:6 };
+    const lvlMap = { 3:3, 5:5, 6:6 };
     rejLevel = lvlMap[currLvl] || currLvl;
   } else {
     return res.status(403).json({ error: 'Tidak berwenang' });
