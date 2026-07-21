@@ -1094,15 +1094,16 @@ router.put('/:id/laporan', (req, res) => {
   if (!laporan) return res.status(404).json({ error: 'Laporan tidak ditemukan' });
   if (laporan.status !== 'pending')
     return res.status(400).json({ error: 'Tidak bisa diedit setelah laporan diproses' });
-  const hasApproval = db.prepare('SELECT id FROM sppd_laporan_approvals WHERE laporan_id=? AND approver_user_id IS NOT NULL').get(laporan.id);
-  if (hasApproval)
-    return res.status(400).json({ error: 'Tidak bisa diedit setelah ada yang menyetujui' });
 
   const { tanggal_laporan, isi_laporan, catatan_umum, kunjungan, biaya } = req.body;
   const totalBiaya = Array.isArray(biaya) ? biaya.reduce((s, b) => s + (Number(b.jumlah) || 0), 0) : laporan.total_biaya;
 
-  db.prepare('UPDATE sppd_laporan SET tanggal_laporan=?, isi_laporan=?, catatan_umum=?, total_biaya=? WHERE id=?')
-    .run(tanggal_laporan || '', isi_laporan || '', catatan_umum || '', totalBiaya, laporan.id);
+  // Edit mengubah isi laporan, jadi approval yang sudah masuk direset agar
+  // approver menilai ulang data terbaru (kembali ke level awal: GM stage).
+  const laporanInitLevel = 3;
+  db.prepare('DELETE FROM sppd_laporan_approvals WHERE laporan_id=?').run(laporan.id);
+  db.prepare('UPDATE sppd_laporan SET tanggal_laporan=?, isi_laporan=?, catatan_umum=?, total_biaya=?, laporan_approval_level=? WHERE id=?')
+    .run(tanggal_laporan || '', isi_laporan || '', catatan_umum || '', totalBiaya, laporanInitLevel, laporan.id);
 
   if (Array.isArray(kunjungan)) {
     db.prepare('DELETE FROM sppd_laporan_kunjungan WHERE laporan_id = ?').run(laporan.id);
@@ -1115,6 +1116,32 @@ router.put('/:id/laporan', (req, res) => {
     const ins = db.prepare('INSERT INTO sppd_laporan_biaya (laporan_id, keterangan, jumlah, bukti) VALUES (?, ?, ?, ?)');
     biaya.forEach(b => ins.run(laporan.id, b.keterangan || '', Number(b.jumlah) || 0, b.bukti || null));
   }
+
+  res.json({ success: true });
+});
+
+// ── Delete Laporan (tanpa menghapus SPPD) ────────────────────────────────────
+router.delete('/:id/laporan', (req, res) => {
+  const user = req.session.user;
+  if (user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+
+  const sppd = db.prepare('SELECT id FROM sppd WHERE id = ?').get(req.params.id);
+  if (!sppd) return res.status(404).json({ error: 'SPPD tidak ditemukan' });
+
+  const laporan = db.prepare('SELECT id FROM sppd_laporan WHERE sppd_id = ?').get(req.params.id);
+  if (!laporan) return res.status(404).json({ error: 'Laporan tidak ditemukan' });
+
+  const pencairan = db.prepare('SELECT id FROM sppd_pencairan WHERE sppd_id=?').get(req.params.id);
+  if (pencairan)
+    return res.status(400).json({ error: 'Tidak bisa dihapus: sudah ada data pencairan dana untuk SPPD ini' });
+  const pengembalian = db.prepare('SELECT id FROM sppd_pengembalian WHERE sppd_id=?').get(req.params.id);
+  if (pengembalian)
+    return res.status(400).json({ error: 'Tidak bisa dihapus: sudah ada data pengembalian uang muka untuk SPPD ini' });
+
+  db.prepare('DELETE FROM sppd_laporan_biaya WHERE laporan_id=?').run(laporan.id);
+  db.prepare('DELETE FROM sppd_laporan_kunjungan WHERE laporan_id=?').run(laporan.id);
+  db.prepare('DELETE FROM sppd_laporan_approvals WHERE laporan_id=?').run(laporan.id);
+  db.prepare('DELETE FROM sppd_laporan WHERE id=?').run(laporan.id);
 
   res.json({ success: true });
 });

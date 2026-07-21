@@ -2695,6 +2695,18 @@ async function deleteSppd(id) {
        } catch { showToast('Koneksi gagal', 'error'); }
 }
 
+async function deleteLaporanSppd(id) {
+       if (!confirm('Hapus laporan perjalanan dinas ini?\nSPPD-nya sendiri tidak akan terhapus. Tindakan ini tidak dapat dibatalkan.')) return;
+       try {
+              const res = await api(`/api/sppd/${id}/laporan`, 'DELETE');
+              const data = await res.json();
+              if (res.ok) {
+                     showToast('Laporan berhasil dihapus', 'success');
+                     viewSPPDDetail(id);
+              } else showToast(data.error || 'Gagal menghapus laporan', 'error');
+       } catch { showToast('Koneksi gagal', 'error'); }
+}
+
 // ===================== GANTI / RESET PASSWORD =====================
 function openChangePasswordModal() {
        document.getElementById('cp-old').value = '';
@@ -3314,8 +3326,8 @@ async function viewSPPDDetail(id) {
               const isOwner = currentUser.id === sppd.created_by;
               const canApprove = (SPPD_APPROVER_ROLES.includes(role) || role === 'admin') && sppd.status === 'pending';
               const canSubmitLaporan = isOwner && sppd.status === 'approved' && !laporan;
-              const hasLaporanApproval = !!laporan?.approvals?.some(a => a.approver_user_id);
-              const canEditLaporan = isOwner && laporan && laporan.status === 'pending' && !hasLaporanApproval;
+              const canEditLaporan = isOwner && laporan && laporan.status === 'pending';
+              const canDeleteLaporan = role === 'admin' && laporan && !pencairan && !pengembalian;
 
               // Laporan: check if user's role can act at current laporan level
               const lLvl = laporan?.laporan_approval_level;
@@ -3352,6 +3364,7 @@ async function viewSPPDDetail(id) {
               }
               if (canSubmitLaporan) footer.push(`<button onclick="openLaporanForm(${id})" class="btn btn-primary">📋 Buat Laporan</button>`);
               if (canEditLaporan) footer.push(`<button onclick="openLaporanForm(${id}, currentDetailLaporan)" class="btn btn-secondary">✏️ Edit Laporan</button>`);
+              if (canDeleteLaporan) footer.push(`<button onclick="deleteLaporanSppd(${id})" class="btn btn-danger">🗑️ Hapus Laporan</button>`);
               if (canApproveLaporan) {
                      footer.push(`<button onclick="openLaporanAction(${id},null,'approve')" class="btn btn-success">✅ Setujui Laporan</button>`);
                      footer.push(`<button onclick="openLaporanAction(${id},null,'reject')" class="btn btn-danger">❌ Tolak Laporan</button>`);
