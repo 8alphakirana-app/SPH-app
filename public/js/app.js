@@ -154,6 +154,19 @@ function setUser(user) {
               document.querySelectorAll('.kk-all').forEach(el => el.style.display = '');
        }
 
+       // Pengajuan Uang Muka menu visibility — sama seperti KK: semua role (kecuali viewer) bisa membuat
+       document.querySelectorAll('.um-menu').forEach(el => el.style.display = '');
+       if (user.role !== 'viewer') {
+              document.querySelectorAll('.um-create').forEach(el => el.style.display = '');
+              document.querySelectorAll('.um-mine').forEach(el => el.style.display = '');
+       }
+       if (APPROVER_ROLES.includes(user.role) || user.role === 'admin') {
+              document.querySelectorAll('.um-approver').forEach(el => el.style.display = '');
+       }
+       if (['admin', 'direktur_utama', 'kantor_pusat', 'gm', 'gm2', 'direktur_ops', 'viewer'].includes(user.role)) {
+              document.querySelectorAll('.um-all').forEach(el => el.style.display = '');
+       }
+
        // Laporan Bulanan: semua user bisa akses, hanya admin/manajemen lihat rekap semua
        const LAPORAN_ADMIN_ROLES = ['admin','kantor_pusat','gm','gm2','manager_keuangan','direktur_ops','direktur_utama','area_manager','viewer'];
        if (LAPORAN_ADMIN_ROLES.includes(user.role)) {
@@ -196,6 +209,12 @@ function setUser(user) {
        if (canEditMM) {
               const btnAdd = document.getElementById('btn-add-mm');
               if (btnAdd) btnAdd.style.display = '';
+       }
+
+       // MOM Meeting: khusus area kerja Kantor Pusat yang boleh membuat & melihat
+       const canViewMOM = (user.area_kerja || '').trim().toLowerCase() === 'kantor pusat';
+       if (canViewMOM) {
+              document.querySelectorAll('.mom-menu').forEach(el => el.style.display = '');
        }
 
        // Viewer: tidak boleh membuat/mengelola apa pun, hanya melihat
@@ -251,6 +270,11 @@ function showPage(page) {
               'sales-target': 'Target & Penjualan',
               'sph-approvals': 'Persetujuan SPH',
               'media-monitoring': 'Media Monitoring Investasi',
+              'mom': 'MOM Meeting',
+              'new-uang-muka': 'Buat Pengajuan Uang Muka',
+              'my-uang-muka': 'Uang Muka Saya',
+              'uang-muka-approvals': 'Persetujuan Uang Muka',
+              'admin-uang-muka': 'Semua Pengajuan Uang Muka',
        };
        document.getElementById('top-bar-title').textContent = titles[page] || page;
        if (page === 'dashboard') loadDashboard();
@@ -277,6 +301,11 @@ function showPage(page) {
        else if (page === 'my-laporan') loadMyLaporan();
        else if (page === 'laporan-rekap') loadLaporanRekap();
        else if (page === 'media-monitoring') loadMediaMonitoring();
+       else if (page === 'mom') loadMOMList();
+       else if (page === 'new-uang-muka') initUMForm();
+       else if (page === 'my-uang-muka') loadMyUM();
+       else if (page === 'uang-muka-approvals') loadUMApprovals();
+       else if (page === 'admin-uang-muka') loadAdminUM();
        if (window.innerWidth <= 768) {
               closeSidebar();
        }
@@ -452,7 +481,9 @@ async function loadDashboard() {
               if (zipBtn) zipBtn.style.display = (month && (sph.disetujui > 0)) ? '' : 'none';
 
               // Media Monitoring widget
-              if (['admin', 'kantor_pusat', 'manager_keuangan'].includes(currentUser.role)) {
+              const canViewMMDash = ['admin', 'kantor_pusat', 'manager_keuangan'].includes(currentUser.role)
+                     || (currentUser.area_kerja || '').trim().toLowerCase() === 'kantor pusat';
+              if (canViewMMDash) {
                      loadMMDashboardWidget();
               }
 
@@ -2822,7 +2853,7 @@ function formatDate(str) {
 }
 
 function statusLabel(status) {
-       return { pending: '⏳ Menunggu', approved: '✅ Disetujui', rejected: '❌ Ditolak' }[status] || status;
+       return { pending: '⏳ Menunggu', approved: '✅ Disetujui', rejected: '❌ Ditolak', selesai: '📦 Selesai' }[status] || status;
 }
 
 function escHtml(str) {
@@ -5381,5 +5412,743 @@ async function loadMMDashboardWidget() {
     }).join('');
   } catch {
     section.style.display = 'none';
+  }
+}
+
+// ===================== MOM MEETING =====================
+let momData = [];
+let momEditId = null;
+
+async function loadMOMList() {
+  const tbody = document.getElementById('mom-tbody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="loading">⏳ Memuat...</td></tr>';
+  try {
+    const res = await api('/api/mom');
+    if (!res.ok) { if (tbody) tbody.innerHTML = '<tr><td colspan="6">Gagal memuat data</td></tr>'; return; }
+    momData = await res.json();
+    renderMOMTable(momData);
+  } catch {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6">Gagal memuat data</td></tr>';
+  }
+}
+
+function filterMOMList() {
+  const q = (document.getElementById('mom-search')?.value || '').toLowerCase().trim();
+  const filtered = momData.filter(e => {
+    if (!q) return true;
+    return (e.judul || '').toLowerCase().includes(q) || (e.perusahaan || '').toLowerCase().includes(q);
+  });
+  renderMOMTable(filtered);
+}
+
+function renderMOMTable(data) {
+  const tbody = document.getElementById('mom-tbody');
+  if (!tbody) return;
+  if (data.length === 0) { tbody.innerHTML = `<tr><td colspan="6">${emptyState('Belum ada data MOM Meeting')}</td></tr>`; return; }
+  tbody.innerHTML = data.map(e => `
+    <tr>
+      <td>${e.tanggal ? formatDate(e.tanggal) : '-'}</td>
+      <td class="fw-bold">${escHtml(e.judul)}</td>
+      <td>${escHtml(e.perusahaan || '-')}</td>
+      <td>${escHtml(e.agenda || '-')}</td>
+      <td>${escHtml(e.creator_name || '-')}</td>
+      <td>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          <button onclick="openMOMDetail(${e.id})" class="btn btn-secondary btn-sm">🔍</button>
+          <button onclick="openMOMEdit(${e.id})" class="btn btn-secondary btn-sm">✏️</button>
+          <button onclick="deleteMOMEntry(${e.id})" class="btn btn-danger btn-sm">🗑️</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+function addMOMPesertaRow(data = {}) {
+  const tbody = document.getElementById('mom-peserta-tbody');
+  if (!tbody) return;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td class="mom-peserta-no" style="text-align:center;font-size:12px"></td>
+    <td><input type="text" class="mom-peserta-nama" placeholder="Nama" value="${escHtml(data.nama || '')}"></td>
+    <td><input type="text" class="mom-peserta-jabatan" placeholder="Jabatan" value="${escHtml(data.jabatan || '')}"></td>
+    <td style="text-align:center"><input type="checkbox" class="mom-peserta-hadir" ${data.hadir === 0 ? '' : 'checked'}></td>
+    <td><button type="button" onclick="this.closest('tr').remove();renumberMOMPeserta()" class="btn-remove-row">✕</button></td>`;
+  tbody.appendChild(tr);
+  renumberMOMPeserta();
+}
+
+function renumberMOMPeserta() {
+  document.querySelectorAll('#mom-peserta-tbody tr').forEach((r, i) => {
+    const cell = r.querySelector('.mom-peserta-no');
+    if (cell) cell.textContent = i + 1;
+  });
+}
+
+function getMOMPesertaFromDOM() {
+  return Array.from(document.querySelectorAll('#mom-peserta-tbody tr')).map((row, idx) => ({
+    nama: row.querySelector('.mom-peserta-nama')?.value.trim() || '',
+    jabatan: row.querySelector('.mom-peserta-jabatan')?.value.trim() || '',
+    hadir: row.querySelector('.mom-peserta-hadir')?.checked ? 1 : 0,
+    urutan: idx,
+  })).filter(p => p.nama);
+}
+
+function addMOMPoinRow(text) {
+  text = text || '';
+  const container = document.getElementById('mom-poin-container');
+  const empty = container.querySelector('.mom-poin-empty');
+  if (empty) empty.remove();
+
+  const row = document.createElement('div');
+  row.className = 'mom-poin-row';
+  row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px';
+  row.innerHTML = `<input type="text" class="mom-poin-input" placeholder="Poin yang dibahas..."
+    style="flex:1;padding:8px 10px;border:1px solid var(--gray-border);border-radius:6px;font-size:13px">
+    <button type="button" onclick="this.parentElement.remove();checkMOMPoinEmpty()" class="btn-remove-row">✕</button>`;
+  container.appendChild(row);
+  row.querySelector('input').value = text;
+}
+
+function checkMOMPoinEmpty() {
+  const container = document.getElementById('mom-poin-container');
+  if (!container.querySelector('.mom-poin-row')) {
+    container.innerHTML = '<p class="mom-poin-empty" style="color:var(--text-light);font-size:13px;margin:0">Belum ada poin. Klik "+ Tambah Poin" untuk menambah.</p>';
+  }
+}
+
+function getMOMPoinFromDOM() {
+  return Array.from(document.querySelectorAll('.mom-poin-input')).map(inp => inp.value.trim()).filter(Boolean);
+}
+
+async function openMOMForm(id = null) {
+  momEditId = id;
+  document.getElementById('mom-form-error').style.display = 'none';
+  document.getElementById('mom-form-title').textContent = id ? 'Edit MOM Meeting' : 'Tambah MOM Meeting';
+  document.getElementById('mom-peserta-tbody').innerHTML = '';
+  document.getElementById('mom-poin-container').innerHTML = '<p class="mom-poin-empty" style="color:var(--text-light);font-size:13px;margin:0">Belum ada poin. Klik "+ Tambah Poin" untuk menambah.</p>';
+
+  if (id) {
+    try {
+      const res = await api(`/api/mom/${id}`);
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error || 'Gagal memuat data', 'error'); return; }
+      document.getElementById('mom-judul').value = data.judul || '';
+      document.getElementById('mom-perusahaan').value = data.perusahaan || '';
+      document.getElementById('mom-tanggal').value = data.tanggal || '';
+      document.getElementById('mom-waktu').value = data.waktu || '';
+      document.getElementById('mom-lokasi').value = data.lokasi || '';
+      document.getElementById('mom-agenda').value = data.agenda || '';
+      document.getElementById('mom-keterangan').value = data.keterangan || '';
+      (data.peserta || []).forEach(p => addMOMPesertaRow(p));
+      (data.poin || []).forEach(p => addMOMPoinRow(p.poin));
+    } catch { showToast('Gagal memuat data', 'error'); return; }
+  } else {
+    document.getElementById('mom-judul').value = '';
+    document.getElementById('mom-perusahaan').value = '';
+    document.getElementById('mom-tanggal').value = '';
+    document.getElementById('mom-waktu').value = '';
+    document.getElementById('mom-lokasi').value = '';
+    document.getElementById('mom-agenda').value = '';
+    document.getElementById('mom-keterangan').value = '';
+  }
+  showModal('modal-mom-form');
+}
+
+function openMOMEdit(id) {
+  openMOMForm(id);
+}
+
+async function saveMOMForm() {
+  const errEl = document.getElementById('mom-form-error');
+  errEl.style.display = 'none';
+  const judul = document.getElementById('mom-judul').value.trim();
+  const tanggal = document.getElementById('mom-tanggal').value;
+  if (!judul) { errEl.textContent = 'Judul rapat wajib diisi'; errEl.style.display = 'block'; return; }
+  if (!tanggal) { errEl.textContent = 'Tanggal rapat wajib diisi'; errEl.style.display = 'block'; return; }
+
+  const payload = {
+    judul,
+    perusahaan: document.getElementById('mom-perusahaan').value.trim(),
+    tanggal,
+    waktu: document.getElementById('mom-waktu').value,
+    lokasi: document.getElementById('mom-lokasi').value.trim(),
+    agenda: document.getElementById('mom-agenda').value.trim(),
+    keterangan: document.getElementById('mom-keterangan').value.trim(),
+    peserta: getMOMPesertaFromDOM(),
+    poin: getMOMPoinFromDOM(),
+  };
+
+  try {
+    const btn = document.getElementById('btn-save-mom');
+    btn.disabled = true;
+    const res = momEditId
+      ? await api(`/api/mom/${momEditId}`, 'PUT', payload)
+      : await api('/api/mom', 'POST', payload);
+    const data = await res.json();
+    btn.disabled = false;
+    if (res.ok) {
+      closeModal('modal-mom-form');
+      showToast('✅ MOM Meeting berhasil disimpan', 'success');
+      loadMOMList();
+    } else {
+      errEl.textContent = data.error || 'Gagal menyimpan';
+      errEl.style.display = 'block';
+    }
+  } catch {
+    errEl.textContent = 'Koneksi ke server gagal';
+    errEl.style.display = 'block';
+  }
+}
+
+async function deleteMOMEntry(id) {
+  if (!confirm('Hapus MOM Meeting ini beserta daftar peserta dan poin pembahasannya?')) return;
+  try {
+    const res = await api(`/api/mom/${id}`, 'DELETE');
+    if (res.ok) {
+      showToast('✅ Data berhasil dihapus', 'success');
+      closeModal('modal-mom-detail');
+      loadMOMList();
+    } else {
+      const data = await res.json();
+      showToast(data.error || 'Gagal menghapus', 'error');
+    }
+  } catch { showToast('Koneksi ke server gagal', 'error'); }
+}
+
+async function openMOMDetail(id) {
+  try {
+    const res = await api(`/api/mom/${id}`);
+    const data = await res.json();
+    if (!res.ok) { showToast(data.error || 'Gagal memuat detail', 'error'); return; }
+
+    document.getElementById('mom-detail-title').textContent = `📝 ${data.judul}`;
+
+    const pesertaRows = (data.peserta || []).map((p, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${escHtml(p.nama || '-')}</td>
+        <td>${escHtml(p.jabatan || '-')}</td>
+        <td>${p.hadir ? '<span class="badge" style="background:#def7ec;color:var(--green)">✅ Hadir</span>' : '<span class="badge" style="background:var(--gray-light);color:var(--text-light)">— Tidak Hadir</span>'}</td>
+      </tr>`).join('');
+
+    const poinList = (data.poin || []).map(p => `<li>${escHtml(p.poin)}</li>`).join('');
+
+    document.getElementById('mom-detail-body').innerHTML = `
+      <div class="detail-section-title">📋 Info Rapat</div>
+      <div class="detail-grid" style="grid-template-columns:1fr 1fr">
+        <div class="detail-item"><label>Judul Rapat</label><div class="value">${escHtml(data.judul)}</div></div>
+        <div class="detail-item"><label>Perusahaan / Instansi</label><div class="value">${escHtml(data.perusahaan || '-')}</div></div>
+        <div class="detail-item"><label>Tanggal</label><div class="value">${data.tanggal ? formatDate(data.tanggal) : '-'}</div></div>
+        <div class="detail-item"><label>Waktu</label><div class="value">${escHtml(data.waktu || '-')}</div></div>
+        <div class="detail-item"><label>Lokasi</label><div class="value">${escHtml(data.lokasi || '-')}</div></div>
+        <div class="detail-item"><label>Agenda</label><div class="value">${escHtml(data.agenda || '-')}</div></div>
+        <div class="detail-item"><label>Dibuat Oleh</label><div class="value">${escHtml(data.creator_name || '-')}</div></div>
+      </div>
+
+      <div class="detail-section-title">🗒️ Keterangan</div>
+      <p style="font-size:13px;white-space:pre-wrap;margin:0 0 16px">${escHtml(data.keterangan || '-')}</p>
+
+      <div class="detail-section-title">👥 Daftar Peserta &amp; Kehadiran</div>
+      <table class="table" style="margin-bottom:16px">
+        <thead><tr><th>No</th><th>Nama</th><th>Jabatan</th><th>Status</th></tr></thead>
+        <tbody>${pesertaRows || '<tr><td colspan="4">Belum ada peserta</td></tr>'}</tbody>
+      </table>
+
+      <div class="detail-section-title">📌 Poin Utama yang Dibahas</div>
+      <ul style="font-size:13px;padding-left:20px;margin:0">${poinList || '<li>Belum ada poin</li>'}</ul>
+    `;
+
+    document.getElementById('mom-detail-footer').innerHTML = `
+      <button onclick="closeModal('modal-mom-detail');setTimeout(()=>openMOMEdit(${id}),200)" class="btn btn-secondary">✏️ Edit</button>
+      <button onclick="deleteMOMEntry(${id})" class="btn btn-danger">🗑️ Hapus</button>
+      <button onclick="closeModal('modal-mom-detail')" class="btn btn-outline">Tutup</button>
+    `;
+
+    showModal('modal-mom-detail');
+  } catch { showToast('Gagal memuat detail', 'error'); }
+}
+
+// ===================== PENGAJUAN UANG MUKA =====================
+let umActionTargetId = null;
+let umActionType = null;
+let umRealisasiTargetId = null;
+let umRealisasiNominal = 0;
+let eumTargetId = null;
+
+function renderUMProgressBadge(r) {
+  const lvl = r.approval_level;
+  const status = r.status;
+  const short = ['AM', 'MK', 'GM1', 'GM2', 'DO', 'DU'];
+  const lvlStatus = [null, r.lvl1_status, r.lvl2_status, r.lvl3_status, r.lvl4_status, r.lvl5_status, r.lvl6_status];
+
+  const steps = [1, 2, 3, 4, 5, 6].map(i => {
+    let icon, cls;
+    const actualStatus = lvlStatus[i];
+    const isAutoSkip = i === 1 && !!r.am_auto_skipped;
+    const isGmParallel = (i === 4) && (lvl === 3);
+
+    if (!actualStatus || actualStatus === 'pending') {
+      if (status === 'approved' || status === 'selesai') {
+        icon = '○'; cls = 'waiting';
+      } else if (status !== 'rejected' && (lvl === i || isGmParallel)) {
+        icon = '⏳'; cls = 'current';
+      } else {
+        icon = '○'; cls = 'waiting';
+      }
+    } else if (actualStatus === 'approved') {
+      if (isAutoSkip) { icon = '⏭️'; cls = 'skipped'; }
+      else { icon = '✅'; cls = 'approved'; }
+    } else {
+      icon = '❌'; cls = 'rejected';
+    }
+    return `<span class="kk-ps kk-ps-${cls}" title="${KK_LEVEL_LABELS[i]}">${icon} ${short[i - 1]}</span>`;
+  }).join('<span class="kk-ps-sep">›</span>');
+  return `<div class="kk-progress-steps">${steps}</div>`;
+}
+
+function refreshUMList() {
+  const page = document.querySelector('.menu-item.active')?.getAttribute('data-page');
+  if (page === 'my-uang-muka') loadMyUM();
+  else if (page === 'uang-muka-approvals') loadUMApprovals();
+  else if (page === 'admin-uang-muka') loadAdminUM();
+}
+
+function renderUMTable(rows, { showCreator = false, showApproveBtn = false } = {}) {
+  if (rows.length === 0) return emptyState('Belum ada Pengajuan Uang Muka');
+  const myLvl = { area_manager: 1, manager_keuangan: 2, gm: 3, gm2: 4, direktur_ops: 5, direktur_utama: 6 }[currentUser.role];
+  const tableRows = rows.map(r => {
+    const lvl = r.approval_level;
+    const approvalBadge = r.status === 'selesai'
+      ? '<span class="badge badge-info">📦 Selesai</span>'
+      : renderUMProgressBadge(r);
+    let canAct = false;
+    if (showApproveBtn && r.status === 'pending') {
+      if (currentUser.role === 'admin') {
+        canAct = true;
+      } else if (currentUser.role === 'gm') {
+        canAct = lvl === 3 && r.lvl3_status !== 'approved';
+      } else if (currentUser.role === 'gm2') {
+        canAct = lvl === 3 && r.lvl4_status !== 'approved';
+      } else if (myLvl) {
+        canAct = myLvl === lvl;
+      }
+    }
+    const canRealisasi = r.status === 'approved' && !r.has_realisasi && (currentUser.role === 'admin' || r.created_by === currentUser.id);
+    return `<tr>
+      <td><div class="fw-bold">${escHtml(r.keperluan)}</div>
+          <div style="font-size:11px;color:var(--text-light)">${escHtml(r.nomor || '-')}</div></td>
+      ${showCreator ? `<td style="font-size:12px">${escHtml(r.creator_name || '-')}</td>` : ''}
+      <td class="text-right">Rp ${formatRupiah(r.nominal)}</td>
+      <td>${approvalBadge}</td>
+      <td style="font-size:12px;color:var(--text-light)">${formatDate(r.created_at)}</td>
+      <td>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button onclick="viewUMDetail(${r.id})" class="btn btn-secondary btn-sm">🔍 Detail</button>
+          ${canAct ? `
+            <button onclick="openUMAction(${r.id},'approve')" class="btn btn-success btn-sm">✅ Setuju</button>
+            <button onclick="openUMAction(${r.id},'reject')"  class="btn btn-danger btn-sm">❌ Tolak</button>` : ''}
+          ${canRealisasi ? `<button onclick="openUMRealisasi(${r.id})" class="btn btn-secondary btn-sm">🧾 Realisasi</button>` : ''}
+          ${r.status === 'pending' && (currentUser.role === 'admin' || r.created_by === currentUser.id) ? `
+            <button onclick="openEditUM(${r.id})" class="btn btn-secondary btn-sm">✏️ Edit</button>` : ''}
+          ${currentUser.role === 'admin' ? `<button onclick="deleteUM(${r.id})" class="btn btn-danger btn-sm">🗑️ Hapus</button>` : ''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+  return `<div class="table-responsive"><table class="table">
+    <thead><tr>
+      <th>Keperluan</th>
+      ${showCreator ? '<th>Diajukan Oleh</th>' : ''}
+      <th class="text-right">Nominal</th>
+      <th>Status Approval</th>
+      <th>Tanggal</th>
+      <th>Aksi</th>
+    </tr></thead>
+    <tbody>${tableRows}</tbody>
+  </table></div>`;
+}
+
+async function loadMyUM() {
+  const container = document.getElementById('my-um-container');
+  if (!container) return;
+  container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
+  const filterStatus = document.getElementById('my-um-filter')?.value || '';
+  try {
+    const res = await api('/api/uang-muka');
+    let rows = await res.json();
+    rows = rows.filter(r => r.created_by === currentUser.id);
+    if (filterStatus) rows = rows.filter(r => r.status === filterStatus);
+    container.innerHTML = renderUMTable(rows);
+  } catch { container.innerHTML = '<div class="alert alert-error">Gagal memuat data</div>'; }
+}
+
+async function loadUMApprovals() {
+  const container = document.getElementById('um-approvals-container');
+  if (!container) return;
+  container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
+  const filterStatus = document.getElementById('um-approvals-filter')?.value || 'pending';
+  try {
+    const res = await api('/api/uang-muka');
+    let rows = await res.json();
+    if (filterStatus) rows = rows.filter(r => r.status === filterStatus);
+    container.innerHTML = renderUMTable(rows, { showApproveBtn: true, showCreator: true });
+  } catch { container.innerHTML = '<div class="alert alert-error">Gagal memuat data</div>'; }
+}
+
+async function loadAdminUM() {
+  const container = document.getElementById('admin-um-container');
+  if (!container) return;
+  container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
+  const filterStatus = document.getElementById('admin-um-filter')?.value || '';
+  try {
+    const res = await api('/api/uang-muka');
+    let rows = await res.json();
+    if (filterStatus) rows = rows.filter(r => r.status === filterStatus);
+    container.innerHTML = renderUMTable(rows, { showCreator: true, showApproveBtn: true });
+  } catch { container.innerHTML = '<div class="alert alert-error">Gagal memuat data</div>'; }
+}
+
+async function viewUMDetail(id) {
+  try {
+    const res = await api(`/api/uang-muka/${id}`);
+    const um = await res.json();
+    if (!res.ok) { showToast(um.error || 'Gagal memuat', 'error'); return; }
+    const approvals = um.approvals || [];
+
+    const approvalSteps = [1, 2, 3, 4, 5, 6].map(lvl => {
+      const a = approvals.find(x => x.level === lvl);
+      const isAutoSkip = a?.status === 'approved' && !a?.approver_user_id;
+      let icon, color;
+      if (!a || a.status === 'pending') { icon = '⬜'; color = 'var(--text-light)'; }
+      else if (a.status === 'approved' && isAutoSkip) { icon = '⏭️'; color = 'var(--blue)'; }
+      else if (a.status === 'approved') { icon = '✅'; color = 'var(--green)'; }
+      else { icon = '❌'; color = 'var(--red)'; }
+      const isGmParallel = (lvl === 3 || lvl === 4) ? ' <small style="color:var(--blue)">(paralel)</small>' : '';
+      return `<div class="kk-step">
+        <div class="kk-step-icon" style="color:${color}">${icon}</div>
+        <div class="kk-step-label">
+          <strong>${KK_LEVEL_LABELS[lvl]}</strong>${isGmParallel}
+          ${a?.approver_name ? `<br><small>${escHtml(a.approver_name)}</small>` : ''}
+          ${a?.note ? `<br><small style="color:var(--text-light)">${escHtml(a.note)}</small>` : ''}
+          ${a?.acted_at ? `<br><small style="color:var(--text-light)">${formatDate(a.acted_at)}</small>` : ''}
+        </div>
+      </div>`;
+    }).join('<div class="kk-step-arrow">→</div>');
+
+    const realisasi = um.realisasi;
+    const realisasiHtml = realisasi ? `
+      <div class="detail-section-title">🧾 Realisasi / Pertanggungjawaban</div>
+      <div class="detail-grid" style="grid-template-columns:1fr 1fr 1fr">
+        <div class="detail-item"><label>Tanggal Realisasi</label><div class="value">${realisasi.tanggal_realisasi ? formatDate(realisasi.tanggal_realisasi) : '-'}</div></div>
+        <div class="detail-item"><label>Total Terpakai</label><div class="value">Rp ${formatRupiah(realisasi.total_terpakai)}</div></div>
+        <div class="detail-item"><label>Sisa Dikembalikan</label><div class="value" style="color:${realisasi.sisa >= 0 ? 'var(--green)' : 'var(--red)'}">Rp ${formatRupiah(Math.abs(realisasi.sisa))}${realisasi.sisa < 0 ? ' (kurang bayar)' : ''}</div></div>
+      </div>
+      <p style="font-size:13px;white-space:pre-wrap;margin:8px 0">${escHtml(realisasi.keterangan || '-')}</p>
+      <table class="table" style="margin-bottom:16px">
+        <thead><tr><th>No</th><th>Keterangan</th><th class="text-right">Jumlah</th><th>Bukti</th></tr></thead>
+        <tbody>${(realisasi.rincian || []).map((r, i) => `
+          <tr>
+            <td>${i + 1}</td>
+            <td>${escHtml(r.keterangan || '-')}</td>
+            <td class="text-right">Rp ${formatRupiah(r.jumlah)}</td>
+            <td>${r.bukti ? `<img src="${r.bukti}" style="max-width:80px;max-height:60px;object-fit:contain;border:1px solid #ddd;border-radius:4px;cursor:pointer" onclick="window.open(this.src,'_blank')">` : '-'}</td>
+          </tr>`).join('') || '<tr><td colspan="4">Belum ada rincian</td></tr>'}</tbody>
+      </table>` : '';
+
+    document.getElementById('um-detail-title').textContent = `Uang Muka — ${um.keperluan}`;
+    document.getElementById('um-detail-body').innerHTML = `
+      <div class="detail-grid" style="grid-template-columns:repeat(3,1fr)">
+        <div class="detail-item"><label>Status</label><div class="value"><span class="badge badge-${um.status === 'selesai' ? 'info' : um.status}">${statusLabel(um.status)}</span></div></div>
+        <div class="detail-item"><label>Nomor</label><div class="value">${escHtml(um.nomor || '-')}</div></div>
+        <div class="detail-item"><label>Diajukan Oleh</label><div class="value">${escHtml(um.creator_name || '-')}</div></div>
+        <div class="detail-item"><label>Nominal</label><div class="value fw-bold">Rp ${formatRupiah(um.nominal)}</div></div>
+        <div class="detail-item"><label>Tanggal Dibutuhkan</label><div class="value">${um.tanggal_dibutuhkan ? formatDate(um.tanggal_dibutuhkan) : '-'}</div></div>
+        <div class="detail-item"><label>Area Kerja</label><div class="value">${escHtml(um.area_kerja || '-')}</div></div>
+      </div>
+      <div class="detail-section-title">📝 Keperluan</div>
+      <p style="font-size:13px;white-space:pre-wrap;margin:0 0 8px">${escHtml(um.keperluan)}</p>
+      ${um.catatan ? `<div class="detail-section-title">🗒️ Catatan</div><p style="font-size:13px;white-space:pre-wrap;margin:0 0 8px">${escHtml(um.catatan)}</p>` : ''}
+      <div class="detail-section-title">🔄 Progress Approval</div>
+      <div class="kk-approval-steps">${approvalSteps}</div>
+      ${um.status === 'rejected' ? `<div class="alert alert-error" style="margin-top:12px">❌ Alasan Penolakan: ${escHtml(um.reject_reason || '-')}</div>` : ''}
+      ${realisasiHtml}
+    `;
+
+    const lvl = um.approval_level;
+    const myRole = currentUser.role;
+    const myLvl = { area_manager: 1, manager_keuangan: 2, gm: 3, gm2: 4, direktur_ops: 5, direktur_utama: 6 }[myRole];
+    let canAct = false;
+    if (myRole === 'admin') {
+      canAct = um.status === 'pending';
+    } else if (myRole === 'gm') {
+      const myApproval = approvals.find(a => a.level === 3);
+      canAct = um.status === 'pending' && lvl === 3 && (!myApproval || myApproval.status === 'pending');
+    } else if (myRole === 'gm2') {
+      const myApproval = approvals.find(a => a.level === 4);
+      canAct = um.status === 'pending' && lvl === 3 && (!myApproval || myApproval.status === 'pending');
+    } else if (myLvl) {
+      canAct = um.status === 'pending' && myLvl === lvl;
+    }
+    let footer = '';
+    if (canAct) {
+      footer += `<button onclick="closeModal('modal-um-detail');setTimeout(()=>openUMAction(${id},'approve'),200)" class="btn btn-success">✅ Setujui</button>`;
+      footer += `<button onclick="closeModal('modal-um-detail');setTimeout(()=>openUMAction(${id},'reject'),200)" class="btn btn-danger">❌ Tolak</button>`;
+    }
+    if (um.status === 'approved' && !realisasi && (currentUser.role === 'admin' || um.created_by === currentUser.id)) {
+      footer += `<button onclick="closeModal('modal-um-detail');setTimeout(()=>openUMRealisasi(${id}),200)" class="btn btn-secondary">🧾 Isi Realisasi</button>`;
+    }
+    if (um.status === 'pending' && (currentUser.role === 'admin' || um.created_by === currentUser.id)) {
+      footer += `<button onclick="closeModal('modal-um-detail');setTimeout(()=>openEditUM(${id}),200)" class="btn btn-secondary">✏️ Edit</button>`;
+    }
+    if (currentUser.role === 'admin') {
+      footer += `<button onclick="deleteUM(${id})" class="btn btn-danger">🗑️ Hapus</button>`;
+    }
+    footer += `<button onclick="closeModal('modal-um-detail')" class="btn btn-outline">Tutup</button>`;
+    document.getElementById('um-detail-footer').innerHTML = footer;
+    showModal('modal-um-detail');
+  } catch { showToast('Gagal memuat detail Uang Muka', 'error'); }
+}
+
+function openUMAction(id, type) {
+  umActionTargetId = id;
+  umActionType = type;
+  document.getElementById('um-action-note').value = '';
+  document.getElementById('um-action-error').style.display = 'none';
+  document.getElementById('um-action-title').textContent = type === 'approve' ? '✅ Setujui Pengajuan Uang Muka' : '❌ Tolak Pengajuan Uang Muka';
+  const footer = type === 'approve'
+    ? `<button onclick="submitUMAction()" class="btn btn-success">✅ Konfirmasi Setuju</button>`
+    : `<button onclick="submitUMAction()" class="btn btn-danger">❌ Konfirmasi Tolak</button>`;
+  document.getElementById('um-action-footer').innerHTML = footer + `<button onclick="closeModal('modal-um-action')" class="btn btn-outline">Batal</button>`;
+  showModal('modal-um-action');
+}
+
+async function submitUMAction() {
+  const note = document.getElementById('um-action-note').value.trim();
+  const errEl = document.getElementById('um-action-error');
+  errEl.style.display = 'none';
+  if (umActionType === 'reject' && !note) {
+    errEl.textContent = 'Harap isi alasan penolakan';
+    errEl.style.display = 'block'; return;
+  }
+  try {
+    const res = await api(`/api/uang-muka/${umActionTargetId}/${umActionType}`, 'POST', { note });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(umActionType === 'approve' ? '✅ Disetujui!' : '❌ Ditolak', 'success');
+      closeModal('modal-um-action');
+      refreshUMList();
+    } else {
+      errEl.textContent = data.error || 'Gagal';
+      errEl.style.display = 'block';
+    }
+  } catch {
+    errEl.textContent = 'Koneksi gagal';
+    errEl.style.display = 'block';
+  }
+}
+
+function initUMForm() {
+  document.getElementById('um-form-error').style.display = 'none';
+  document.getElementById('um-keperluan').value = '';
+  document.getElementById('um-nominal').value = '';
+  document.getElementById('um-tanggal-dibutuhkan').value = '';
+  document.getElementById('um-catatan').value = '';
+}
+
+async function submitUMForm(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('um-form-error');
+  errEl.style.display = 'none';
+  const keperluan = document.getElementById('um-keperluan').value.trim();
+  const nominal = parseNum(document.getElementById('um-nominal').value);
+  const tanggal_dibutuhkan = document.getElementById('um-tanggal-dibutuhkan').value;
+  if (!keperluan) { errEl.textContent = 'Keperluan wajib diisi'; errEl.style.display = 'block'; return; }
+  if (nominal <= 0) { errEl.textContent = 'Nominal harus lebih dari 0'; errEl.style.display = 'block'; return; }
+  if (!tanggal_dibutuhkan) { errEl.textContent = 'Tanggal dibutuhkan wajib diisi'; errEl.style.display = 'block'; return; }
+
+  const payload = {
+    keperluan, nominal, tanggal_dibutuhkan,
+    catatan: document.getElementById('um-catatan').value.trim(),
+  };
+
+  try {
+    const res = await api('/api/uang-muka', 'POST', payload);
+    const data = await res.json();
+    if (res.ok) {
+      showToast('✅ Pengajuan Uang Muka berhasil dikirim', 'success');
+      showPage('my-uang-muka');
+    } else {
+      errEl.textContent = data.error || 'Gagal mengirim pengajuan';
+      errEl.style.display = 'block';
+    }
+  } catch {
+    errEl.textContent = 'Koneksi ke server gagal';
+    errEl.style.display = 'block';
+  }
+}
+
+async function openEditUM(id) {
+  try {
+    const res = await api(`/api/uang-muka/${id}`);
+    const um = await res.json();
+    if (!res.ok) { showToast(um.error || 'Gagal memuat data', 'error'); return; }
+    eumTargetId = id;
+    document.getElementById('eum-error').style.display = 'none';
+    document.getElementById('eum-keperluan').value = um.keperluan || '';
+    document.getElementById('eum-nominal').value = um.nominal ? fmtNumStr(um.nominal) : '';
+    document.getElementById('eum-tanggal-dibutuhkan').value = um.tanggal_dibutuhkan || '';
+    document.getElementById('eum-catatan').value = um.catatan || '';
+    showModal('modal-um-edit');
+  } catch { showToast('Gagal memuat data', 'error'); }
+}
+
+async function submitEditUM() {
+  const errEl = document.getElementById('eum-error');
+  errEl.style.display = 'none';
+  const keperluan = document.getElementById('eum-keperluan').value.trim();
+  const nominal = parseNum(document.getElementById('eum-nominal').value);
+  const tanggal_dibutuhkan = document.getElementById('eum-tanggal-dibutuhkan').value;
+  if (!keperluan) { errEl.textContent = 'Keperluan wajib diisi'; errEl.style.display = 'block'; return; }
+  if (nominal <= 0) { errEl.textContent = 'Nominal harus lebih dari 0'; errEl.style.display = 'block'; return; }
+  if (!tanggal_dibutuhkan) { errEl.textContent = 'Tanggal dibutuhkan wajib diisi'; errEl.style.display = 'block'; return; }
+
+  const payload = { keperluan, nominal, tanggal_dibutuhkan, catatan: document.getElementById('eum-catatan').value.trim() };
+  try {
+    const res = await api(`/api/uang-muka/${eumTargetId}`, 'PUT', payload);
+    const data = await res.json();
+    if (res.ok) {
+      showToast('✅ Pengajuan berhasil diperbarui', 'success');
+      closeModal('modal-um-edit');
+      refreshUMList();
+    } else {
+      errEl.textContent = data.error || 'Gagal menyimpan';
+      errEl.style.display = 'block';
+    }
+  } catch {
+    errEl.textContent = 'Koneksi ke server gagal';
+    errEl.style.display = 'block';
+  }
+}
+
+async function deleteUM(id) {
+  if (!confirm('Hapus pengajuan uang muka ini?')) return;
+  try {
+    const res = await api(`/api/uang-muka/${id}`, 'DELETE');
+    const data = await res.json();
+    if (res.ok) {
+      showToast('✅ Pengajuan berhasil dihapus', 'success');
+      closeModal('modal-um-detail');
+      refreshUMList();
+    } else {
+      showToast(data.error || 'Gagal menghapus', 'error');
+    }
+  } catch { showToast('Koneksi ke server gagal', 'error'); }
+}
+
+// ── Realisasi / pertanggungjawaban ────────────────────────────────────────────
+async function openUMRealisasi(id) {
+  try {
+    const res = await api(`/api/uang-muka/${id}`);
+    const um = await res.json();
+    if (!res.ok) { showToast(um.error || 'Gagal memuat data', 'error'); return; }
+    umRealisasiTargetId = id;
+    umRealisasiNominal = um.nominal || 0;
+    document.getElementById('um-real-error').style.display = 'none';
+    document.getElementById('um-real-nominal-info').textContent = 'Rp ' + formatRupiah(um.nominal);
+    document.getElementById('um-real-tanggal').value = '';
+    document.getElementById('um-real-keterangan').value = '';
+    document.getElementById('um-real-tbody').innerHTML = '';
+    updateUMRealisasiTotal();
+    showModal('modal-um-realisasi');
+  } catch { showToast('Gagal memuat data', 'error'); }
+}
+
+function addUMRealisasiRow(data = {}) {
+  const tbody = document.getElementById('um-real-tbody');
+  if (!tbody) return;
+  const idx = tbody.querySelectorAll('tr').length + 1;
+  const previewId = `um-real-preview-${Date.now()}-${idx}`;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td style="text-align:center;font-size:12px" class="um-real-no">${idx}</td>
+    <td><input type="text" class="um-real-ket" placeholder="Keterangan" value="${escHtml(data.keterangan || '')}"></td>
+    <td><input type="text" inputmode="numeric" class="um-real-jml num-fmt" value="${data.jumlah ? fmtNumStr(data.jumlah) : ''}" oninput="formatNumInput(this);updateUMRealisasiTotal()" onfocus="if(this.value==='0')this.value=''"></td>
+    <td>
+      <input type="file" accept="image/*" class="um-real-bukti-input" style="display:none" onchange="previewUMRealisasiBukti(this,'${previewId}')">
+      <button type="button" onclick="this.previousElementSibling.click()" class="btn btn-secondary btn-sm">📷</button>
+      <div id="${previewId}" style="display:${data.bukti ? 'block' : 'none'};margin-top:4px">
+        <img class="um-real-bukti-img" style="max-width:60px;max-height:44px;object-fit:contain;border:1px solid #ddd;border-radius:4px;display:block" src="${escHtml(data.bukti || '')}">
+      </div>
+    </td>
+    <td><button type="button" onclick="this.closest('tr').remove();renumberUMRealisasi();updateUMRealisasiTotal()" class="btn-remove-row">✕</button></td>`;
+  tbody.appendChild(tr);
+  if (data.bukti) tr.querySelector(`#${previewId}`).dataset.bukti = data.bukti;
+  renumberUMRealisasi();
+  updateUMRealisasiTotal();
+}
+
+function renumberUMRealisasi() {
+  document.querySelectorAll('#um-real-tbody tr').forEach((r, i) => {
+    const cell = r.querySelector('.um-real-no');
+    if (cell) cell.textContent = i + 1;
+  });
+}
+
+async function previewUMRealisasiBukti(input, previewId) {
+  if (!input.files || !input.files[0]) return;
+  const base64 = await compressImage(input.files[0]);
+  const preview = document.getElementById(previewId);
+  if (!preview) return;
+  preview.style.display = 'block';
+  preview.querySelector('.um-real-bukti-img').src = base64;
+  preview.dataset.bukti = base64;
+}
+
+function updateUMRealisasiTotal() {
+  let total = 0;
+  document.querySelectorAll('#um-real-tbody .um-real-jml').forEach(inp => { total += parseNum(inp.value); });
+  const sisa = umRealisasiNominal - total;
+  document.getElementById('um-real-total').textContent = 'Rp ' + formatRupiah(total);
+  const sisaEl = document.getElementById('um-real-sisa');
+  sisaEl.textContent = 'Rp ' + formatRupiah(Math.abs(sisa)) + (sisa < 0 ? ' (kurang bayar)' : '');
+  sisaEl.style.color = sisa >= 0 ? 'var(--green)' : 'var(--red)';
+}
+
+function getUMRealisasiRincianFromDOM() {
+  return Array.from(document.querySelectorAll('#um-real-tbody tr')).map(row => ({
+    keterangan: row.querySelector('.um-real-ket')?.value.trim() || '',
+    jumlah: parseNum(row.querySelector('.um-real-jml')?.value),
+    bukti: row.querySelector('[id^="um-real-preview-"]')?.dataset.bukti || null,
+  })).filter(r => r.keterangan || r.jumlah);
+}
+
+async function submitUMRealisasi() {
+  const errEl = document.getElementById('um-real-error');
+  errEl.style.display = 'none';
+  const rincian = getUMRealisasiRincianFromDOM();
+  if (rincian.length === 0) { errEl.textContent = 'Tambahkan minimal 1 rincian penggunaan'; errEl.style.display = 'block'; return; }
+
+  const payload = {
+    tanggal_realisasi: document.getElementById('um-real-tanggal').value,
+    keterangan: document.getElementById('um-real-keterangan').value.trim(),
+    rincian,
+  };
+
+  try {
+    const btn = document.getElementById('btn-save-um-real');
+    btn.disabled = true;
+    const res = await api(`/api/uang-muka/${umRealisasiTargetId}/realisasi`, 'POST', payload);
+    const data = await res.json();
+    btn.disabled = false;
+    if (res.ok) {
+      closeModal('modal-um-realisasi');
+      showToast('✅ Realisasi berhasil disimpan', 'success');
+      refreshUMList();
+    } else {
+      errEl.textContent = data.error || 'Gagal menyimpan realisasi';
+      errEl.style.display = 'block';
+    }
+  } catch {
+    errEl.textContent = 'Koneksi ke server gagal';
+    errEl.style.display = 'block';
   }
 }

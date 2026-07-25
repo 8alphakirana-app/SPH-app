@@ -22,6 +22,20 @@ const SPPD_APPROVER_ROLES = {
   1: ['gm', 'gm2'],
 };
 
+const UM_APPROVER_ROLES = {
+  1: ['area_manager'],
+  2: ['manager_keuangan'],
+  3: ['gm'],
+  4: ['gm2'],
+  5: ['direktur_ops'],
+  6: ['direktur_utama'],
+};
+
+const UM_LEVEL_LABELS = {
+  1: 'Area Manager', 2: 'Manager Keuangan', 3: 'GM', 4: 'GM 2',
+  5: 'Direktur Ops', 6: 'Direktur Utama',
+};
+
 // ── Core ──────────────────────────────────────────────────────────────────────
 function createNotification(userId, { title, body = '', type = 'info', ref_type = '', ref_id = null }) {
   try {
@@ -119,9 +133,34 @@ function notifySPPDResult(sppdId, creatorId, action) {
   });
 }
 
+// ── Pengajuan Uang Muka ───────────────────────────────────────────────────────
+function notifyUMNextLevel(umId, nextLevel, creatorAreaKerja) {
+  const roles = UM_APPROVER_ROLES[nextLevel];
+  if (!roles) return;
+  const areaKerja = nextLevel === 1 ? (creatorAreaKerja || null) : null;
+  _notifyByRoles(roles, {
+    title: `Pengajuan Uang Muka #${umId} Menunggu Persetujuan ${UM_LEVEL_LABELS[nextLevel] || ''}`,
+    body: `Pengajuan Uang Muka #${umId} perlu persetujuan Anda`,
+    type: 'approval',
+    ref_type: 'uang_muka',
+    ref_id: umId,
+  }, areaKerja);
+}
+
+function notifyUMResult(umId, creatorId, action) {
+  createNotification(creatorId, {
+    title: action === 'approved' ? `Pengajuan Uang Muka #${umId} Disetujui Semua` : `Pengajuan Uang Muka #${umId} Ditolak`,
+    body: action === 'approved' ? 'Pengajuan Uang Muka Anda telah disetujui penuh' : 'Pengajuan Uang Muka Anda ditolak',
+    type: action === 'approved' ? 'success' : 'reject',
+    ref_type: 'uang_muka',
+    ref_id: umId,
+  });
+}
+
 module.exports = {
   createNotification,
   notifySPHCreated, notifySPHResult,
   notifyKKNextLevel, notifyKKResult,
   notifySPPDNextLevel, notifySPPDResult,
+  notifyUMNextLevel, notifyUMResult,
 };

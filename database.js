@@ -772,6 +772,96 @@ db.exec(`
   );
 `);
 
+// ── MOM Meeting tables ────────────────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS mom_meeting (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    judul TEXT NOT NULL DEFAULT '',
+    perusahaan TEXT DEFAULT '',
+    agenda TEXT DEFAULT '',
+    tanggal TEXT NOT NULL,
+    waktu TEXT DEFAULT '',
+    lokasi TEXT DEFAULT '',
+    keterangan TEXT DEFAULT '',
+    created_by INTEGER,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    updated_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (created_by) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS mom_peserta (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    meeting_id INTEGER NOT NULL,
+    urutan INTEGER DEFAULT 0,
+    nama TEXT DEFAULT '',
+    jabatan TEXT DEFAULT '',
+    hadir INTEGER DEFAULT 1,
+    FOREIGN KEY (meeting_id) REFERENCES mom_meeting(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS mom_poin (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    meeting_id INTEGER NOT NULL,
+    urutan INTEGER DEFAULT 0,
+    poin TEXT DEFAULT '',
+    FOREIGN KEY (meeting_id) REFERENCES mom_meeting(id)
+  );
+`);
+
+// ── Pengajuan Uang Muka tables ─────────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS uang_muka (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nomor TEXT DEFAULT '',
+    created_by INTEGER NOT NULL,
+    keperluan TEXT DEFAULT '',
+    nominal REAL DEFAULT 0,
+    tanggal_dibutuhkan TEXT DEFAULT '',
+    area_kerja TEXT DEFAULT '',
+    catatan TEXT DEFAULT '',
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected','selesai')),
+    approval_level INTEGER DEFAULT 1,
+    reject_reason TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    updated_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (created_by) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS uang_muka_approvals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    uang_muka_id INTEGER NOT NULL,
+    level INTEGER NOT NULL,
+    approver_user_id INTEGER,
+    status TEXT DEFAULT 'pending',
+    note TEXT DEFAULT '',
+    acted_at TEXT,
+    FOREIGN KEY (uang_muka_id) REFERENCES uang_muka(id),
+    FOREIGN KEY (approver_user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS uang_muka_realisasi (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    uang_muka_id INTEGER NOT NULL UNIQUE,
+    tanggal_realisasi TEXT DEFAULT '',
+    keterangan TEXT DEFAULT '',
+    total_terpakai REAL DEFAULT 0,
+    sisa REAL DEFAULT 0,
+    created_by INTEGER,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (uang_muka_id) REFERENCES uang_muka(id),
+    FOREIGN KEY (created_by) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS uang_muka_realisasi_rincian (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    realisasi_id INTEGER NOT NULL,
+    keterangan TEXT DEFAULT '',
+    jumlah REAL DEFAULT 0,
+    bukti TEXT,
+    FOREIGN KEY (realisasi_id) REFERENCES uang_muka_realisasi(id)
+  );
+`);
+
 // ── Auto-backup saat server start ────────────────────────────────────────────
 (async () => {
   try {
