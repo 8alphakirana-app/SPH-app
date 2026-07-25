@@ -8,8 +8,11 @@ const PORT = process.env.PORT || 3000;
 const isProd = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT !== undefined;
 
 // Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Limit dinaikkan dari default 100kb karena beberapa form (mis. Laporan SPPD) mengirim
+// foto bukti sebagai base64 di dalam JSON body, yang mudah melebihi 100kb dan sebelumnya
+// menyebabkan PayloadTooLargeError yang tertutup pesan "Internal server error" generik.
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Service Worker: pastikan header yang benar
@@ -53,6 +56,9 @@ app.get('*', (req, res) => {
 // Error handler
 app.use((err, req, res, next) => {
     console.error(err.stack);
+    if (err.type === 'entity.too.large' || err.status === 413) {
+        return res.status(413).json({ error: 'Ukuran data terlalu besar (mis. foto bukti terlalu banyak/besar). Kurangi jumlah atau ukuran foto lalu coba lagi.' });
+    }
     res.status(500).json({ error: 'Internal server error' });
 });
 
