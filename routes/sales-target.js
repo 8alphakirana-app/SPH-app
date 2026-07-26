@@ -37,7 +37,7 @@ router.get('/', requireLogin, (req, res) => {
   const existing = db.prepare('SELECT * FROM sales_target WHERE periode = ?').all(periode);
   const byArea   = Object.fromEntries(existing.map(r => [r.area_kerja, r]));
 
-  const rows = areas.map(area => byArea[area] || { id: null, area_kerja: area, periode, target: 0, penjualan: 0, laba_kotor: 0, pendapatan_lain: 0 });
+  const rows = areas.map(area => byArea[area] || { id: null, area_kerja: area, periode, target: 0, penjualan: 0, laba_kotor: 0, pendapatan_lain: 0, difaktur: 0 });
   res.json(rows);
 });
 
@@ -61,14 +61,16 @@ router.get('/monthly', requireLogin, (req, res) => {
   }
 
   const rows = areaFilter
-    ? db.prepare('SELECT periode, SUM(target) AS target, SUM(penjualan) AS penjualan, SUM(laba_kotor) AS laba_kotor, SUM(pendapatan_lain) AS pendapatan_lain FROM sales_target WHERE area_kerja=? GROUP BY periode').all(areaFilter)
-    : db.prepare('SELECT periode, SUM(target) AS target, SUM(penjualan) AS penjualan, SUM(laba_kotor) AS laba_kotor, SUM(pendapatan_lain) AS pendapatan_lain FROM sales_target GROUP BY periode').all();
+    ? db.prepare('SELECT periode, SUM(target) AS target, SUM(penjualan) AS penjualan, SUM(laba_kotor) AS laba_kotor, SUM(pendapatan_lain) AS pendapatan_lain, SUM(difaktur) AS difaktur FROM sales_target WHERE area_kerja=? GROUP BY periode').all(areaFilter)
+    : db.prepare('SELECT periode, SUM(target) AS target, SUM(penjualan) AS penjualan, SUM(laba_kotor) AS laba_kotor, SUM(pendapatan_lain) AS pendapatan_lain, SUM(difaktur) AS difaktur FROM sales_target GROUP BY periode').all();
 
   const byPeriode = Object.fromEntries(rows.map(r => [r.periode, r]));
   const result = list.map(p => ({
     periode:   p,
     target:    byPeriode[p]?.target    || 0,
-    penjualan: byPeriode[p]?.penjualan || 0
+    penjualan: byPeriode[p]?.penjualan || 0,
+    difaktur:  byPeriode[p]?.difaktur  || 0,
+    laba_kotor: byPeriode[p]?.laba_kotor || 0,
   }));
 
   // Hanya kembalikan bulan yang ada data (untuk menghindari spam bulan kosong)
@@ -121,12 +123,14 @@ router.get('/by-area', requireLogin, (req, res) => {
       penjualan:  lookup[area]?.[p]?.penjualan  || 0,
       laba_kotor:     lookup[area]?.[p]?.laba_kotor     || 0,
       pendapatan_lain: lookup[area]?.[p]?.pendapatan_lain || 0,
+      difaktur:   lookup[area]?.[p]?.difaktur   || 0,
     }));
     const totT  = monthData.reduce((s, d) => s + d.target,          0);
     const totP  = monthData.reduce((s, d) => s + d.penjualan,       0);
     const totL  = monthData.reduce((s, d) => s + d.laba_kotor,      0);
     const totPL = monthData.reduce((s, d) => s + d.pendapatan_lain, 0);
-    return { area_kerja: area, months: monthData, total_target: totT, total_penjualan: totP, total_laba_kotor: totL, total_pendapatan_lain: totPL };
+    const totD  = monthData.reduce((s, d) => s + d.difaktur,        0);
+    return { area_kerja: area, months: monthData, total_target: totT, total_penjualan: totP, total_laba_kotor: totL, total_pendapatan_lain: totPL, total_difaktur: totD };
   });
 
   res.json({ months, areas: result });

@@ -268,6 +268,7 @@ function showPage(page) {
               'laporan-rekap': 'Rekap Laporan Bulanan',
               'backup': 'Backup Database',
               'sales-target': 'Target & Penjualan',
+              'admin-penjualan': 'Upload Rincian Penjualan',
               'sph-approvals': 'Persetujuan SPH',
               'media-monitoring': 'Media Monitoring Investasi',
               'mom': 'MOM Meeting',
@@ -295,6 +296,7 @@ function showPage(page) {
        else if (page === 'sppd-pencairan') loadPencairan();
        else if (page === 'admin-sppd') loadAdminSPPD();
        else if (page === 'sales-target') initSalesTarget();
+       else if (page === 'admin-penjualan') initUploadPenjualan();
        else if (page === 'backup') loadBackupPage();
        else if (page === 'profile') loadProfile();
        else if (page === 'new-laporan') initLaporanForm();
@@ -971,25 +973,32 @@ function _renderDashSalesTarget(rows) {
        const totLaba       = document.getElementById('dash-sales-total-laba');
        const totPendapatan = document.getElementById('dash-sales-total-pendapatan');
        const totPct        = document.getElementById('dash-sales-total-pct');
+       const totDifaktur    = document.getElementById('dash-sales-total-difaktur');
+       const totDifakturPct = document.getElementById('dash-sales-total-difaktur-pct');
        if (!section || !tbody) return;
 
-       const meaningful = (rows || []).filter(r => r.target > 0 || r.penjualan > 0 || r.laba_kotor > 0 || r.pendapatan_lain > 0);
+       const meaningful = (rows || []).filter(r => r.target > 0 || r.penjualan > 0 || r.laba_kotor > 0 || r.pendapatan_lain > 0 || r.difaktur > 0);
        if (!meaningful.length) { section.style.display = 'none'; return; }
        section.style.display = '';
 
-       let sumTarget = 0, sumPenj = 0, sumLaba = 0, sumPendapatan = 0;
+       let sumTarget = 0, sumPenj = 0, sumLaba = 0, sumPendapatan = 0, sumDifaktur = 0;
        tbody.innerHTML = meaningful.map(r => {
               sumTarget     += r.target          || 0;
               sumPenj       += r.penjualan       || 0;
               sumLaba       += r.laba_kotor      || 0;
               sumPendapatan += r.pendapatan_lain || 0;
+              sumDifaktur   += r.difaktur        || 0;
               const pct = r.target > 0 ? Math.round((r.penjualan / r.target) * 100) : 0;
               const barColor = pct >= 100 ? '#0e9f6e' : pct >= 75 ? '#3b82f6' : pct >= 50 ? '#e3a008' : '#f05252';
               const pctText  = r.target > 0 ? `${pct}%` : '—';
+              const difakturPct = r.penjualan > 0 ? Math.round(((r.difaktur || 0) / r.penjualan) * 100) : 0;
+              const difakturPctText = r.penjualan > 0 ? `${difakturPct}%` : '—';
               return `<tr>
                      <td><strong>${escHtml(r.area_kerja)}</strong></td>
                      <td class="text-right">Rp ${fmtNumStr(r.target)}</td>
                      <td class="text-right">Rp ${fmtNumStr(r.penjualan)}</td>
+                     <td class="text-right" style="color:#0e9f6e">Rp ${fmtNumStr(r.difaktur || 0)}</td>
+                     <td class="text-right">${difakturPctText}</td>
                      <td class="text-right" style="color:#0e9f6e">Rp ${fmtNumStr(r.laba_kotor || 0)}</td>
                      <td class="text-right" style="color:#7c3aed">Rp ${fmtNumStr(r.pendapatan_lain || 0)}</td>
                      <td class="text-right">
@@ -1005,10 +1014,13 @@ function _renderDashSalesTarget(rows) {
 
        const totalPct = sumTarget > 0 ? Math.round((sumPenj / sumTarget) * 100) : 0;
        const totColor = totalPct >= 100 ? '#0e9f6e' : totalPct >= 75 ? '#3b82f6' : totalPct >= 50 ? '#e3a008' : '#f05252';
+       const totalDifakturPct = sumPenj > 0 ? Math.round((sumDifaktur / sumPenj) * 100) : 0;
        if (totTgt)        totTgt.textContent        = 'Rp ' + fmtNumStr(sumTarget);
        if (totPenj)       totPenj.textContent       = 'Rp ' + fmtNumStr(sumPenj);
        if (totLaba)       totLaba.textContent       = 'Rp ' + fmtNumStr(sumLaba);
        if (totPendapatan) totPendapatan.textContent = 'Rp ' + fmtNumStr(sumPendapatan);
+       if (totDifaktur)    totDifaktur.textContent    = 'Rp ' + fmtNumStr(sumDifaktur);
+       if (totDifakturPct) totDifakturPct.textContent = sumPenj > 0 ? `${totalDifakturPct}%` : '—';
        if (totPct)  { totPct.textContent = sumTarget > 0 ? `${totalPct}%` : '—'; totPct.style.color = totColor; }
 }
 
@@ -6150,5 +6162,126 @@ async function submitUMRealisasi() {
   } catch {
     errEl.textContent = 'Koneksi ke server gagal';
     errEl.style.display = 'block';
+  }
+}
+
+// ===================== UPLOAD RINCIAN PENJUALAN (ODOO) =====================
+function initUploadPenjualan() {
+  document.getElementById('penj-upload-error').style.display = 'none';
+  document.getElementById('penj-upload-result').style.display = 'none';
+  document.getElementById('penj-file-order').value = '';
+  document.getElementById('penj-file-report').value = '';
+  const periodeInput = document.getElementById('penj-cek-periode');
+  if (periodeInput && !periodeInput.value) {
+    const d = new Date();
+    periodeInput.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+}
+
+async function submitUploadPenjualan() {
+  const errEl = document.getElementById('penj-upload-error');
+  const resultEl = document.getElementById('penj-upload-result');
+  errEl.style.display = 'none';
+  resultEl.style.display = 'none';
+
+  const fileOrder  = document.getElementById('penj-file-order').files[0];
+  const fileReport = document.getElementById('penj-file-report').files[0];
+  if (!fileOrder) { errEl.textContent = 'File Sales Order (sale.order) wajib diupload'; errEl.style.display = 'block'; return; }
+
+  const formData = new FormData();
+  formData.append('file_order', fileOrder);
+  if (fileReport) formData.append('file_report', fileReport);
+
+  const btn = document.getElementById('btn-upload-penjualan');
+  btn.disabled = true;
+  btn.textContent = '⏳ Memproses...';
+  try {
+    const res = await fetch('/api/penjualan/upload', { method: 'POST', body: formData, credentials: 'same-origin' });
+    const data = await res.json();
+    if (!res.ok) {
+      errEl.textContent = data.error || 'Gagal mengupload file';
+      errEl.style.display = 'block';
+    } else {
+      const warnHtml = data.salesperson_tidak_terpetakan?.length
+        ? `<div class="alert alert-error" style="margin-top:10px">
+             ⚠️ ${data.salesperson_tidak_terpetakan.length} salesperson tidak terpetakan ke area kerja (masuk ke
+             "(Belum Dipetakan)"). Perbaiki <strong>Area Kerja</strong> pada akun berikut agar penjualannya
+             tercatat di area yang benar:<br>${data.salesperson_tidak_terpetakan.map(escHtml).join(', ')}
+           </div>`
+        : '';
+      resultEl.innerHTML = `
+        <div class="alert alert-success">
+          ✅ ${data.orders_diproses} order berhasil diproses untuk periode:
+          <strong>${(data.periode_terpengaruh || []).map(formatPeriode).join(', ') || '-'}</strong>
+        </div>
+        ${warnHtml}`;
+      resultEl.style.display = 'block';
+      showToast('✅ Upload berhasil diproses', 'success');
+      if (data.periode_terpengaruh?.length) {
+        document.getElementById('penj-cek-periode').value = data.periode_terpengaruh[0];
+        loadPenjualanSummary();
+      }
+    }
+  } catch {
+    errEl.textContent = 'Koneksi ke server gagal';
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📤 Upload & Proses';
+  }
+}
+
+async function loadPenjualanSummary() {
+  const container = document.getElementById('penj-summary-container');
+  const periode = document.getElementById('penj-cek-periode')?.value;
+  if (!periode) return;
+  container.innerHTML = '<div class="loading" style="padding:16px">⏳ Memuat...</div>';
+  try {
+    const res = await api(`/api/penjualan/summary?periode=${periode}`);
+    const rows = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="alert alert-error" style="margin:16px">${rows.error || 'Gagal memuat'}</div>`; return; }
+    if (!rows.length) { container.innerHTML = emptyState('Belum ada data penjualan untuk periode ini'); return; }
+
+    let sumPenj = 0, sumDifaktur = 0, sumLaba = 0, sumTarget = 0;
+    const bodyRows = rows.map(r => {
+      sumPenj += r.total_penjualan || 0;
+      sumDifaktur += r.difaktur || 0;
+      sumLaba += r.laba_kotor || 0;
+      sumTarget += r.target || 0;
+      const pct = r.total_penjualan > 0 ? Math.round((r.difaktur / r.total_penjualan) * 100) : 0;
+      return `<tr>
+        <td>${escHtml(r.area_kerja)}</td>
+        <td class="text-right">Rp ${formatRupiah(r.total_penjualan)}</td>
+        <td class="text-right">Rp ${formatRupiah(r.difaktur)}</td>
+        <td class="text-right">${r.total_penjualan > 0 ? pct + '%' : '—'}</td>
+        <td class="text-right">Rp ${formatRupiah(r.laba_kotor)}</td>
+        <td class="text-right">Rp ${formatRupiah(r.target)}</td>
+      </tr>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div class="table-responsive">
+        <table class="table">
+          <thead><tr>
+            <th>Area Kerja</th>
+            <th class="text-right">Total Penjualan</th>
+            <th class="text-right">Sudah Difaktur</th>
+            <th class="text-right">% Difaktur</th>
+            <th class="text-right">Laba Kotor</th>
+            <th class="text-right">Target</th>
+          </tr></thead>
+          <tbody>${bodyRows}</tbody>
+          <tfoot><tr>
+            <td class="fw-bold">Total</td>
+            <td class="text-right fw-bold">Rp ${formatRupiah(sumPenj)}</td>
+            <td class="text-right fw-bold">Rp ${formatRupiah(sumDifaktur)}</td>
+            <td class="text-right fw-bold">${sumPenj > 0 ? Math.round((sumDifaktur/sumPenj)*100) + '%' : '—'}</td>
+            <td class="text-right fw-bold">Rp ${formatRupiah(sumLaba)}</td>
+            <td class="text-right fw-bold">Rp ${formatRupiah(sumTarget)}</td>
+          </tr></tfoot>
+        </table>
+      </div>`;
+  } catch {
+    container.innerHTML = '<div class="alert alert-error" style="margin:16px">Koneksi ke server gagal</div>';
   }
 }

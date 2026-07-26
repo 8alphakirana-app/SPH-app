@@ -179,6 +179,8 @@
               class="menu-item" data-page="admin-settings"><span class="icon">⚙️</span> Pengaturan</a></li>
           <li class="admin-or-mk" style="display:none"><a href="#" onclick="showPage('sales-target')" class="menu-item"
               data-page="sales-target"><span class="icon">🎯</span> Target & Penjualan</a></li>
+          <li class="admin-or-mk" style="display:none"><a href="#" onclick="showPage('admin-penjualan')"
+              class="menu-item" data-page="admin-penjualan"><span class="icon">📥</span> Upload Penjualan</a></li>
           <li class="admin-only" style="display:none"><a href="#" onclick="showPage('backup')" class="menu-item"
               data-page="backup"><span class="icon">💾</span> Backup Database</a></li>
 
@@ -444,6 +446,8 @@
                           <th>Area Kerja</th>
                           <th class="text-right">Target (Rp)</th>
                           <th class="text-right">Realisasi (Rp)</th>
+                          <th class="text-right">Sudah Difaktur (Rp)</th>
+                          <th class="text-right" width="90">% Difaktur</th>
                           <th class="text-right">Laba Kotor (Rp)</th>
                           <th class="text-right">Pendapatan Lain (Rp)</th>
                           <th class="text-right" width="110">Pencapaian</th>
@@ -456,6 +460,8 @@
                           <td class="fw-bold">Total</td>
                           <td class="text-right fw-bold" id="dash-sales-total-target">Rp 0</td>
                           <td class="text-right fw-bold" id="dash-sales-total-penjualan">Rp 0</td>
+                          <td class="text-right fw-bold" id="dash-sales-total-difaktur">Rp 0</td>
+                          <td class="text-right fw-bold" id="dash-sales-total-difaktur-pct">0%</td>
                           <td class="text-right fw-bold" id="dash-sales-total-laba">Rp 0</td>
                           <td class="text-right fw-bold" id="dash-sales-total-pendapatan">Rp 0</td>
                           <td class="text-right fw-bold" id="dash-sales-total-pct">0%</td>
@@ -1318,6 +1324,59 @@
             <div id="st-alert" class="alert" style="display:none;margin-bottom:12px"></div>
             <div id="st-container">
               <div class="loading" style="padding:32px;text-align:center">⏳ Memuat...</div>
+            </div>
+          </div>
+
+          <!-- ═══════════ UPLOAD PENJUALAN (ODOO) ═══════════ -->
+          <div id="content-admin-penjualan" class="content-page" style="display:none">
+            <div class="page-header">
+              <h1 class="page-title">📥 Upload Rincian Penjualan (Odoo)</h1>
+            </div>
+            <div class="card" style="margin-bottom:16px">
+              <div class="card-header">
+                <h3>📤 Upload File Export</h3>
+              </div>
+              <div class="card-body">
+                <p style="color:var(--text-light);font-size:13px;margin-bottom:16px">
+                  Upload export Excel dari Odoo. Periode &amp; area kerja terdeteksi otomatis dari isi file
+                  (kolom <strong>Order Date</strong> &amp; <strong>Salesperson</strong>). Re-upload file yang sama
+                  aman dilakukan (tidak menggandakan data).
+                </p>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>File "Sales Order (sale.order)" <span class="required">*</span></label>
+                    <input type="file" id="penj-file-order" accept=".xlsx">
+                    <small>Sumber Total Penjualan &amp; Status Faktur</small>
+                  </div>
+                  <div class="form-group">
+                    <label>File "Sales Analysis Report (sale.report)" <span style="color:var(--text-light)">(opsional)</span></label>
+                    <input type="file" id="penj-file-report" accept=".xlsx">
+                    <small>Sumber Laba Kotor (Gross Margin)</small>
+                  </div>
+                </div>
+                <div id="penj-upload-error" class="alert alert-error" style="display:none;margin-top:8px"></div>
+                <div id="penj-upload-result" style="display:none;margin-top:12px"></div>
+                <div class="form-actions" style="padding:0;margin-top:16px">
+                  <button onclick="submitUploadPenjualan()" id="btn-upload-penjualan" class="btn btn-primary">📤
+                    Upload &amp; Proses</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+                <h3>🔍 Cek Ringkasan per Periode</h3>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input type="month" id="penj-cek-periode" style="min-width:150px">
+                  <button onclick="loadPenjualanSummary()" class="btn btn-secondary btn-sm">Tampilkan</button>
+                </div>
+              </div>
+              <div class="card-body no-padding">
+                <div id="penj-summary-container">
+                  <p style="color:var(--text-light);font-size:13px;padding:16px;margin:0">Pilih periode lalu klik
+                    "Tampilkan" untuk melihat ringkasan per area.</p>
+                </div>
+              </div>
             </div>
           </div>
 

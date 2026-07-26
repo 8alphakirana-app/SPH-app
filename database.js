@@ -723,6 +723,51 @@ db.exec(`
 try { db.exec("ALTER TABLE sales_target ADD COLUMN laba_kotor REAL DEFAULT 0"); } catch {}
 // ── MIGRATION: pendapatan_lain on sales_target ───────────────────────────────
 try { db.exec("ALTER TABLE sales_target ADD COLUMN pendapatan_lain REAL DEFAULT 0"); } catch {}
+// ── MIGRATION: difaktur on sales_target (upload rincian penjualan Odoo) ─────
+try { db.exec("ALTER TABLE sales_target ADD COLUMN difaktur REAL DEFAULT 0"); } catch {}
+
+// ── Rincian order penjualan (upload dari Odoo, agregat ke sales_target) ─────
+// Catatan: 'Order Reference' pada data Odoo TIDAK selalu unik (ditemukan 2 nomor
+// yang dipakai untuk 2 order berbeda), sehingga id AUTOINCREMENT dipakai sebagai
+// primary key dan order_reference disimpan sebagai kolom biasa (bukan unique).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS penjualan_order (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_reference TEXT,
+    order_date TEXT, periode TEXT,
+    customer TEXT, salesperson TEXT, area_kerja TEXT,
+    total REAL DEFAULT 0,
+    invoice_status TEXT,
+    laba_kotor REAL DEFAULT 0,
+    difaktur INTEGER DEFAULT 0,
+    uploaded_by INTEGER, uploaded_at TEXT DEFAULT (datetime('now','localtime'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_penjualan_order_periode ON penjualan_order(area_kerja, periode);
+`);
+
+// ── MIGRATION: penjualan_order dari skema lama (order_reference PRIMARY KEY) ─
+const penjualanOrderDef = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='penjualan_order'").get();
+if (penjualanOrderDef && /order_reference\s+TEXT\s+PRIMARY\s+KEY/i.test(penjualanOrderDef.sql)) {
+  db.exec(`
+    CREATE TABLE penjualan_order_v2 (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_reference TEXT,
+      order_date TEXT, periode TEXT,
+      customer TEXT, salesperson TEXT, area_kerja TEXT,
+      total REAL DEFAULT 0,
+      invoice_status TEXT,
+      laba_kotor REAL DEFAULT 0,
+      difaktur INTEGER DEFAULT 0,
+      uploaded_by INTEGER, uploaded_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+    INSERT INTO penjualan_order_v2 (order_reference, order_date, periode, customer, salesperson, area_kerja, total, invoice_status, laba_kotor, difaktur, uploaded_by, uploaded_at)
+      SELECT order_reference, order_date, periode, customer, salesperson, area_kerja, total, invoice_status, laba_kotor, difaktur, uploaded_by, uploaded_at FROM penjualan_order;
+    DROP TABLE penjualan_order;
+    ALTER TABLE penjualan_order_v2 RENAME TO penjualan_order;
+    CREATE INDEX IF NOT EXISTS idx_penjualan_order_periode ON penjualan_order(area_kerja, periode);
+  `);
+  console.log('✅ penjualan_order diupgrade: order_reference bukan lagi PRIMARY KEY (bisa duplikat)');
+}
 
 // ── MIGRATION: notifications table ───────────────────────────────────────────
 db.exec(`
