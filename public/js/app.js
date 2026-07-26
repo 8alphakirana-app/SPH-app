@@ -211,8 +211,8 @@ function setUser(user) {
               if (btnAdd) btnAdd.style.display = '';
        }
 
-       // MOM Meeting: khusus area kerja Kantor Pusat yang boleh membuat & melihat
-       const canViewMOM = (user.area_kerja || '').trim().toLowerCase() === 'kantor pusat';
+       // MOM Meeting: admin dan area kerja Kantor Pusat yang boleh membuat & melihat
+       const canViewMOM = user.role === 'admin' || (user.area_kerja || '').trim().toLowerCase() === 'kantor pusat';
        if (canViewMOM) {
               document.querySelectorAll('.mom-menu').forEach(el => el.style.display = '');
        }

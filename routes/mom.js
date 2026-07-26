@@ -7,11 +7,13 @@ function requireLogin(req, res, next) {
   next();
 }
 
-// Khusus area kerja Kantor Pusat yang boleh membuat & melihat MOM Meeting
+// Admin dan akun dengan area kerja Kantor Pusat yang boleh membuat & melihat MOM Meeting
 function requireKantorPusat(req, res, next) {
   const u = req.session.user;
   const isKantorPusatArea = (u?.area_kerja || '').trim().toLowerCase() === 'kantor pusat';
-  if (!isKantorPusatArea) return res.status(403).json({ error: 'Akses ditolak, khusus area kerja Kantor Pusat' });
+  if (u?.role !== 'admin' && !isKantorPusatArea) {
+    return res.status(403).json({ error: 'Akses ditolak, khusus admin atau area kerja Kantor Pusat' });
+  }
   next();
 }
 
