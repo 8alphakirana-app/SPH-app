@@ -5102,23 +5102,25 @@ function mmStatusBadge(entry) {
 
 async function loadMediaMonitoring() {
   const tbody = document.getElementById('mm-tbody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="10" class="loading">⏳ Memuat...</td></tr>';
+  if (tbody) tbody.innerHTML = '<tr><td colspan="11" class="loading">⏳ Memuat...</td></tr>';
   try {
     const res = await api('/api/media-monitoring');
-    if (!res.ok) { if (tbody) tbody.innerHTML = '<tr><td colspan="10">Gagal memuat data</td></tr>'; return; }
+    if (!res.ok) { if (tbody) tbody.innerHTML = '<tr><td colspan="11">Gagal memuat data</td></tr>'; return; }
     mmData = await res.json();
 
     const totInvestasi = mmData.reduce((s, e) => s + (parseFloat(e.nilai_investasi) || 0), 0);
     const totTerbayar  = mmData.reduce((s, e) => s + (parseFloat(e.terbayar) || 0), 0);
-    const totSisa      = mmData.reduce((s, e) => s + (parseFloat(e.sisa) || 0), 0);
+    const totSisa      = mmData.reduce((s, e) => s + (parseFloat(e.sisa_uang_kembali ?? e.sisa) || 0), 0);
+    const totSisaLaba  = mmData.reduce((s, e) => s + (parseFloat(e.sisa_laba) || 0), 0);
     const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
     setTxt('mm-sum-investasi', 'Rp ' + formatRupiah(totInvestasi));
     setTxt('mm-sum-terbayar',  'Rp ' + formatRupiah(totTerbayar));
     setTxt('mm-sum-sisa',      'Rp ' + formatRupiah(totSisa));
+    setTxt('mm-sum-sisa-laba', 'Rp ' + formatRupiah(totSisaLaba));
 
     renderMMTable(mmData);
   } catch {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="10">Gagal memuat data</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="11">Gagal memuat data</td></tr>';
   }
 }
 
@@ -5144,7 +5146,7 @@ function filterMMList() {
 function renderMMTable(data) {
   const tbody = document.getElementById('mm-tbody');
   if (!tbody) return;
-  if (data.length === 0) { tbody.innerHTML = `<tr><td colspan="10">${emptyState('Belum ada data Media Monitoring')}</td></tr>`; return; }
+  if (data.length === 0) { tbody.innerHTML = `<tr><td colspan="11">${emptyState('Belum ada data Media Monitoring')}</td></tr>`; return; }
   const canEdit = currentUser?.role === 'manager_keuangan';
   tbody.innerHTML = data.map(e => `
     <tr>
@@ -5155,7 +5157,8 @@ function renderMMTable(data) {
       <td class="text-right">Rp ${formatRupiah(e.nilai_uang_kembali)}</td>
       <td class="text-right" style="color:${e.margin_pct >= 0 ? 'var(--green)' : 'var(--red)'}">${e.margin_pct.toFixed(2)}%</td>
       <td class="text-right">Rp ${formatRupiah(e.terbayar)}</td>
-      <td class="text-right">Rp ${formatRupiah(e.sisa)}</td>
+      <td class="text-right" style="color:${(e.sisa_uang_kembali ?? e.sisa) >= 0 ? 'var(--red)' : 'var(--green)'}">Rp ${formatRupiah(e.sisa_uang_kembali ?? e.sisa)}</td>
+      <td class="text-right" style="color:${(e.sisa_laba ?? 0) >= 0 ? 'var(--red)' : 'var(--green)'}">Rp ${formatRupiah(e.sisa_laba)}</td>
       <td>${mmStatusBadge(e)}</td>
       <td>
         <div style="display:flex;gap:4px;flex-wrap:wrap">
@@ -5357,7 +5360,8 @@ async function openMMDetail(id) {
       <div style="margin-bottom:10px;font-size:13px">
         Total Investasi: <strong>Rp ${formatRupiah(data.nilai_investasi)}</strong> &nbsp;|&nbsp;
         Terbayar: <strong style="color:var(--green)">Rp ${formatRupiah(data.terbayar)}</strong> &nbsp;|&nbsp;
-        Sisa: <strong style="color:var(--red)">Rp ${formatRupiah(data.sisa)}</strong>
+        Sisa (Uang Kembali): <strong style="color:var(--red)">Rp ${formatRupiah(data.sisa_uang_kembali ?? data.sisa)}</strong> &nbsp;|&nbsp;
+        Sisa (Laba): <strong style="color:var(--red)">Rp ${formatRupiah(data.sisa_laba)}</strong>
       </div>
       <table class="table">
         <thead><tr><th>No</th><th>Tanggal</th><th class="text-right">Nilai</th><th>Status</th><th>Catatan</th><th></th></tr></thead>
@@ -5417,7 +5421,8 @@ async function loadMMDashboardWidget() {
         <div class="mm-dash-row"><span class="lbl">Investasi</span><span>Rp ${formatRupiah(e.nilai_investasi)}</span></div>
         <div class="mm-dash-row"><span class="lbl">Terbayar</span><span>Rp ${formatRupiah(e.terbayar)}</span></div>
         <div class="mm-progress-bar"><div class="mm-progress-fill" style="width:${pct}%"></div></div>
-        <div class="mm-dash-row"><span class="lbl">Sisa</span><span>Rp ${formatRupiah(e.sisa)}</span></div>
+        <div class="mm-dash-row"><span class="lbl">Sisa (Uang Kembali)</span><span>Rp ${formatRupiah(e.sisa_uang_kembali ?? e.sisa)}</span></div>
+        <div class="mm-dash-row"><span class="lbl">Sisa (Laba)</span><span>Rp ${formatRupiah(e.sisa_laba)}</span></div>
         <div class="mm-dash-row"><span class="lbl">Margin</span><span style="color:${e.margin_pct >= 0 ? 'var(--green)' : 'var(--red)'}">${e.margin_pct.toFixed(2)}%</span></div>
         <div style="margin-top:8px">${badge}</div>
       </div>`;

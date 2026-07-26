@@ -32,7 +32,14 @@ function calcEntry(row, pembayaran = []) {
   const today      = new Date(); today.setHours(0, 0, 0, 0);
   const terbayar   = pembayaran.filter(p => p.status === 'lunas')
                                .reduce((s, p) => s + (parseFloat(p.nilai_pembayaran) || 0), 0);
-  const sisa       = inv - terbayar;
+
+  // Sisa tagihan dalam 2 basis: uang kembali (nilai kontrak yang harus diterima)
+  // dan laba (margin bersih setelah dikurangi investasi). `sisa` dipertahankan
+  // sebagai alias sisa_uang_kembali agar frontend/kode lama tidak pecah.
+  const laba              = balik - inv;
+  const sisa_uang_kembali = balik - terbayar;
+  const sisa_laba         = laba - terbayar;
+  const sisa              = sisa_uang_kembali;
 
   // Cari keterlambatan: pembayaran belum lunas dengan tanggal sudah lewat
   let max_telat_hari = 0;
@@ -45,7 +52,7 @@ function calcEntry(row, pembayaran = []) {
       ada_keterlambatan = true;
     }
   });
-  return { ...row, margin_pct, terbayar, sisa, ada_keterlambatan, max_telat_hari, pembayaran };
+  return { ...row, margin_pct, terbayar, laba, sisa, sisa_uang_kembali, sisa_laba, ada_keterlambatan, max_telat_hari, pembayaran };
 }
 
 function getPembayaran(monitoringId) {
@@ -80,6 +87,8 @@ router.get('/dashboard', requireLogin, requireViewer, (req, res) => {
       margin_pct: calc.margin_pct,
       terbayar: calc.terbayar,
       sisa: calc.sisa,
+      sisa_uang_kembali: calc.sisa_uang_kembali,
+      sisa_laba: calc.sisa_laba,
       ada_keterlambatan: calc.ada_keterlambatan,
       max_telat_hari: calc.max_telat_hari,
       ada_jadwal: pembayaran.length > 0,
@@ -90,8 +99,10 @@ router.get('/dashboard', requireLogin, requireViewer, (req, res) => {
   const total_investasi = entries.reduce((s, e) => s + (parseFloat(e.nilai_investasi) || 0), 0);
   const total_terbayar  = entries.reduce((s, e) => s + (parseFloat(e.terbayar) || 0), 0);
   const total_sisa      = entries.reduce((s, e) => s + (parseFloat(e.sisa) || 0), 0);
+  const total_sisa_uang_kembali = entries.reduce((s, e) => s + (parseFloat(e.sisa_uang_kembali) || 0), 0);
+  const total_sisa_laba        = entries.reduce((s, e) => s + (parseFloat(e.sisa_laba) || 0), 0);
 
-  res.json({ entries, total_investasi, total_terbayar, total_sisa });
+  res.json({ entries, total_investasi, total_terbayar, total_sisa, total_sisa_uang_kembali, total_sisa_laba });
 });
 
 // ── GET /api/media-monitoring/:id ──────────────────────────────────────────────
