@@ -13,27 +13,27 @@ let _lastUnreadCount = 0;
 // ===================== NUMBER FORMATTING =====================
 // Strip thousand-separators and return a plain float
 function parseNum(v) {
-  if (v === null || v === undefined || v === '') return 0;
-  return parseFloat(String(v).replace(/\./g, '').replace(/,/g, '')) || 0;
+       if (v === null || v === undefined || v === '') return 0;
+       return parseFloat(String(v).replace(/\./g, '').replace(/,/g, '')) || 0;
 }
 
 // Format a number with Indonesian thousand separators (1.000.000)
 function fmtNumStr(n) {
-  const num = parseFloat(String(n).replace(/\./g, '').replace(/,/g, '')) || 0;
-  if (!num) return '0';
-  return num.toLocaleString('id-ID');
+       const num = parseFloat(String(n).replace(/\./g, '').replace(/,/g, '')) || 0;
+       if (!num) return '0';
+       return num.toLocaleString('id-ID');
 }
 
 // Format input value in-place with thousand separators, preserving cursor
 function formatNumInput(el) {
-  const fromEnd = el.value.length - (el.selectionStart || 0);
-  const raw = el.value.replace(/[^\d]/g, '');
-  const formatted = raw ? Number(raw).toLocaleString('id-ID') : '';
-  el.value = formatted;
-  try {
-    const pos = Math.max(0, formatted.length - fromEnd);
-    el.setSelectionRange(pos, pos);
-  } catch {}
+       const fromEnd = el.value.length - (el.selectionStart || 0);
+       const raw = el.value.replace(/[^\d]/g, '');
+       const formatted = raw ? Number(raw).toLocaleString('id-ID') : '';
+       el.value = formatted;
+       try {
+              const pos = Math.max(0, formatted.length - fromEnd);
+              el.setSelectionRange(pos, pos);
+       } catch { }
 }
 
 // ===================== INIT =====================
@@ -168,7 +168,7 @@ function setUser(user) {
        }
 
        // Laporan Bulanan: semua user bisa akses, hanya admin/manajemen lihat rekap semua
-       const LAPORAN_ADMIN_ROLES = ['admin','kantor_pusat','gm','gm2','manager_keuangan','direktur_ops','direktur_utama','area_manager','viewer'];
+       const LAPORAN_ADMIN_ROLES = ['admin', 'kantor_pusat', 'gm', 'gm2', 'manager_keuangan', 'direktur_ops', 'direktur_utama', 'area_manager', 'viewer'];
        if (LAPORAN_ADMIN_ROLES.includes(user.role)) {
               document.querySelectorAll('.laporan-admin').forEach(el => el.style.display = '');
        }
@@ -349,11 +349,11 @@ function expandNavGroup(id) {
 }
 
 // ===================== DASHBOARD =====================
-let _dashChartModul   = null;
-let _dashChartNilai   = null;
-let _dashChartSales   = null;
+let _dashChartModul = null;
+let _dashChartNilai = null;
+let _dashChartSales = null;
 let _dashFiltersInited = false;
-let _lastDashLapRows   = [];
+let _lastDashLapRows = [];
 
 async function loadDashboard() {
        try {
@@ -376,21 +376,21 @@ async function loadDashboard() {
                             const filters = await _loadLaporanFilters();
                             if (isPusat) _populateLaporanAreaDropdown(document.getElementById('dash-filter-area'), filters.areas);
                             _populateLaporanUserDropdown(document.getElementById('dash-filter-user'), filters.users, '');
-                     } catch {}
+                     } catch { }
               }
 
-              const area  = document.getElementById('dash-filter-area')?.value  || '';
-              const uid   = document.getElementById('dash-filter-user')?.value   || '';
+              const area = document.getElementById('dash-filter-area')?.value || '';
+              const uid = document.getElementById('dash-filter-user')?.value || '';
 
               // Build laporan query params (area+user affect narasi)
               const lapParams = new URLSearchParams();
               if (month) lapParams.set('periode', month);
-              if (isAdmin && area)  lapParams.set('area_kerja', area);
-              if (isAdmin && uid)   lapParams.set('user_id', uid);
+              if (isAdmin && area) lapParams.set('area_kerja', area);
+              if (isAdmin && uid) lapParams.set('user_id', uid);
 
               // Tentukan periode untuk sales target (bulan terpilih atau bulan ini)
               const salesPeriode = month || (() => {
-                     const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+                     const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
               })();
 
               const moduleQS = (() => { const p = new URLSearchParams(); if (month) p.set('month', month); if (area) p.set('area', area); const s = p.toString(); return s ? '?' + s : ''; })();
@@ -406,36 +406,36 @@ async function loadDashboard() {
               ]);
 
               const sphFull = sphR.status === 'fulfilled' ? sphR.value : null;
-              const allSph  = recentR.status === 'fulfilled' ? (recentR.value || []) : [];
+              const allSph = recentR.status === 'fulfilled' ? (recentR.value || []) : [];
               const sph = sphFull?.summary || (() => {
                      const f = month ? allSph.filter(s => s.created_at?.startsWith(month)) : allSph;
-                     return { total: f.length, menunggu: f.filter(s=>s.status==='pending').length, disetujui: f.filter(s=>s.status==='approved').length, ditolak: f.filter(s=>s.status==='rejected').length };
+                     return { total: f.length, menunggu: f.filter(s => s.status === 'pending').length, disetujui: f.filter(s => s.status === 'approved').length, ditolak: f.filter(s => s.status === 'rejected').length };
               })();
 
-              const kk           = kkR.status          === 'fulfilled' ? kkR.value            : null;
-              const sppd         = sppdR.status        === 'fulfilled' ? sppdR.value?.summary  : null;
-              const lapRows      = lapR.status         === 'fulfilled' ? (lapR.value || [])    : [];
-              const salesRows    = salesR.status       === 'fulfilled' ? (salesR.value || [])  : [];
-              const salesMonthly = salesMonthlyR.status=== 'fulfilled' ? (salesMonthlyR.value || []) : [];
-              const lapPrognosa  = lapRows.reduce((s, r) => s + (r.prognosa_bulan_depan || 0), 0);
+              const kk = kkR.status === 'fulfilled' ? kkR.value : null;
+              const sppd = sppdR.status === 'fulfilled' ? sppdR.value?.summary : null;
+              const lapRows = lapR.status === 'fulfilled' ? (lapR.value || []) : [];
+              const salesRows = salesR.status === 'fulfilled' ? (salesR.value || []) : [];
+              const salesMonthly = salesMonthlyR.status === 'fulfilled' ? (salesMonthlyR.value || []) : [];
+              const lapPrognosa = lapRows.reduce((s, r) => s + (r.prognosa_bulan_depan || 0), 0);
 
               // SPH card
-              _setDEl('d-sph-total',    sph.total     || 0);
+              _setDEl('d-sph-total', sph.total || 0);
               _setDEl('d-sph-approved', sph.disetujui || 0);
-              _setDEl('d-sph-pending',  sph.menunggu  || 0);
+              _setDEl('d-sph-pending', sph.menunggu || 0);
 
               // KK card
-              _setDEl('d-kk-total',    kk?.total     || 0);
+              _setDEl('d-kk-total', kk?.total || 0);
               _setDEl('d-kk-approved', kk?.disetujui || 0);
-              _setDEl('d-kk-pending',  kk?.menunggu  || 0);
+              _setDEl('d-kk-pending', kk?.menunggu || 0);
 
               // SPPD card
-              _setDEl('d-sppd-total',   sppd?.total   || 0);
+              _setDEl('d-sppd-total', sppd?.total || 0);
               _setDEl('d-sppd-selesai', sppd?.selesai || 0);
-              _setDEl('d-sppd-biaya',   sppd ? 'Rp ' + fmtNumStr(sppd.total_biaya_dicairkan || 0) : '-');
+              _setDEl('d-sppd-biaya', sppd ? 'Rp ' + fmtNumStr(sppd.total_biaya_dicairkan || 0) : '-');
 
               // Laporan card
-              _setDEl('d-lap-total',    lapRows.length);
+              _setDEl('d-lap-total', lapRows.length);
               _setDEl('d-lap-prognosa', 'Rp ' + fmtNumStr(lapPrognosa));
 
               // Charts
@@ -499,7 +499,7 @@ async function onDashAreaChange() {
        try {
               const filters = await _loadLaporanFilters();
               _populateLaporanUserDropdown(document.getElementById('dash-filter-user'), filters.users, area);
-       } catch {}
+       } catch { }
        loadDashboard();
 }
 
@@ -528,9 +528,9 @@ function _renderDashCharts(sph, kk, sppd, lapPrognosa) {
                      data: {
                             labels: ['SPH', 'Kertas Kerja', 'SPPD'],
                             datasets: [
-                                   { label: 'Total',              data: [sph?.total||0,    kk?.total||0,    sppd?.total||0],   backgroundColor:'#1a56db33', borderColor:'#1a56db', borderWidth:2 },
-                                   { label: 'Disetujui/Selesai', data: [sph?.disetujui||0, kk?.disetujui||0, sppd?.selesai||0], backgroundColor:'#0e9f6e55', borderColor:'#0e9f6e', borderWidth:2 },
-                                   { label: 'Menunggu',           data: [sph?.menunggu||0,  kk?.menunggu||0,  0],               backgroundColor:'#e3a00844', borderColor:'#e3a008', borderWidth:2 }
+                                   { label: 'Total', data: [sph?.total || 0, kk?.total || 0, sppd?.total || 0], backgroundColor: '#1a56db33', borderColor: '#1a56db', borderWidth: 2 },
+                                   { label: 'Disetujui/Selesai', data: [sph?.disetujui || 0, kk?.disetujui || 0, sppd?.selesai || 0], backgroundColor: '#0e9f6e55', borderColor: '#0e9f6e', borderWidth: 2 },
+                                   { label: 'Menunggu', data: [sph?.menunggu || 0, kk?.menunggu || 0, 0], backgroundColor: '#e3a00844', borderColor: '#e3a008', borderWidth: 2 }
                             ]
                      },
                      options: {
@@ -550,9 +550,9 @@ function _renderDashCharts(sph, kk, sppd, lapPrognosa) {
                             labels: ['Biaya Usulan SPPD', 'Realisasi Biaya SPPD'],
                             datasets: [{
                                    label: 'Nilai (Rp)',
-                                   data: [sppd?.total_biaya_usulan||0, sppd?.total_biaya_dicairkan||0],
+                                   data: [sppd?.total_biaya_usulan || 0, sppd?.total_biaya_dicairkan || 0],
                                    backgroundColor: ['#ff5a1f33', '#0e9f6e33'],
-                                   borderColor:     ['#ff5a1f',   '#0e9f6e'],
+                                   borderColor: ['#ff5a1f', '#0e9f6e'],
                                    borderWidth: 2
                             }]
                      },
@@ -570,7 +570,7 @@ function _renderDashCharts(sph, kk, sppd, lapPrognosa) {
 
 function _renderLaporanNarasi(rows) {
        const section = document.getElementById('laporan-narasi-section');
-       const grid    = document.getElementById('laporan-narasi-grid');
+       const grid = document.getElementById('laporan-narasi-grid');
        if (!section || !grid) return;
        const withNarasi = (rows || []).filter(r => r.aktivitas_bulan_ini || r.rencana_bulan_depan);
        if (!withNarasi.length) { section.style.display = 'none'; return; }
@@ -592,7 +592,7 @@ function _renderLaporanNarasi(rows) {
                                    </div>`).join('');
                             const inputHtml = isReviewer ? `
                                    <div class="ln-input-wrap" style="margin-top:6px">
-                                          <textarea id="st-inp-${s.id}" placeholder="Tulis tanggapan support ini...">${(s.tanggapan||[]).find(t=>t.reviewer_name===currentUser.full_name)?.tanggapan||''}</textarea>
+                                          <textarea id="st-inp-${s.id}" placeholder="Tulis tanggapan support ini...">${(s.tanggapan || []).find(t => t.reviewer_name === currentUser.full_name)?.tanggapan || ''}</textarea>
                                           <button class="btn btn-secondary btn-sm btn-kirim" onclick="saveSupportTanggapan(${s.id},${lid})">Kirim</button>
                                    </div>` : '';
                             return `<div class="ln-support-item">
@@ -613,7 +613,7 @@ function _renderLaporanNarasi(rows) {
               const tanggapan = r.tanggapan || [];
               const existingHtml = tanggapan.map(t => `
                      <div class="ln-tanggapan-item">
-                            <div class="ln-tanggapan-avatar">${escHtml((t.reviewer_name||'?')[0].toUpperCase())}</div>
+                            <div class="ln-tanggapan-avatar">${escHtml((t.reviewer_name || '?')[0].toUpperCase())}</div>
                             <div class="ln-tanggapan-bubble">
                                    <div class="ln-t-who">${escHtml(t.reviewer_name)} <span style="font-weight:normal;color:var(--text-light)">(${t.reviewer_role === 'gm' ? 'GM1' : t.reviewer_role === 'gm2' ? 'GM2' : 'Admin'})</span></div>
                                    <div class="ln-t-text">${escHtml(t.tanggapan)}</div>
@@ -704,7 +704,7 @@ async function saveSupportTanggapan(supportId, lapId) {
 
 function _renderDashProjects(lapRows) {
        const section = document.getElementById('dash-project-section');
-       const tbody   = document.getElementById('dash-project-tbody');
+       const tbody = document.getElementById('dash-project-tbody');
        const totalEl = document.getElementById('dash-project-total');
        if (!section || !tbody) return;
 
@@ -759,14 +759,14 @@ function _renderDashProjects(lapRows) {
 
 function downloadRincianPrognosaExcel() {
        const month = document.getElementById('dash-filter-month')?.value || '';
-       const area  = document.getElementById('dash-filter-area')?.value  || '';
-       const uid   = document.getElementById('dash-filter-user')?.value  || '';
-       const prob  = document.getElementById('dash-project-prob-filter')?.value || '';
+       const area = document.getElementById('dash-filter-area')?.value || '';
+       const uid = document.getElementById('dash-filter-user')?.value || '';
+       const prob = document.getElementById('dash-project-prob-filter')?.value || '';
        const p = new URLSearchParams();
        if (month) p.set('periode', month);
-       if (area)  p.set('area_kerja', area);
-       if (uid)   p.set('user_id', uid);
-       if (prob)  p.set('prob', prob);
+       if (area) p.set('area_kerja', area);
+       if (uid) p.set('user_id', uid);
+       if (prob) p.set('prob', prob);
        const qs = p.toString() ? '?' + p.toString() : '';
        const a = document.createElement('a');
        a.href = '/api/laporan/rincian-prognosa-excel' + qs;
@@ -786,10 +786,10 @@ function _renderSalesHero(monthly, currentRows, periode) {
 
        // KPI dari bulan terpilih / bulan saat ini
        const curTarget = (currentRows || []).reduce((s, r) => s + (r.target || 0), 0);
-       const curPenj   = (currentRows || []).reduce((s, r) => s + (r.penjualan || 0), 0);
-       const curPct    = curTarget > 0 ? Math.round((curPenj / curTarget) * 100) : 0;
-       const gap       = curTarget - curPenj;
-       const achieved  = curPenj >= curTarget && curTarget > 0;
+       const curPenj = (currentRows || []).reduce((s, r) => s + (r.penjualan || 0), 0);
+       const curPct = curTarget > 0 ? Math.round((curPenj / curTarget) * 100) : 0;
+       const gap = curTarget - curPenj;
+       const achieved = curPenj >= curTarget && curTarget > 0;
 
        // Update periode badge
        const periodeEl = document.getElementById('sales-hero-periode');
@@ -797,11 +797,11 @@ function _renderSalesHero(monthly, currentRows, periode) {
 
        // Update KPI boxes (angka singkat agar tidak wrap)
        const _s = id => document.getElementById(id);
-       const curLaba       = (currentRows || []).reduce((s, r) => s + (r.laba_kotor      || 0), 0);
+       const curLaba = (currentRows || []).reduce((s, r) => s + (r.laba_kotor || 0), 0);
        const curPendapatan = (currentRows || []).reduce((s, r) => s + (r.pendapatan_lain || 0), 0);
-       if (_s('sh-target'))     _s('sh-target').textContent     = 'Rp ' + formatRupiahShort(curTarget);
-       if (_s('sh-real'))       _s('sh-real').textContent       = 'Rp ' + formatRupiahShort(curPenj);
-       if (_s('sh-laba'))       _s('sh-laba').textContent       = 'Rp ' + formatRupiahShort(curLaba);
+       if (_s('sh-target')) _s('sh-target').textContent = 'Rp ' + formatRupiahShort(curTarget);
+       if (_s('sh-real')) _s('sh-real').textContent = 'Rp ' + formatRupiahShort(curPenj);
+       if (_s('sh-laba')) _s('sh-laba').textContent = 'Rp ' + formatRupiahShort(curLaba);
        if (_s('sh-pendapatan')) _s('sh-pendapatan').textContent = 'Rp ' + formatRupiahShort(curPendapatan);
 
        const pctEl = _s('sh-pct');
@@ -810,15 +810,15 @@ function _renderSalesHero(monthly, currentRows, periode) {
               pctEl.style.color = curPct >= 100 ? '#6ee7b7' : curPct >= 75 ? '#93c5fd' : curPct >= 50 ? '#fde68a' : '#fca5a5';
        }
 
-       const gapBox  = _s('sh-gap-box');
-       const gapEl   = _s('sh-gap');
+       const gapBox = _s('sh-gap-box');
+       const gapEl = _s('sh-gap');
        const gapIcon = _s('sh-gap-icon');
-       const gapLbl  = _s('sh-gap-lbl');
+       const gapLbl = _s('sh-gap-lbl');
        if (gapEl) {
               gapEl.textContent = 'Rp ' + formatRupiahShort(Math.abs(gap));
-              if (gapBox)  { gapBox.classList.toggle('achieved', achieved); }
+              if (gapBox) { gapBox.classList.toggle('achieved', achieved); }
               if (gapIcon) gapIcon.textContent = achieved ? '🎉' : '📉';
-              if (gapLbl)  gapLbl.textContent  = achieved ? 'Surplus' : 'GAP';
+              if (gapLbl) gapLbl.textContent = achieved ? 'Surplus' : 'GAP';
        }
 
        // Chart
@@ -826,10 +826,10 @@ function _renderSalesHero(monthly, currentRows, periode) {
        if (!ctx) return;
        if (_dashChartSales) { _dashChartSales.destroy(); _dashChartSales = null; }
 
-       const labels    = monthly.map(r => formatPeriode(r.periode));
-       const targets   = monthly.map(r => r.target);
+       const labels = monthly.map(r => formatPeriode(r.periode));
+       const targets = monthly.map(r => r.target);
        const penjualan = monthly.map(r => r.penjualan);
-       const pctLine   = monthly.map(r => r.target > 0 ? Math.round((r.penjualan / r.target) * 100) : null);
+       const pctLine = monthly.map(r => r.target > 0 ? Math.round((r.penjualan / r.target) * 100) : null);
 
        // Plugin 1: angka singkat di atas setiap bar
        const barValLabels = {
@@ -871,9 +871,9 @@ function _renderSalesHero(monthly, currentRows, periode) {
                             if (pct === null || pct === undefined) return;
                             const x = xScale.getPixelForTick(i);
                             const col = pct >= 100 ? '#6ee7b7'
-                                       : pct >= 75  ? '#93c5fd'
-                                       : pct >= 50  ? '#fde68a'
-                                       : '#fca5a5';
+                                   : pct >= 75 ? '#93c5fd'
+                                          : pct >= 50 ? '#fde68a'
+                                                 : '#fca5a5';
                             c.fillStyle = col;
                             c.fillText(pct + '%', x, yPos);
                      });
@@ -966,14 +966,14 @@ function _renderSalesHero(monthly, currentRows, periode) {
 }
 
 function _renderDashSalesTarget(rows) {
-       const section  = document.getElementById('dash-sales-section');
-       const tbody    = document.getElementById('dash-sales-tbody');
-       const totTgt   = document.getElementById('dash-sales-total-target');
-       const totPenj  = document.getElementById('dash-sales-total-penjualan');
-       const totLaba       = document.getElementById('dash-sales-total-laba');
+       const section = document.getElementById('dash-sales-section');
+       const tbody = document.getElementById('dash-sales-tbody');
+       const totTgt = document.getElementById('dash-sales-total-target');
+       const totPenj = document.getElementById('dash-sales-total-penjualan');
+       const totLaba = document.getElementById('dash-sales-total-laba');
        const totPendapatan = document.getElementById('dash-sales-total-pendapatan');
-       const totPct        = document.getElementById('dash-sales-total-pct');
-       const totDifaktur    = document.getElementById('dash-sales-total-difaktur');
+       const totPct = document.getElementById('dash-sales-total-pct');
+       const totDifaktur = document.getElementById('dash-sales-total-difaktur');
        const totDifakturPct = document.getElementById('dash-sales-total-difaktur-pct');
        if (!section || !tbody) return;
 
@@ -983,14 +983,14 @@ function _renderDashSalesTarget(rows) {
 
        let sumTarget = 0, sumPenj = 0, sumLaba = 0, sumPendapatan = 0, sumDifaktur = 0;
        tbody.innerHTML = meaningful.map(r => {
-              sumTarget     += r.target          || 0;
-              sumPenj       += r.penjualan       || 0;
-              sumLaba       += r.laba_kotor      || 0;
+              sumTarget += r.target || 0;
+              sumPenj += r.penjualan || 0;
+              sumLaba += r.laba_kotor || 0;
               sumPendapatan += r.pendapatan_lain || 0;
-              sumDifaktur   += r.difaktur        || 0;
+              sumDifaktur += r.difaktur || 0;
               const pct = r.target > 0 ? Math.round((r.penjualan / r.target) * 100) : 0;
               const barColor = pct >= 100 ? '#0e9f6e' : pct >= 75 ? '#3b82f6' : pct >= 50 ? '#e3a008' : '#f05252';
-              const pctText  = r.target > 0 ? `${pct}%` : '—';
+              const pctText = r.target > 0 ? `${pct}%` : '—';
               const difakturPct = r.penjualan > 0 ? Math.round(((r.difaktur || 0) / r.penjualan) * 100) : 0;
               const difakturPctText = r.penjualan > 0 ? `${difakturPct}%` : '—';
               return `<tr>
@@ -1006,7 +1006,7 @@ function _renderDashSalesTarget(rows) {
                      </td>
                      <td>
                             ${r.target > 0 ? `<div class="sales-progress-wrap">
-                                   <div class="sales-progress-bar" style="width:${Math.min(pct,100)}%;background:${barColor}"></div>
+                                   <div class="sales-progress-bar" style="width:${Math.min(pct, 100)}%;background:${barColor}"></div>
                             </div>` : '<span style="color:var(--text-light);font-size:12px">—</span>'}
                      </td>
               </tr>`;
@@ -1015,13 +1015,13 @@ function _renderDashSalesTarget(rows) {
        const totalPct = sumTarget > 0 ? Math.round((sumPenj / sumTarget) * 100) : 0;
        const totColor = totalPct >= 100 ? '#0e9f6e' : totalPct >= 75 ? '#3b82f6' : totalPct >= 50 ? '#e3a008' : '#f05252';
        const totalDifakturPct = sumPenj > 0 ? Math.round((sumDifaktur / sumPenj) * 100) : 0;
-       if (totTgt)        totTgt.textContent        = 'Rp ' + fmtNumStr(sumTarget);
-       if (totPenj)       totPenj.textContent       = 'Rp ' + fmtNumStr(sumPenj);
-       if (totLaba)       totLaba.textContent       = 'Rp ' + fmtNumStr(sumLaba);
+       if (totTgt) totTgt.textContent = 'Rp ' + fmtNumStr(sumTarget);
+       if (totPenj) totPenj.textContent = 'Rp ' + fmtNumStr(sumPenj);
+       if (totLaba) totLaba.textContent = 'Rp ' + fmtNumStr(sumLaba);
        if (totPendapatan) totPendapatan.textContent = 'Rp ' + fmtNumStr(sumPendapatan);
-       if (totDifaktur)    totDifaktur.textContent    = 'Rp ' + fmtNumStr(sumDifaktur);
+       if (totDifaktur) totDifaktur.textContent = 'Rp ' + fmtNumStr(sumDifaktur);
        if (totDifakturPct) totDifakturPct.textContent = sumPenj > 0 ? `${totalDifakturPct}%` : '—';
-       if (totPct)  { totPct.textContent = sumTarget > 0 ? `${totalPct}%` : '—'; totPct.style.color = totColor; }
+       if (totPct) { totPct.textContent = sumTarget > 0 ? `${totalPct}%` : '—'; totPct.style.color = totColor; }
 }
 
 async function loadDashboardAdmin() {
@@ -1241,7 +1241,7 @@ async function createBackup() {
               const res = await api('/api/backup/create', 'POST');
               const data = await res.json();
               if (res.ok) {
-                     showToast(`✅ Backup berhasil: ${data.filename} (${(data.size/1024).toFixed(1)} KB)`, 'success');
+                     showToast(`✅ Backup berhasil: ${data.filename} (${(data.size / 1024).toFixed(1)} KB)`, 'success');
                      loadBackupPage();
               } else {
                      showToast(data.error || 'Gagal membuat backup', 'error');
@@ -1430,7 +1430,7 @@ function renderSubmissionTable(submissions, showActions = false, isAdmin = false
                                                                                                                                   ${(currentUser.role === 'admin' || currentUser.role === 'kantor_pusat') ? `<button onclick="downloadDoc(${s.id},'docx')" class="btn btn-success btn-sm" title="Unduh Word">⬇️ Word</button>` : ''}
                                                                                                                                                 <button onclick="downloadDoc(${s.id},'pdf')" class="btn btn-pdf btn-sm" title="Unduh PDF">📄 PDF</button>
                                                                                                                                                             </div>` : ''}
-                                                                                                                                                                      ${(['admin','kantor_pusat','gm','gm2'].includes(currentUser.role)) && s.status === 'pending' ? `
+                                                                                                                                                                      ${(['admin', 'kantor_pusat', 'gm', 'gm2'].includes(currentUser.role)) && s.status === 'pending' ? `
                                                                                                                                                                                   <button onclick="approveSubmission(${s.id})" class="btn btn-success btn-sm">✅ Setuju</button>
                                                                                                                                                                                               <button onclick="openRejectModal(${s.id})" class="btn btn-danger btn-sm">❌ Tolak</button>
                                                                                                                                                                                                         ` : ''}
@@ -1570,7 +1570,7 @@ async function viewDetail(id) {
               if (s.status === 'pending' && (currentUser.role === 'admin' || s.created_by === currentUser.id)) {
                      footerHTML += `<button onclick="closeModal('modal-detail');setTimeout(()=>openEditModal(${s.id}),200)" class="btn btn-secondary">✏️ Edit</button>`;
               }
-              if (['pending','approved','rejected'].includes(s.status) && currentUser.role === 'admin') {
+              if (['pending', 'approved', 'rejected'].includes(s.status) && currentUser.role === 'admin') {
                      footerHTML += `<button onclick="deleteSubmission(${s.id})" class="btn btn-danger">🗑️ Hapus</button>`;
               }
               footerHTML += `<button onclick="closeModal('modal-detail')" class="btn btn-outline">Tutup</button>`;
@@ -1754,7 +1754,7 @@ async function downloadDoc(id, format = 'docx') {
               const res = await fetch(url, { credentials: 'same-origin' });
               if (!res.ok) {
                      let errMsg = 'Gagal mengunduh';
-                     try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
+                     try { const d = await res.json(); errMsg = d.error || errMsg; } catch { }
                      showToast(errMsg, 'error');
                      return;
               }
@@ -2242,16 +2242,16 @@ function removeKKProduct(btn) {
 
 function getKKProductsFromDOM() {
        return Array.from(document.querySelectorAll('#kk-products-tbody tr')).map(row => {
-              const qty          = parseFloat(row.querySelector('.kk-prod-qty')?.value) || 0;
+              const qty = parseFloat(row.querySelector('.kk-prod-qty')?.value) || 0;
               const harga_satuan = parseNum(row.querySelector('.kk-prod-harga')?.value);
               return {
-                     nama:         row.querySelector('.kk-prod-nama').value.trim(),
+                     nama: row.querySelector('.kk-prod-nama').value.trim(),
                      qty,
                      harga_satuan,
                      nilai_kontrak: qty * harga_satuan,
-                     dpp_beli:     parseNum(row.querySelector('.kk-prod-dpp').value),
+                     dpp_beli: parseNum(row.querySelector('.kk-prod-dpp').value),
                      b_distribusi: parseNum(row.querySelector('.kk-prod-dist').value),
-                     ongkir:       parseNum(row.querySelector('.kk-prod-ongkir').value),
+                     ongkir: parseNum(row.querySelector('.kk-prod-ongkir').value),
               };
        });
 }
@@ -2446,7 +2446,7 @@ function renderKKTable(rows, { showCreator = false, showApproveBtn = false } = {
                                <button onclick="downloadKKPDF(${r.id})" class="btn btn-pdf btn-sm">📄 PDF</button>` : ''}
                            ${r.status === 'pending' && (currentUser.role === 'admin' || r.created_by === currentUser.id) ? `
                                <button onclick="openEditKK(${r.id})" class="btn btn-secondary btn-sm">✏️ Edit</button>` : ''}
-                           ${['pending','approved','rejected'].includes(r.status) && currentUser.role === 'admin' ? `
+                           ${['pending', 'approved', 'rejected'].includes(r.status) && currentUser.role === 'admin' ? `
                                <button onclick="deleteKK(${r.id})" class="btn btn-danger btn-sm">🗑️ Hapus</button>` : ''}
                        </div>
                    </td>
@@ -2631,7 +2631,7 @@ async function viewKKDetail(id) {
               if (kk.status === 'pending' && (currentUser.role === 'admin' || kk.created_by === currentUser.id)) {
                      footer += `<button onclick="closeModal('modal-kk-detail');setTimeout(()=>openEditKK(${id}),200)" class="btn btn-secondary">✏️ Edit</button>`;
               }
-              if (['pending','approved','rejected'].includes(kk.status) && currentUser.role === 'admin') {
+              if (['pending', 'approved', 'rejected'].includes(kk.status) && currentUser.role === 'admin') {
                      footer += `<button onclick="deleteKK(${id})" class="btn btn-danger">🗑️ Hapus</button>`;
               }
               footer += `<button onclick="closeModal('modal-kk-detail')" class="btn btn-outline">Tutup</button>`;
@@ -2694,7 +2694,7 @@ async function downloadKKExcel(id) {
        showToast('⏳ Menyiapkan Excel...', '');
        try {
               const res = await fetch(`/api/kk/${id}/export-excel`, { credentials: 'same-origin' });
-              if (!res.ok) { let d; try { d = await res.json(); } catch {} showToast(d?.error || 'Gagal', 'error'); return; }
+              if (!res.ok) { let d; try { d = await res.json(); } catch { } showToast(d?.error || 'Gagal', 'error'); return; }
               const blob = await res.blob();
               const filename = res.headers.get('content-disposition')?.match(/filename="([^"]+)"/)?.[1] || `KK_${id}.xlsx`;
               triggerDownload(URL.createObjectURL(blob), filename);
@@ -2706,7 +2706,7 @@ async function downloadKKPDF(id) {
        showToast('⏳ Menyiapkan PDF...', '');
        try {
               const res = await fetch(`/api/kk/${id}/export-pdf`, { credentials: 'same-origin' });
-              if (!res.ok) { let d; try { d = await res.json(); } catch {} showToast(d?.error || 'Gagal', 'error'); return; }
+              if (!res.ok) { let d; try { d = await res.json(); } catch { } showToast(d?.error || 'Gagal', 'error'); return; }
               const blob = await res.blob();
               const filename = res.headers.get('content-disposition')?.match(/filename="([^"]+)"/)?.[1] || `KK_${id}.pdf`;
               triggerDownload(URL.createObjectURL(blob), filename);
@@ -2911,7 +2911,7 @@ let currentDetailLaporan = null;
 // ── Approval progress badge ───────────────────────────────────────────────────
 // sppd_approval_level: 0=waiting AM, 1=AM done/skipped waiting GM1+GM2 parallel, 2=all approved
 function renderSPPDProgressBadge(sppd) {
-       const lvl    = sppd.sppd_approval_level;
+       const lvl = sppd.sppd_approval_level;
        const status = sppd.status;
        // AM skipped: level sudah 1+ tapi tidak ada record approval AM (gm1_approved/gm2_approved
        // bukan indikator AM — cek dari am_skipped flag via creator role tidak tersedia di sini,
@@ -2996,7 +2996,7 @@ function renderSPPDTable(rows, { showCreator = false, showApproveBtn = false } =
               const editBtn = canEditSppd
                      ? `<button onclick="openEditSPPD(${r.id})" class="btn btn-sm btn-secondary">✏️ Edit</button> `
                      : '';
-              const deleteSppdBtn = ['approved','completed','rejected'].includes(r.status) && currentUser.role === 'admin'
+              const deleteSppdBtn = ['approved', 'completed', 'rejected'].includes(r.status) && currentUser.role === 'admin'
                      ? `<button onclick="deleteSppd(${r.id})" class="btn btn-sm btn-danger">🗑️ Hapus</button> ` : '';
               return `<tr>
               <td><span style="font-family:monospace;font-size:12px">${escHtml(r.nomor)}</span></td>
@@ -3355,11 +3355,11 @@ async function viewSPPDDetail(id) {
                      api(`/api/sppd/${id}/pencairan`),
                      api(`/api/sppd/${id}/pengembalian`),
               ]);
-              const sppd       = await sppdRes.json();
-              const laporan    = laporanRes.ok  ? await laporanRes.json()   : null;
+              const sppd = await sppdRes.json();
+              const laporan = laporanRes.ok ? await laporanRes.json() : null;
               currentDetailLaporan = laporan;
-              const pencairan  = pencairanRes.ok ? await pencairanRes.json() : null;
-              const pengembalian = pengembRes.ok ? await pengembRes.json()  : null;
+              const pencairan = pencairanRes.ok ? await pencairanRes.json() : null;
+              const pengembalian = pengembRes.ok ? await pengembRes.json() : null;
 
               document.getElementById('sppd-detail-title').textContent = `SPPD: ${sppd.nomor}`;
               document.getElementById('sppd-detail-body').innerHTML = renderSPPDDetail(sppd, laporan, pencairan, pengembalian);
@@ -3417,13 +3417,13 @@ async function viewSPPDDetail(id) {
                      footer.push(`<button onclick="openPencairanActionFromDetail(${id},'reject')" class="btn btn-danger">❌ Tolak Pencairan</button>`);
               }
               // Pengembalian: admin/manager_keuangan saat laporan sudah approved
-              if (['admin','manager_keuangan'].includes(role) && laporan?.status === 'approved') {
+              if (['admin', 'manager_keuangan'].includes(role) && laporan?.status === 'approved') {
                      footer.push(`<button onclick="openPengembalianModal(${id})" class="btn btn-secondary">💰 Pengembalian UM</button>`);
               }
               if (pengembalian) {
                      footer.push(`<a href="/api/sppd/${id}/pengembalian/docx" class="btn btn-pdf">📄 Unduh SKUM</a>`);
               }
-              if (['approved','completed','rejected'].includes(sppd.status) && currentUser.role === 'admin') {
+              if (['approved', 'completed', 'rejected'].includes(sppd.status) && currentUser.role === 'admin') {
                      footer.push(`<button onclick="deleteSppd(${id})" class="btn btn-danger">🗑️ Hapus</button>`);
               }
               footer.push(`<button onclick="closeModal('modal-sppd-detail')" class="btn btn-outline">Tutup</button>`);
@@ -3577,19 +3577,19 @@ function renderSPPDDetail(sppd, laporan, pencairan, pengembalian) {
 
 function renderPengembalianHtml(p, sppd, fmt) {
        if (!p) return `<p style="color:var(--text-light)">Belum ada data pengembalian. Admin/Manager Keuangan dapat menginput realisasi biaya setelah laporan disetujui.</p>`;
-       const statusColor = { lebih_bayar:'#dc2626', kurang_bayar:'#d97706', sesuai:'#16a34a' };
-       const statusLabel = { lebih_bayar:'🔴 Lebih Bayar — Harus Dikembalikan', kurang_bayar:'🟡 Kurang Bayar — Perlu Tambahan', sesuai:'🟢 Sesuai' };
+       const statusColor = { lebih_bayar: '#dc2626', kurang_bayar: '#d97706', sesuai: '#16a34a' };
+       const statusLabel = { lebih_bayar: '🔴 Lebih Bayar — Harus Dikembalikan', kurang_bayar: '🟡 Kurang Bayar — Perlu Tambahan', sesuai: '🟢 Sesuai' };
        const sel = p.selisih;
        const color = statusColor[p.status] || '#555';
        return `
        <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:12px">
-         <div><strong>Nomor:</strong> <span style="font-family:monospace">${escHtml(p.nomor||'-')}</span></div>
+         <div><strong>Nomor:</strong> <span style="font-family:monospace">${escHtml(p.nomor || '-')}</span></div>
          <div><strong>Uang Muka:</strong> ${fmt(p.uang_muka)}</div>
          <div><strong>Realisasi Biaya:</strong> ${fmt(p.realisasi_biaya)}</div>
        </div>
        <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:8px">
          <div><strong>Selisih:</strong> <span style="font-weight:700;color:${color}">${fmt(Math.abs(sel))} ${sel > 0 ? '(dikembalikan)' : sel < 0 ? '(ditambahkan)' : ''}</span></div>
-         <div><strong>Status:</strong> <span style="font-weight:700;color:${color}">${statusLabel[p.status]||p.status}</span></div>
+         <div><strong>Status:</strong> <span style="font-weight:700;color:${color}">${statusLabel[p.status] || p.status}</span></div>
        </div>
        ${p.catatan ? `<div style="font-size:12px;color:var(--text-light)">Catatan: ${escHtml(p.catatan)}</div>` : ''}`;
 }
@@ -3603,11 +3603,11 @@ async function openPengembalianModal(sppdId) {
               const [sppdRes, pengRes] = await Promise.all([api(`/api/sppd/${sppdId}`), api(`/api/sppd/${sppdId}/pengembalian`)]);
               const sppd = await sppdRes.json();
               const peng = pengRes.ok ? await pengRes.json() : null;
-              const fmt  = v => new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(v||0);
+              const fmt = v => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(v || 0);
 
               document.getElementById('peng-uang-muka-info').textContent = fmt(sppd.uang_muka);
               document.getElementById('peng-realisasi').value = peng ? fmtNumStr(peng.realisasi_biaya) : '';
-              document.getElementById('peng-catatan').value  = peng?.catatan || '';
+              document.getElementById('peng-catatan').value = peng?.catatan || '';
               document.getElementById('peng-error').style.display = 'none';
               document.getElementById('peng-result').style.display = 'none';
               showModal('modal-pengembalian');
@@ -3615,10 +3615,10 @@ async function openPengembalianModal(sppdId) {
 }
 
 function hitungPengembalian() {
-       const uangMuka  = parseNum(document.getElementById('peng-uang-muka-info').dataset.raw || document.getElementById('peng-uang-muka-info').textContent);
+       const uangMuka = parseNum(document.getElementById('peng-uang-muka-info').dataset.raw || document.getElementById('peng-uang-muka-info').textContent);
        // re-fetch uang muka from SPPD detail
        const realisasi = parseNum(document.getElementById('peng-realisasi').value);
-       const fmt = v => new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(v||0);
+       const fmt = v => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(v || 0);
        const resultEl = document.getElementById('peng-result');
        resultEl.style.display = 'block';
        // We'll just show info here - actual calc done on backend
@@ -3629,14 +3629,14 @@ async function submitPengembalian() {
        const errEl = document.getElementById('peng-error');
        errEl.style.display = 'none';
        const realisasi = parseNum(document.getElementById('peng-realisasi').value);
-       const catatan   = document.getElementById('peng-catatan').value.trim();
+       const catatan = document.getElementById('peng-catatan').value.trim();
        if (!realisasi && realisasi !== 0) {
               errEl.textContent = 'Realisasi biaya wajib diisi'; errEl.style.display = 'block'; return;
        }
        try {
-              const res  = await api(`/api/sppd/${pengembalianSppdId}/pengembalian`, 'POST', { realisasi_biaya: realisasi, catatan });
+              const res = await api(`/api/sppd/${pengembalianSppdId}/pengembalian`, 'POST', { realisasi_biaya: realisasi, catatan });
               const data = await res.json();
-              if (!res.ok) { errEl.textContent = data.error||'Gagal'; errEl.style.display='block'; return; }
+              if (!res.ok) { errEl.textContent = data.error || 'Gagal'; errEl.style.display = 'block'; return; }
               showToast('✅ Data pengembalian tersimpan!', 'success');
               closeModal('modal-pengembalian');
               viewSPPDDetail(pengembalianSppdId);
@@ -3999,7 +3999,7 @@ async function openEditKK(id) {
               const tbody = document.getElementById('ekk-products-tbody');
               tbody.innerHTML = '';
               let products = [];
-              try { products = JSON.parse(kk.products || '[]'); } catch {}
+              try { products = JSON.parse(kk.products || '[]'); } catch { }
               // Backward-compatible: data lama tanpa qty/harga_satuan -> default qty=1
               // agar nilai_kontrak lama tetap terjaga saat form dibuka.
               const withFallbackQty = p => (!p.qty && !p.harga_satuan && p.nilai_kontrak)
@@ -4017,7 +4017,7 @@ async function openEditKK(id) {
 function updateEKKRowNkt(idx) {
        const row = document.getElementById(`ekk-row-${idx}`);
        if (!row) return;
-       const qty   = parseFloat(row.querySelector('[data-field="qty"]')?.value) || 0;
+       const qty = parseFloat(row.querySelector('[data-field="qty"]')?.value) || 0;
        const harga = parseNum(row.querySelector('[data-field="harga_satuan"]')?.value);
        const nktEl = row.querySelector('.ekk-prod-nkt');
        if (nktEl) nktEl.textContent = 'Rp ' + formatRupiah(qty * harga);
@@ -4048,7 +4048,7 @@ function addEKKProduct(data = {}) {
 function getEKKProductsFromDOM() {
        const products = [];
        document.querySelectorAll('#ekk-products-tbody tr').forEach(row => {
-              const qty          = parseFloat(row.querySelector('[data-field="qty"]')?.value) || 0;
+              const qty = parseFloat(row.querySelector('[data-field="qty"]')?.value) || 0;
               const harga_satuan = parseNum(row.querySelector('[data-field="harga_satuan"]')?.value);
               products.push({
                      nama: row.querySelector('[data-field="nama"]')?.value || '',
@@ -4238,14 +4238,14 @@ async function submitEditSPPD() {
 
 // ===================== LAPORAN BULANAN =====================
 
-const LAPORAN_ADMIN_ROLES_FE  = ['admin','kantor_pusat','gm','gm2','manager_keuangan','direktur_ops','direktur_utama','area_manager','viewer'];
-const LAPORAN_PUSAT_ROLES_FE  = ['admin','kantor_pusat','gm','gm2','manager_keuangan','direktur_ops','direktur_utama','viewer'];
-const LAPORAN_REVIEWER_ROLES  = ['admin','gm','gm2'];
+const LAPORAN_ADMIN_ROLES_FE = ['admin', 'kantor_pusat', 'gm', 'gm2', 'manager_keuangan', 'direktur_ops', 'direktur_utama', 'area_manager', 'viewer'];
+const LAPORAN_PUSAT_ROLES_FE = ['admin', 'kantor_pusat', 'gm', 'gm2', 'manager_keuangan', 'direktur_ops', 'direktur_utama', 'viewer'];
+const LAPORAN_REVIEWER_ROLES = ['admin', 'gm', 'gm2'];
 
 function formatPeriode(periode) {
        if (!periode) return '';
        const [year, month] = periode.split('-');
-       const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+       const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
        return `${months[parseInt(month, 10) - 1]} ${year}`;
 }
 
@@ -4391,10 +4391,10 @@ function addLaporanProjectRow(data) {
        tbody.appendChild(row);
 
        const inputs = row.querySelectorAll('input');
-       inputs[0].value = data.pelanggan  || '';
-       inputs[1].value = data.principal  || '';
-       inputs[2].value = data.produk     || '';
-       if (data.nilai)       { inputs[3].value = fmtNumStr(data.nilai); updateLaporanProjectTotal(); }
+       inputs[0].value = data.pelanggan || '';
+       inputs[1].value = data.principal || '';
+       inputs[2].value = data.produk || '';
+       if (data.nilai) { inputs[3].value = fmtNumStr(data.nilai); updateLaporanProjectTotal(); }
        if (data.probability != null) inputs[4].value = data.probability;
 }
 
@@ -4418,10 +4418,10 @@ function collectLaporanProjects() {
        return Array.from(document.querySelectorAll('#laporan-project-tbody tr')).map(tr => {
               const inputs = tr.querySelectorAll('input');
               return {
-                     pelanggan:   inputs[0]?.value || '',
-                     principal:   inputs[1]?.value || '',
-                     produk:      inputs[2]?.value || '',
-                     nilai:       parseNum(inputs[3]?.value || '0'),
+                     pelanggan: inputs[0]?.value || '',
+                     principal: inputs[1]?.value || '',
+                     produk: inputs[2]?.value || '',
+                     nilai: parseNum(inputs[3]?.value || '0'),
                      probability: Math.min(100, Math.max(0, parseFloat(inputs[4]?.value) || 0))
               };
        });
@@ -4483,18 +4483,18 @@ async function loadMyLaporan() {
                      // Tanggapan umum bubbles
                      const tBubbles = tanggapan.map(t => `
                             <div class="ln-tanggapan-item">
-                                   <div class="ln-tanggapan-avatar">${escHtml((t.reviewer_name||'?')[0].toUpperCase())}</div>
+                                   <div class="ln-tanggapan-avatar">${escHtml((t.reviewer_name || '?')[0].toUpperCase())}</div>
                                    <div class="ln-tanggapan-bubble">
-                                          <div class="ln-t-who">${escHtml(t.reviewer_name)} <span style="font-weight:normal;color:var(--text-light)">(${t.reviewer_role==='gm'?'GM1':t.reviewer_role==='gm2'?'GM2':'Admin'})</span></div>
+                                          <div class="ln-t-who">${escHtml(t.reviewer_name)} <span style="font-weight:normal;color:var(--text-light)">(${t.reviewer_role === 'gm' ? 'GM1' : t.reviewer_role === 'gm2' ? 'GM2' : 'Admin'})</span></div>
                                           <div class="ln-t-text">${escHtml(t.tanggapan)}</div>
-                                          <div class="ln-t-time">${t.updated_at||''}</div>
+                                          <div class="ln-t-time">${t.updated_at || ''}</div>
                                    </div>
                             </div>`).join('');
 
                      // Support items dengan tanggapan per item
                      const supports = r.support_with_tanggapan || r.support || [];
                      const suppHtml = supports.length ? supports.map(s => {
-                            const sResps = (s.tanggapan||[]).map(t => `
+                            const sResps = (s.tanggapan || []).map(t => `
                                    <div class="ln-support-resp">
                                           <span class="ln-resp-who">${escHtml(t.reviewer_name)}</span>:
                                           <span class="ln-resp-text"> ${escHtml(t.tanggapan)}</span>
@@ -4588,7 +4588,7 @@ function _populateLaporanAreaDropdown(el, areas) {
 function _populateLaporanUserDropdown(el, users, areaFilter) {
        const cur = el.value;
        const filtered = areaFilter ? users.filter(u => (u.area_kerja || '').toLowerCase().trim() === areaFilter.toLowerCase().trim()) : users;
-       el.innerHTML = '<option value="">Semua User</option>' + filtered.map(u => `<option value="${u.id}">${u.full_name}${u.area_kerja ? ' ('+u.area_kerja+')' : ''}</option>`).join('');
+       el.innerHTML = '<option value="">Semua User</option>' + filtered.map(u => `<option value="${u.id}">${u.full_name}${u.area_kerja ? ' (' + u.area_kerja + ')' : ''}</option>`).join('');
        if (cur && filtered.find(u => String(u.id) === String(cur))) el.value = cur;
 }
 
@@ -4650,12 +4650,12 @@ async function onRekaplaporanAreaChange() {
 
 function downloadLaporanRekapExcel() {
        const periode = document.getElementById('rekap-laporan-periode')?.value || '';
-       const area    = document.getElementById('rekap-laporan-area')?.value || '';
-       const uid     = document.getElementById('rekap-laporan-user')?.value || '';
+       const area = document.getElementById('rekap-laporan-area')?.value || '';
+       const uid = document.getElementById('rekap-laporan-user')?.value || '';
        const p = new URLSearchParams();
        if (periode) p.set('periode', periode);
-       if (area)    p.set('area_kerja', area);
-       if (uid)     p.set('user_id', uid);
+       if (area) p.set('area_kerja', area);
+       if (uid) p.set('user_id', uid);
        const qs = p.toString() ? '?' + p.toString() : '';
        const a = document.createElement('a');
        a.href = '/api/laporan/rekap-excel' + qs;
@@ -4683,7 +4683,7 @@ async function loadLaporanDashboard() {
                      const filters = await _loadLaporanFilters();
                      _populateLaporanAreaDropdown(document.getElementById('laporan-dash-filter-area'), filters.areas);
                      _populateLaporanUserDropdown(document.getElementById('laporan-dash-filter-user'), filters.users, '');
-              } catch {}
+              } catch { }
        }
 
        const params = new URLSearchParams();
@@ -4755,7 +4755,7 @@ async function loadSalesTarget() {
        }
 }
 
-const _ST_BULAN = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+const _ST_BULAN = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
 function _stColor(pct) {
        return pct >= 100 ? '#0e9f6e' : pct >= 75 ? '#1a56db' : pct >= 40 ? '#e3a008' : '#f05252';
@@ -4777,7 +4777,7 @@ function _renderSalesAreaAccordion(data, container) {
        }
        const year = document.getElementById('st-tahun')?.value || new Date().getFullYear();
        container.innerHTML = data.areas.map((area, ai) => {
-              const totLaba       = area.total_laba_kotor      || 0;
+              const totLaba = area.total_laba_kotor || 0;
               const totPendapatan = area.total_pendapatan_lain || 0;
               const pct = _stPct(area.total_target, area.total_penjualan);
               const col = _stColor(pct);
@@ -4817,7 +4817,7 @@ function _renderSalesAreaAccordion(data, container) {
                             <td class="st-pct-cell">
                                    <div style="display:flex;align-items:center;gap:8px">
                                           <div style="flex:1;height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;min-width:60px">
-                                                 <div class="st-m-bar" style="height:100%;width:${Math.min(100,mPct)}%;background:${mCol};border-radius:3px;transition:width .25s"></div>
+                                                 <div class="st-m-bar" style="height:100%;width:${Math.min(100, mPct)}%;background:${mCol};border-radius:3px;transition:width .25s"></div>
                                           </div>
                                           <span class="st-m-pct" style="min-width:38px;font-size:13px;font-weight:700;color:${mCol}">${mPct}%</span>
                                    </div>
@@ -4851,7 +4851,7 @@ function _renderSalesAreaAccordion(data, container) {
                                    </div>
                                    <div class="st-sum-bar-wrap">
                                           <div class="st-sum-bar-track">
-                                                 <div class="st-sum-bar-fill" style="width:${Math.min(100,pct)}%;background:${col}"></div>
+                                                 <div class="st-sum-bar-fill" style="width:${Math.min(100, pct)}%;background:${col}"></div>
                                           </div>
                                    </div>
                             </div>
@@ -4913,17 +4913,17 @@ function _stUpdateCard(inp) {
        const pct = _stPct(totT, totP);
        const col = _stColor(pct);
        const q = s => card.querySelector(s);
-       if (q('.st-hdr-t'))           { q('.st-hdr-t').textContent = 'Rp ' + fmtNumStr(totT); }
-       if (q('.st-hdr-p'))           { q('.st-hdr-p').textContent = 'Rp ' + fmtNumStr(totP); }
-       if (q('.st-hdr-l'))           { q('.st-hdr-l').textContent = 'Rp ' + fmtNumStr(totL); }
-       if (q('.st-hdr-n'))           { q('.st-hdr-n').textContent = 'Rp ' + fmtNumStr(totN); }
-       if (q('.st-hdr-pct'))         { q('.st-hdr-pct').textContent = pct + '%'; q('.st-hdr-pct').style.color = col; }
-       if (q('.st-sum-bar-fill'))    { q('.st-sum-bar-fill').style.width = Math.min(100,pct)+'%'; q('.st-sum-bar-fill').style.background = col; }
-       if (q('.st-foot-t'))          { q('.st-foot-t').innerHTML = `<strong>Rp ${fmtNumStr(totT)}</strong>`; }
-       if (q('.st-foot-p'))          { q('.st-foot-p').innerHTML = `<strong>Rp ${fmtNumStr(totP)}</strong>`; }
-       if (q('.st-foot-l'))          { q('.st-foot-l').innerHTML = `<strong>Rp ${fmtNumStr(totL)}</strong>`; }
-       if (q('.st-foot-n'))          { q('.st-foot-n').innerHTML = `<strong>Rp ${fmtNumStr(totN)}</strong>`; }
-       if (q('.st-foot-pct'))        { q('.st-foot-pct').innerHTML = `<strong>${pct}%</strong>`; q('.st-foot-pct').style.color = col; }
+       if (q('.st-hdr-t')) { q('.st-hdr-t').textContent = 'Rp ' + fmtNumStr(totT); }
+       if (q('.st-hdr-p')) { q('.st-hdr-p').textContent = 'Rp ' + fmtNumStr(totP); }
+       if (q('.st-hdr-l')) { q('.st-hdr-l').textContent = 'Rp ' + fmtNumStr(totL); }
+       if (q('.st-hdr-n')) { q('.st-hdr-n').textContent = 'Rp ' + fmtNumStr(totN); }
+       if (q('.st-hdr-pct')) { q('.st-hdr-pct').textContent = pct + '%'; q('.st-hdr-pct').style.color = col; }
+       if (q('.st-sum-bar-fill')) { q('.st-sum-bar-fill').style.width = Math.min(100, pct) + '%'; q('.st-sum-bar-fill').style.background = col; }
+       if (q('.st-foot-t')) { q('.st-foot-t').innerHTML = `<strong>Rp ${fmtNumStr(totT)}</strong>`; }
+       if (q('.st-foot-p')) { q('.st-foot-p').innerHTML = `<strong>Rp ${fmtNumStr(totP)}</strong>`; }
+       if (q('.st-foot-l')) { q('.st-foot-l').innerHTML = `<strong>Rp ${fmtNumStr(totL)}</strong>`; }
+       if (q('.st-foot-n')) { q('.st-foot-n').innerHTML = `<strong>Rp ${fmtNumStr(totN)}</strong>`; }
+       if (q('.st-foot-pct')) { q('.st-foot-pct').innerHTML = `<strong>${pct}%</strong>`; q('.st-foot-pct').style.color = col; }
 }
 
 async function saveSalesTarget() {
@@ -4934,7 +4934,7 @@ async function saveSalesTarget() {
               const target = parseNum(inp.value || '0');
               const tr = inp.closest('tr');
               const penjualan = parseNum(tr?.querySelector('.st-inp-p')?.value || '0');
-              const laba_kotor      = parseNum(tr?.querySelector('.st-inp-l')?.value || '0');
+              const laba_kotor = parseNum(tr?.querySelector('.st-inp-l')?.value || '0');
               const pendapatan_lain = parseNum(tr?.querySelector('.st-inp-n')?.value || '0');
               if (area && periode) items.push({ area_kerja: area, periode, target, penjualan, laba_kotor, pendapatan_lain });
        });
@@ -4958,47 +4958,47 @@ async function saveSalesTarget() {
 
 // ===================== NOTIFICATIONS =====================
 function _notifIcon(type) {
-  const map = { approval: '📋', info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' };
-  return map[type] || '🔔';
+       const map = { approval: '📋', info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' };
+       return map[type] || '🔔';
 }
 
 function _timeSince(dateStr) {
-  if (!dateStr) return '';
-  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (diff < 60) return 'Baru saja';
-  if (diff < 3600) return Math.floor(diff / 60) + ' menit lalu';
-  if (diff < 86400) return Math.floor(diff / 3600) + ' jam lalu';
-  return Math.floor(diff / 86400) + ' hari lalu';
+       if (!dateStr) return '';
+       const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+       if (diff < 60) return 'Baru saja';
+       if (diff < 3600) return Math.floor(diff / 60) + ' menit lalu';
+       if (diff < 86400) return Math.floor(diff / 3600) + ' jam lalu';
+       return Math.floor(diff / 86400) + ' hari lalu';
 }
 
 async function loadNotifications() {
-  try {
-    const res = await api('/api/notifications');
-    if (!res.ok) return;
-    const data = await res.json();
-    const badge = document.getElementById('notif-badge');
-    const list = document.getElementById('notif-list');
-    if (!badge || !list) return;
+       try {
+              const res = await api('/api/notifications');
+              if (!res.ok) return;
+              const data = await res.json();
+              const badge = document.getElementById('notif-badge');
+              const list = document.getElementById('notif-list');
+              if (!badge || !list) return;
 
-    const unread = data.unread_count || 0;
-    if (badge) {
-      badge.textContent = unread > 99 ? '99+' : unread;
-      badge.style.display = unread > 0 ? 'flex' : 'none';
-    }
+              const unread = data.unread_count || 0;
+              if (badge) {
+                     badge.textContent = unread > 99 ? '99+' : unread;
+                     badge.style.display = unread > 0 ? 'flex' : 'none';
+              }
 
-    if (unread > _lastUnreadCount && _lastUnreadCount >= 0 && document.visibilityState !== 'visible') {
-      const newest = (data.notifications || [])[0];
-      if (newest) requestWebNotif(newest.title, newest.body);
-    }
-    _lastUnreadCount = unread;
+              if (unread > _lastUnreadCount && _lastUnreadCount >= 0 && document.visibilityState !== 'visible') {
+                     const newest = (data.notifications || [])[0];
+                     if (newest) requestWebNotif(newest.title, newest.body);
+              }
+              _lastUnreadCount = unread;
 
-    const notifs = data.notifications || [];
-    if (notifs.length === 0) {
-      list.innerHTML = '<div class="notif-empty">Tidak ada notifikasi</div>';
-      return;
-    }
-    list.innerHTML = notifs.map(n => `
-      <div class="notif-item${n.is_read ? '' : ' unread'}" onclick="onNotifClick(${n.id},'${escHtml(n.ref_type||'')}',${n.ref_id||0})">
+              const notifs = data.notifications || [];
+              if (notifs.length === 0) {
+                     list.innerHTML = '<div class="notif-empty">Tidak ada notifikasi</div>';
+                     return;
+              }
+              list.innerHTML = notifs.map(n => `
+      <div class="notif-item${n.is_read ? '' : ' unread'}" onclick="onNotifClick(${n.id},'${escHtml(n.ref_type || '')}',${n.ref_id || 0})">
         <div class="notif-icon">${_notifIcon(n.type)}</div>
         <div class="notif-content">
           <div class="notif-title">${escHtml(n.title)}</div>
@@ -5007,85 +5007,85 @@ async function loadNotifications() {
         </div>
       </div>
     `).join('');
-  } catch (e) {
-    console.warn('[notif] load error:', e);
-  }
+       } catch (e) {
+              console.warn('[notif] load error:', e);
+       }
 }
 
 async function onNotifClick(id, refType, refId) {
-  document.getElementById('notif-dropdown').style.display = 'none';
-  try { await api(`/api/notifications/${id}/read`, 'POST'); } catch {}
-  _lastUnreadCount = Math.max(0, _lastUnreadCount - 1);
-  await loadNotifications();
-  if (refType === 'sph' && refId) showPage('all-sph');
-  else if (refType === 'kk' && refId) showPage('kk-semua');
-  else if (refType === 'sppd' && refId) showPage('sppd-semua');
+       document.getElementById('notif-dropdown').style.display = 'none';
+       try { await api(`/api/notifications/${id}/read`, 'POST'); } catch { }
+       _lastUnreadCount = Math.max(0, _lastUnreadCount - 1);
+       await loadNotifications();
+       if (refType === 'sph' && refId) showPage('all-sph');
+       else if (refType === 'kk' && refId) showPage('kk-semua');
+       else if (refType === 'sppd' && refId) showPage('sppd-semua');
 }
 
 async function markAllRead() {
-  try {
-    await api('/api/notifications/read-all', 'POST');
-    _lastUnreadCount = 0;
-    await loadNotifications();
-  } catch (e) {
-    console.warn('[notif] markAllRead error:', e);
-  }
+       try {
+              await api('/api/notifications/read-all', 'POST');
+              _lastUnreadCount = 0;
+              await loadNotifications();
+       } catch (e) {
+              console.warn('[notif] markAllRead error:', e);
+       }
 }
 
 function toggleNotifDropdown() {
-  const dd = document.getElementById('notif-dropdown');
-  if (!dd) return;
-  const isOpen = dd.style.display !== 'none';
-  if (isOpen) {
-    dd.style.display = 'none';
-    document.removeEventListener('click', _closeNotifOnClickOutside);
-  } else {
-    dd.style.display = 'flex';
-    loadNotifications();
-    setTimeout(() => document.addEventListener('click', _closeNotifOnClickOutside), 10);
-  }
+       const dd = document.getElementById('notif-dropdown');
+       if (!dd) return;
+       const isOpen = dd.style.display !== 'none';
+       if (isOpen) {
+              dd.style.display = 'none';
+              document.removeEventListener('click', _closeNotifOnClickOutside);
+       } else {
+              dd.style.display = 'flex';
+              loadNotifications();
+              setTimeout(() => document.addEventListener('click', _closeNotifOnClickOutside), 10);
+       }
 }
 
 function _closeNotifOnClickOutside(e) {
-  const wrap = document.querySelector('.notif-bell-wrap');
-  if (wrap && !wrap.contains(e.target)) {
-    document.getElementById('notif-dropdown').style.display = 'none';
-    document.removeEventListener('click', _closeNotifOnClickOutside);
-  }
+       const wrap = document.querySelector('.notif-bell-wrap');
+       if (wrap && !wrap.contains(e.target)) {
+              document.getElementById('notif-dropdown').style.display = 'none';
+              document.removeEventListener('click', _closeNotifOnClickOutside);
+       }
 }
 
 function startNotifPolling() {
-  loadNotifications();
-  if (_notifInterval) clearInterval(_notifInterval);
-  _notifInterval = setInterval(loadNotifications, 30000);
+       loadNotifications();
+       if (_notifInterval) clearInterval(_notifInterval);
+       _notifInterval = setInterval(loadNotifications, 30000);
 }
 
 function stopNotifPolling() {
-  if (_notifInterval) { clearInterval(_notifInterval); _notifInterval = null; }
-  _lastUnreadCount = 0;
-  const badge = document.getElementById('notif-badge');
-  if (badge) badge.style.display = 'none';
-  const list = document.getElementById('notif-list');
-  if (list) list.innerHTML = '<div class="notif-empty">Tidak ada notifikasi</div>';
+       if (_notifInterval) { clearInterval(_notifInterval); _notifInterval = null; }
+       _lastUnreadCount = 0;
+       const badge = document.getElementById('notif-badge');
+       if (badge) badge.style.display = 'none';
+       const list = document.getElementById('notif-list');
+       if (list) list.innerHTML = '<div class="notif-empty">Tidak ada notifikasi</div>';
 }
 
 function requestWebNotif(title, body) {
-  if (!('Notification' in window)) return;
-  if (Notification.permission === 'granted') {
-    _sendWebNotif(title, body);
-  } else if (Notification.permission !== 'denied') {
-    Notification.requestPermission().then(perm => {
-      if (perm === 'granted') _sendWebNotif(title, body);
-    });
-  }
+       if (!('Notification' in window)) return;
+       if (Notification.permission === 'granted') {
+              _sendWebNotif(title, body);
+       } else if (Notification.permission !== 'denied') {
+              Notification.requestPermission().then(perm => {
+                     if (perm === 'granted') _sendWebNotif(title, body);
+              });
+       }
 }
 
 function _sendWebNotif(title, body) {
-  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-    navigator.serviceWorker.controller.postMessage({ type: 'SHOW_NOTIFICATION', title, body });
-  } else {
-    new Notification(title, { body, icon: '/icons/icon-192.png' });
-  }
+       if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+              navigator.serviceWorker.controller.postMessage({ type: 'SHOW_NOTIFICATION', title, body });
+       } else {
+              new Notification(title, { body, icon: '/icons/icon-192.png' });
+       }
 }
 
 // ===================== MEDIA MONITORING INVESTASI =====================
@@ -5093,62 +5093,62 @@ let mmData = [];
 let mmEditId = null;
 
 function mmStatusBadge(entry) {
-  if (entry.ada_keterlambatan) return `<span class="badge" style="background:#fde8e8;color:var(--red)">⚠️ Telat ${entry.max_telat_hari} hari</span>`;
-  if (!entry.pembayaran || entry.pembayaran.length === 0) return `<span class="badge" style="background:var(--gray-light);color:var(--text-light)">—</span>`;
-  const allLunas = entry.pembayaran.every(p => p.status === 'lunas');
-  if (allLunas) return `<span class="badge" style="background:#def7ec;color:var(--green)">✅ Lunas</span>`;
-  return `<span class="badge" style="background:var(--blue-light);color:var(--blue)">🔵 Berjalan</span>`;
+       if (entry.ada_keterlambatan) return `<span class="badge" style="background:#fde8e8;color:var(--red)">⚠️ Telat ${entry.max_telat_hari} hari</span>`;
+       if (!entry.pembayaran || entry.pembayaran.length === 0) return `<span class="badge" style="background:var(--gray-light);color:var(--text-light)">—</span>`;
+       const allLunas = entry.pembayaran.every(p => p.status === 'lunas');
+       if (allLunas) return `<span class="badge" style="background:#def7ec;color:var(--green)">✅ Lunas</span>`;
+       return `<span class="badge" style="background:var(--blue-light);color:var(--blue)">🔵 Berjalan</span>`;
 }
 
 async function loadMediaMonitoring() {
-  const tbody = document.getElementById('mm-tbody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="11" class="loading">⏳ Memuat...</td></tr>';
-  try {
-    const res = await api('/api/media-monitoring');
-    if (!res.ok) { if (tbody) tbody.innerHTML = '<tr><td colspan="11">Gagal memuat data</td></tr>'; return; }
-    mmData = await res.json();
+       const tbody = document.getElementById('mm-tbody');
+       if (tbody) tbody.innerHTML = '<tr><td colspan="11" class="loading">⏳ Memuat...</td></tr>';
+       try {
+              const res = await api('/api/media-monitoring');
+              if (!res.ok) { if (tbody) tbody.innerHTML = '<tr><td colspan="11">Gagal memuat data</td></tr>'; return; }
+              mmData = await res.json();
 
-    const totInvestasi = mmData.reduce((s, e) => s + (parseFloat(e.nilai_investasi) || 0), 0);
-    const totTerbayar  = mmData.reduce((s, e) => s + (parseFloat(e.terbayar) || 0), 0);
-    const totSisa      = mmData.reduce((s, e) => s + (parseFloat(e.sisa_uang_kembali ?? e.sisa) || 0), 0);
-    const totSisaLaba  = mmData.reduce((s, e) => s + (parseFloat(e.sisa_laba) || 0), 0);
-    const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-    setTxt('mm-sum-investasi', 'Rp ' + formatRupiah(totInvestasi));
-    setTxt('mm-sum-terbayar',  'Rp ' + formatRupiah(totTerbayar));
-    setTxt('mm-sum-sisa',      'Rp ' + formatRupiah(totSisa));
-    setTxt('mm-sum-sisa-laba', 'Rp ' + formatRupiah(totSisaLaba));
+              const totInvestasi = mmData.reduce((s, e) => s + (parseFloat(e.nilai_investasi) || 0), 0);
+              const totTerbayar = mmData.reduce((s, e) => s + (parseFloat(e.terbayar) || 0), 0);
+              const totSisa = mmData.reduce((s, e) => s + (parseFloat(e.sisa_uang_kembali ?? e.sisa) || 0), 0);
+              const totSisaLaba = mmData.reduce((s, e) => s + (parseFloat(e.sisa_laba) || 0), 0);
+              const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+              setTxt('mm-sum-investasi', 'Rp ' + formatRupiah(totInvestasi));
+              setTxt('mm-sum-terbayar', 'Rp ' + formatRupiah(totTerbayar));
+              setTxt('mm-sum-sisa', 'Rp ' + formatRupiah(totSisa));
+              setTxt('mm-sum-sisa-laba', 'Rp ' + formatRupiah(totSisaLaba));
 
-    renderMMTable(mmData);
-  } catch {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="11">Gagal memuat data</td></tr>';
-  }
+              renderMMTable(mmData);
+       } catch {
+              if (tbody) tbody.innerHTML = '<tr><td colspan="11">Gagal memuat data</td></tr>';
+       }
 }
 
 function filterMMList() {
-  const q = (document.getElementById('mm-search')?.value || '').toLowerCase().trim();
-  const status = document.getElementById('mm-filter-status')?.value || '';
-  const filtered = mmData.filter(e => {
-    if (q && !(e.nama_perusahaan || '').toLowerCase().includes(q)) return false;
-    if (status === 'ada_telat' && !e.ada_keterlambatan) return false;
-    if (status === 'lunas') {
-      const allLunas = e.pembayaran?.length > 0 && e.pembayaran.every(p => p.status === 'lunas');
-      if (!allLunas) return false;
-    }
-    if (status === 'berjalan') {
-      const allLunas = e.pembayaran?.length > 0 && e.pembayaran.every(p => p.status === 'lunas');
-      if (e.ada_keterlambatan || allLunas || !e.pembayaran?.length) return false;
-    }
-    return true;
-  });
-  renderMMTable(filtered);
+       const q = (document.getElementById('mm-search')?.value || '').toLowerCase().trim();
+       const status = document.getElementById('mm-filter-status')?.value || '';
+       const filtered = mmData.filter(e => {
+              if (q && !(e.nama_perusahaan || '').toLowerCase().includes(q)) return false;
+              if (status === 'ada_telat' && !e.ada_keterlambatan) return false;
+              if (status === 'lunas') {
+                     const allLunas = e.pembayaran?.length > 0 && e.pembayaran.every(p => p.status === 'lunas');
+                     if (!allLunas) return false;
+              }
+              if (status === 'berjalan') {
+                     const allLunas = e.pembayaran?.length > 0 && e.pembayaran.every(p => p.status === 'lunas');
+                     if (e.ada_keterlambatan || allLunas || !e.pembayaran?.length) return false;
+              }
+              return true;
+       });
+       renderMMTable(filtered);
 }
 
 function renderMMTable(data) {
-  const tbody = document.getElementById('mm-tbody');
-  if (!tbody) return;
-  if (data.length === 0) { tbody.innerHTML = `<tr><td colspan="11">${emptyState('Belum ada data Media Monitoring')}</td></tr>`; return; }
-  const canEdit = currentUser?.role === 'manager_keuangan';
-  tbody.innerHTML = data.map(e => `
+       const tbody = document.getElementById('mm-tbody');
+       if (!tbody) return;
+       if (data.length === 0) { tbody.innerHTML = `<tr><td colspan="11">${emptyState('Belum ada data Media Monitoring')}</td></tr>`; return; }
+       const canEdit = currentUser?.role === 'manager_keuangan';
+       tbody.innerHTML = data.map(e => `
     <tr>
       <td class="fw-bold">${escHtml(e.nama_perusahaan)}</td>
       <td>${escHtml(e.pekerjaan || '-')}</td>
@@ -5171,163 +5171,163 @@ function renderMMTable(data) {
 }
 
 function calcMMMargin() {
-  const inv   = parseNum(document.getElementById('mm-nilai-investasi')?.value);
-  const balik = parseNum(document.getElementById('mm-nilai-kembali')?.value);
-  const margin = inv > 0 ? ((balik - inv) / inv) * 100 : 0;
-  const el = document.getElementById('mm-margin-display');
-  if (el) {
-    el.textContent = margin.toFixed(2) + '%';
-    el.style.color = margin >= 0 ? 'var(--green)' : 'var(--red)';
-  }
+       const inv = parseNum(document.getElementById('mm-nilai-investasi')?.value);
+       const balik = parseNum(document.getElementById('mm-nilai-kembali')?.value);
+       const margin = inv > 0 ? ((balik - inv) / inv) * 100 : 0;
+       const el = document.getElementById('mm-margin-display');
+       if (el) {
+              el.textContent = margin.toFixed(2) + '%';
+              el.style.color = margin >= 0 ? 'var(--green)' : 'var(--red)';
+       }
 }
 
 function addMMPembayaranRow(data = {}) {
-  const tbody = document.getElementById('mm-pembayaran-tbody');
-  if (!tbody) return;
-  const idx = tbody.querySelectorAll('tr').length + 1;
-  const tr = document.createElement('tr');
-  tr.innerHTML = `
+       const tbody = document.getElementById('mm-pembayaran-tbody');
+       if (!tbody) return;
+       const idx = tbody.querySelectorAll('tr').length + 1;
+       const tr = document.createElement('tr');
+       tr.innerHTML = `
     <td style="text-align:center;font-size:12px">${idx}</td>
     <td><input type="date" class="mm-tgl-bayar" value="${data.tanggal_pembayaran || ''}"></td>
     <td><input type="text" inputmode="numeric" class="mm-nilai-bayar num-fmt" value="${data.nilai_pembayaran ? fmtNumStr(data.nilai_pembayaran) : ''}" oninput="formatNumInput(this);updateMMTotalJadwal()" onfocus="if(this.value==='0')this.value=''"></td>
     <td><input type="text" class="mm-catatan-bayar" value="${escHtml(data.catatan || '')}"></td>
     <td><button type="button" onclick="this.closest('tr').remove();updateMMTotalJadwal()" class="btn-remove-row">✕</button></td>`;
-  tbody.appendChild(tr);
-  document.querySelectorAll('#mm-pembayaran-tbody tr').forEach((r, i) => { r.querySelector('td:first-child').textContent = i + 1; });
-  updateMMTotalJadwal();
+       tbody.appendChild(tr);
+       document.querySelectorAll('#mm-pembayaran-tbody tr').forEach((r, i) => { r.querySelector('td:first-child').textContent = i + 1; });
+       updateMMTotalJadwal();
 }
 
 function updateMMTotalJadwal() {
-  let total = 0;
-  document.querySelectorAll('#mm-pembayaran-tbody .mm-nilai-bayar').forEach(inp => { total += parseNum(inp.value); });
-  const el = document.getElementById('mm-total-jadwal');
-  if (el) el.textContent = 'Rp ' + formatRupiah(total);
-  const investasi = parseNum(document.getElementById('mm-nilai-investasi')?.value);
-  const warning = document.getElementById('mm-jadwal-warning');
-  if (warning) warning.style.display = Math.abs(total - investasi) > 1000 ? '' : 'none';
+       let total = 0;
+       document.querySelectorAll('#mm-pembayaran-tbody .mm-nilai-bayar').forEach(inp => { total += parseNum(inp.value); });
+       const el = document.getElementById('mm-total-jadwal');
+       if (el) el.textContent = 'Rp ' + formatRupiah(total);
+       const investasi = parseNum(document.getElementById('mm-nilai-investasi')?.value);
+       const warning = document.getElementById('mm-jadwal-warning');
+       if (warning) warning.style.display = Math.abs(total - investasi) > 1000 ? '' : 'none';
 }
 
 function getMMPembayaranFromDOM() {
-  return Array.from(document.querySelectorAll('#mm-pembayaran-tbody tr')).map((row, idx) => ({
-    tanggal_pembayaran: row.querySelector('.mm-tgl-bayar')?.value || '',
-    nilai_pembayaran: parseNum(row.querySelector('.mm-nilai-bayar')?.value),
-    catatan: row.querySelector('.mm-catatan-bayar')?.value || '',
-    urutan: idx,
-  }));
+       return Array.from(document.querySelectorAll('#mm-pembayaran-tbody tr')).map((row, idx) => ({
+              tanggal_pembayaran: row.querySelector('.mm-tgl-bayar')?.value || '',
+              nilai_pembayaran: parseNum(row.querySelector('.mm-nilai-bayar')?.value),
+              catatan: row.querySelector('.mm-catatan-bayar')?.value || '',
+              urutan: idx,
+       }));
 }
 
 async function openMMForm(id = null) {
-  mmEditId = id;
-  document.getElementById('mm-form-error').style.display = 'none';
-  document.getElementById('mm-form-title').textContent = id ? 'Edit Entry Media Monitoring' : 'Tambah Entry Media Monitoring';
-  document.getElementById('mm-pembayaran-tbody').innerHTML = '';
+       mmEditId = id;
+       document.getElementById('mm-form-error').style.display = 'none';
+       document.getElementById('mm-form-title').textContent = id ? 'Edit Entry Media Monitoring' : 'Tambah Entry Media Monitoring';
+       document.getElementById('mm-pembayaran-tbody').innerHTML = '';
 
-  if (id) {
-    try {
-      const res = await api(`/api/media-monitoring/${id}`);
-      const data = await res.json();
-      if (!res.ok) { showToast(data.error || 'Gagal memuat data', 'error'); return; }
-      document.getElementById('mm-nama-perusahaan').value = data.nama_perusahaan || '';
-      document.getElementById('mm-pekerjaan').value = data.pekerjaan || '';
-      document.getElementById('mm-lama-kontrak').value = data.lama_kontrak || '';
-      document.getElementById('mm-catatan').value = data.catatan || '';
-      document.getElementById('mm-nilai-investasi').value = data.nilai_investasi ? fmtNumStr(data.nilai_investasi) : '';
-      document.getElementById('mm-nilai-kembali').value = data.nilai_uang_kembali ? fmtNumStr(data.nilai_uang_kembali) : '';
-      (data.pembayaran || []).forEach(p => addMMPembayaranRow(p));
-    } catch { showToast('Gagal memuat data', 'error'); return; }
-  } else {
-    document.getElementById('mm-nama-perusahaan').value = '';
-    document.getElementById('mm-pekerjaan').value = '';
-    document.getElementById('mm-lama-kontrak').value = '';
-    document.getElementById('mm-catatan').value = '';
-    document.getElementById('mm-nilai-investasi').value = '';
-    document.getElementById('mm-nilai-kembali').value = '';
-  }
-  calcMMMargin();
-  updateMMTotalJadwal();
-  showModal('modal-mm-form');
+       if (id) {
+              try {
+                     const res = await api(`/api/media-monitoring/${id}`);
+                     const data = await res.json();
+                     if (!res.ok) { showToast(data.error || 'Gagal memuat data', 'error'); return; }
+                     document.getElementById('mm-nama-perusahaan').value = data.nama_perusahaan || '';
+                     document.getElementById('mm-pekerjaan').value = data.pekerjaan || '';
+                     document.getElementById('mm-lama-kontrak').value = data.lama_kontrak || '';
+                     document.getElementById('mm-catatan').value = data.catatan || '';
+                     document.getElementById('mm-nilai-investasi').value = data.nilai_investasi ? fmtNumStr(data.nilai_investasi) : '';
+                     document.getElementById('mm-nilai-kembali').value = data.nilai_uang_kembali ? fmtNumStr(data.nilai_uang_kembali) : '';
+                     (data.pembayaran || []).forEach(p => addMMPembayaranRow(p));
+              } catch { showToast('Gagal memuat data', 'error'); return; }
+       } else {
+              document.getElementById('mm-nama-perusahaan').value = '';
+              document.getElementById('mm-pekerjaan').value = '';
+              document.getElementById('mm-lama-kontrak').value = '';
+              document.getElementById('mm-catatan').value = '';
+              document.getElementById('mm-nilai-investasi').value = '';
+              document.getElementById('mm-nilai-kembali').value = '';
+       }
+       calcMMMargin();
+       updateMMTotalJadwal();
+       showModal('modal-mm-form');
 }
 
 function openMMEdit(id) {
-  openMMForm(id);
+       openMMForm(id);
 }
 
 async function saveMMForm() {
-  const errEl = document.getElementById('mm-form-error');
-  errEl.style.display = 'none';
-  const nama_perusahaan = document.getElementById('mm-nama-perusahaan').value.trim();
-  const nilai_investasi = parseNum(document.getElementById('mm-nilai-investasi').value);
-  if (!nama_perusahaan) { errEl.textContent = 'Nama perusahaan wajib diisi'; errEl.style.display = 'block'; return; }
-  if (nilai_investasi <= 0) { errEl.textContent = 'Nilai investasi harus lebih dari 0'; errEl.style.display = 'block'; return; }
+       const errEl = document.getElementById('mm-form-error');
+       errEl.style.display = 'none';
+       const nama_perusahaan = document.getElementById('mm-nama-perusahaan').value.trim();
+       const nilai_investasi = parseNum(document.getElementById('mm-nilai-investasi').value);
+       if (!nama_perusahaan) { errEl.textContent = 'Nama perusahaan wajib diisi'; errEl.style.display = 'block'; return; }
+       if (nilai_investasi <= 0) { errEl.textContent = 'Nilai investasi harus lebih dari 0'; errEl.style.display = 'block'; return; }
 
-  const payload = {
-    nama_perusahaan,
-    pekerjaan: document.getElementById('mm-pekerjaan').value.trim(),
-    lama_kontrak: document.getElementById('mm-lama-kontrak').value.trim(),
-    nilai_investasi,
-    nilai_uang_kembali: parseNum(document.getElementById('mm-nilai-kembali').value),
-    catatan: document.getElementById('mm-catatan').value.trim(),
-    pembayaran: getMMPembayaranFromDOM(),
-  };
+       const payload = {
+              nama_perusahaan,
+              pekerjaan: document.getElementById('mm-pekerjaan').value.trim(),
+              lama_kontrak: document.getElementById('mm-lama-kontrak').value.trim(),
+              nilai_investasi,
+              nilai_uang_kembali: parseNum(document.getElementById('mm-nilai-kembali').value),
+              catatan: document.getElementById('mm-catatan').value.trim(),
+              pembayaran: getMMPembayaranFromDOM(),
+       };
 
-  try {
-    const btn = document.getElementById('btn-save-mm');
-    btn.disabled = true;
-    const res = mmEditId
-      ? await api(`/api/media-monitoring/${mmEditId}`, 'PUT', payload)
-      : await api('/api/media-monitoring', 'POST', payload);
-    const data = await res.json();
-    btn.disabled = false;
-    if (res.ok) {
-      closeModal('modal-mm-form');
-      showToast('✅ Data Media Monitoring berhasil disimpan', 'success');
-      loadMediaMonitoring();
-    } else {
-      errEl.textContent = data.error || 'Gagal menyimpan';
-      errEl.style.display = 'block';
-    }
-  } catch {
-    errEl.textContent = 'Koneksi ke server gagal';
-    errEl.style.display = 'block';
-  }
+       try {
+              const btn = document.getElementById('btn-save-mm');
+              btn.disabled = true;
+              const res = mmEditId
+                     ? await api(`/api/media-monitoring/${mmEditId}`, 'PUT', payload)
+                     : await api('/api/media-monitoring', 'POST', payload);
+              const data = await res.json();
+              btn.disabled = false;
+              if (res.ok) {
+                     closeModal('modal-mm-form');
+                     showToast('✅ Data Media Monitoring berhasil disimpan', 'success');
+                     loadMediaMonitoring();
+              } else {
+                     errEl.textContent = data.error || 'Gagal menyimpan';
+                     errEl.style.display = 'block';
+              }
+       } catch {
+              errEl.textContent = 'Koneksi ke server gagal';
+              errEl.style.display = 'block';
+       }
 }
 
 async function deleteMMEntry(id) {
-  if (!confirm('Hapus entry ini beserta semua jadwal pembayarannya?')) return;
-  try {
-    const res = await api(`/api/media-monitoring/${id}`, 'DELETE');
-    if (res.ok) {
-      showToast('✅ Data berhasil dihapus', 'success');
-      closeModal('modal-mm-detail');
-      loadMediaMonitoring();
-    } else {
-      const data = await res.json();
-      showToast(data.error || 'Gagal menghapus', 'error');
-    }
-  } catch { showToast('Koneksi ke server gagal', 'error'); }
+       if (!confirm('Hapus entry ini beserta semua jadwal pembayarannya?')) return;
+       try {
+              const res = await api(`/api/media-monitoring/${id}`, 'DELETE');
+              if (res.ok) {
+                     showToast('✅ Data berhasil dihapus', 'success');
+                     closeModal('modal-mm-detail');
+                     loadMediaMonitoring();
+              } else {
+                     const data = await res.json();
+                     showToast(data.error || 'Gagal menghapus', 'error');
+              }
+       } catch { showToast('Koneksi ke server gagal', 'error'); }
 }
 
 function mmPembayaranStatusBadge(p) {
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  if (p.status === 'lunas') return `<span class="badge" style="background:#def7ec;color:var(--green)">✅ Lunas</span>`;
-  const tgl = p.tanggal_pembayaran ? new Date(p.tanggal_pembayaran) : null;
-  if (tgl) { tgl.setHours(0, 0, 0, 0); }
-  if (tgl && tgl < today) {
-    const hari = Math.floor((today - tgl) / 86400000);
-    return `<span class="badge" style="background:#fde8e8;color:var(--red)">⚠️ Telat ${hari} hari</span>`;
-  }
-  return `<span class="badge" style="background:#fdf6b2;color:#8a6d00">⏳ Belum</span>`;
+       const today = new Date(); today.setHours(0, 0, 0, 0);
+       if (p.status === 'lunas') return `<span class="badge" style="background:#def7ec;color:var(--green)">✅ Lunas</span>`;
+       const tgl = p.tanggal_pembayaran ? new Date(p.tanggal_pembayaran) : null;
+       if (tgl) { tgl.setHours(0, 0, 0, 0); }
+       if (tgl && tgl < today) {
+              const hari = Math.floor((today - tgl) / 86400000);
+              return `<span class="badge" style="background:#fde8e8;color:var(--red)">⚠️ Telat ${hari} hari</span>`;
+       }
+       return `<span class="badge" style="background:#fdf6b2;color:#8a6d00">⏳ Belum</span>`;
 }
 
 async function openMMDetail(id) {
-  try {
-    const res = await api(`/api/media-monitoring/${id}`);
-    const data = await res.json();
-    if (!res.ok) { showToast(data.error || 'Gagal memuat detail', 'error'); return; }
-    const canEdit = currentUser?.role === 'manager_keuangan';
+       try {
+              const res = await api(`/api/media-monitoring/${id}`);
+              const data = await res.json();
+              if (!res.ok) { showToast(data.error || 'Gagal memuat detail', 'error'); return; }
+              const canEdit = currentUser?.role === 'manager_keuangan';
 
-    document.getElementById('mm-detail-title').textContent = `📡 ${data.nama_perusahaan}`;
-    const pembayaranRows = (data.pembayaran || []).map((p, i) => `
+              document.getElementById('mm-detail-title').textContent = `📡 ${data.nama_perusahaan}`;
+              const pembayaranRows = (data.pembayaran || []).map((p, i) => `
       <tr>
         <td>${i + 1}</td>
         <td>${p.tanggal_pembayaran ? formatDate(p.tanggal_pembayaran) : '-'}</td>
@@ -5337,7 +5337,7 @@ async function openMMDetail(id) {
         <td>${canEdit ? `<button onclick="toggleMMPembayaranStatus(${p.id}, '${p.status === 'lunas' ? 'belum' : 'lunas'}', ${id})" class="btn btn-secondary btn-sm">${p.status === 'lunas' ? 'Tandai Belum' : 'Tandai Lunas'}</button>` : ''}</td>
       </tr>`).join('');
 
-    document.getElementById('mm-detail-body').innerHTML = `
+              document.getElementById('mm-detail-body').innerHTML = `
       <div class="detail-section-title">📋 Info Kontrak</div>
       <div class="detail-grid" style="grid-template-columns:1fr 1fr">
         <div class="detail-item"><label>Nama Perusahaan</label><div class="value">${escHtml(data.nama_perusahaan)}</div></div>
@@ -5369,52 +5369,52 @@ async function openMMDetail(id) {
       </table>
     `;
 
-    let footer = '';
-    if (canEdit) {
-      footer += `<button onclick="closeModal('modal-mm-detail');setTimeout(()=>openMMEdit(${id}),200)" class="btn btn-secondary">✏️ Edit</button>`;
-      footer += `<button onclick="deleteMMEntry(${id})" class="btn btn-danger">🗑️ Hapus</button>`;
-    }
-    footer += `<button onclick="closeModal('modal-mm-detail')" class="btn btn-outline">Tutup</button>`;
-    document.getElementById('mm-detail-footer').innerHTML = footer;
+              let footer = '';
+              if (canEdit) {
+                     footer += `<button onclick="closeModal('modal-mm-detail');setTimeout(()=>openMMEdit(${id}),200)" class="btn btn-secondary">✏️ Edit</button>`;
+                     footer += `<button onclick="deleteMMEntry(${id})" class="btn btn-danger">🗑️ Hapus</button>`;
+              }
+              footer += `<button onclick="closeModal('modal-mm-detail')" class="btn btn-outline">Tutup</button>`;
+              document.getElementById('mm-detail-footer').innerHTML = footer;
 
-    showModal('modal-mm-detail');
-  } catch { showToast('Gagal memuat detail', 'error'); }
+              showModal('modal-mm-detail');
+       } catch { showToast('Gagal memuat detail', 'error'); }
 }
 
 async function toggleMMPembayaranStatus(pid, newStatus, monitoringId) {
-  try {
-    const res = await api(`/api/media-monitoring/pembayaran/${pid}/status`, 'PATCH', { status: newStatus });
-    if (res.ok) {
-      showToast('✅ Status pembayaran diperbarui', 'success');
-      openMMDetail(monitoringId);
-      loadMediaMonitoring();
-    } else {
-      const data = await res.json();
-      showToast(data.error || 'Gagal memperbarui status', 'error');
-    }
-  } catch { showToast('Koneksi ke server gagal', 'error'); }
+       try {
+              const res = await api(`/api/media-monitoring/pembayaran/${pid}/status`, 'PATCH', { status: newStatus });
+              if (res.ok) {
+                     showToast('✅ Status pembayaran diperbarui', 'success');
+                     openMMDetail(monitoringId);
+                     loadMediaMonitoring();
+              } else {
+                     const data = await res.json();
+                     showToast(data.error || 'Gagal memperbarui status', 'error');
+              }
+       } catch { showToast('Koneksi ke server gagal', 'error'); }
 }
 
 async function loadMMDashboardWidget() {
-  const section = document.getElementById('mm-dashboard-section');
-  const cardsEl = document.getElementById('mm-dashboard-cards');
-  if (!section || !cardsEl) return;
-  try {
-    const res = await api('/api/media-monitoring/dashboard');
-    if (!res.ok) { section.style.display = 'none'; return; }
-    const data = await res.json();
-    if (!data.entries || data.entries.length === 0) { section.style.display = 'none'; return; }
+       const section = document.getElementById('mm-dashboard-section');
+       const cardsEl = document.getElementById('mm-dashboard-cards');
+       if (!section || !cardsEl) return;
+       try {
+              const res = await api('/api/media-monitoring/dashboard');
+              if (!res.ok) { section.style.display = 'none'; return; }
+              const data = await res.json();
+              if (!data.entries || data.entries.length === 0) { section.style.display = 'none'; return; }
 
-    section.style.display = '';
-    cardsEl.innerHTML = data.entries.map(e => {
-      const pct = e.nilai_investasi > 0 ? Math.min(100, (e.terbayar / e.nilai_investasi) * 100) : 0;
-      let badge;
-      if (e.ada_keterlambatan) badge = `<span class="badge" style="background:#fde8e8;color:var(--red);font-weight:700">⚠️ Telat ${e.max_telat_hari} hari</span>`;
-      else if (e.semua_lunas) badge = `<span class="badge" style="background:#def7ec;color:var(--green)">✅ Semua Lunas</span>`;
-      else if (!e.ada_jadwal) badge = `<span class="badge" style="background:var(--gray-light);color:var(--text-light)">—</span>`;
-      else badge = `<span class="badge" style="background:var(--blue-light);color:var(--blue)">🔵 Berjalan</span>`;
+              section.style.display = '';
+              cardsEl.innerHTML = data.entries.map(e => {
+                     const pct = e.nilai_investasi > 0 ? Math.min(100, (e.terbayar / e.nilai_investasi) * 100) : 0;
+                     let badge;
+                     if (e.ada_keterlambatan) badge = `<span class="badge" style="background:#fde8e8;color:var(--red);font-weight:700">⚠️ Telat ${e.max_telat_hari} hari</span>`;
+                     else if (e.semua_lunas) badge = `<span class="badge" style="background:#def7ec;color:var(--green)">✅ Semua Lunas</span>`;
+                     else if (!e.ada_jadwal) badge = `<span class="badge" style="background:var(--gray-light);color:var(--text-light)">—</span>`;
+                     else badge = `<span class="badge" style="background:var(--blue-light);color:var(--blue)">🔵 Berjalan</span>`;
 
-      return `
+                     return `
       <div class="mm-dash-card ${e.ada_keterlambatan ? 'mm-telat' : ''}" onclick="openMMDetail(${e.id})">
         <div class="mm-dash-card-name">📡 ${escHtml(e.nama_perusahaan)}</div>
         <div class="mm-dash-card-job">${escHtml(e.pekerjaan || '-')}</div>
@@ -5426,10 +5426,10 @@ async function loadMMDashboardWidget() {
         <div class="mm-dash-row"><span class="lbl">Margin</span><span style="color:${e.margin_pct >= 0 ? 'var(--green)' : 'var(--red)'}">${e.margin_pct.toFixed(2)}%</span></div>
         <div style="margin-top:8px">${badge}</div>
       </div>`;
-    }).join('');
-  } catch {
-    section.style.display = 'none';
-  }
+              }).join('');
+       } catch {
+              section.style.display = 'none';
+       }
 }
 
 // ===================== MOM MEETING =====================
@@ -5437,32 +5437,32 @@ let momData = [];
 let momEditId = null;
 
 async function loadMOMList() {
-  const tbody = document.getElementById('mom-tbody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="loading">⏳ Memuat...</td></tr>';
-  try {
-    const res = await api('/api/mom');
-    if (!res.ok) { if (tbody) tbody.innerHTML = '<tr><td colspan="6">Gagal memuat data</td></tr>'; return; }
-    momData = await res.json();
-    renderMOMTable(momData);
-  } catch {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="6">Gagal memuat data</td></tr>';
-  }
+       const tbody = document.getElementById('mom-tbody');
+       if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="loading">⏳ Memuat...</td></tr>';
+       try {
+              const res = await api('/api/mom');
+              if (!res.ok) { if (tbody) tbody.innerHTML = '<tr><td colspan="6">Gagal memuat data</td></tr>'; return; }
+              momData = await res.json();
+              renderMOMTable(momData);
+       } catch {
+              if (tbody) tbody.innerHTML = '<tr><td colspan="6">Gagal memuat data</td></tr>';
+       }
 }
 
 function filterMOMList() {
-  const q = (document.getElementById('mom-search')?.value || '').toLowerCase().trim();
-  const filtered = momData.filter(e => {
-    if (!q) return true;
-    return (e.judul || '').toLowerCase().includes(q) || (e.perusahaan || '').toLowerCase().includes(q);
-  });
-  renderMOMTable(filtered);
+       const q = (document.getElementById('mom-search')?.value || '').toLowerCase().trim();
+       const filtered = momData.filter(e => {
+              if (!q) return true;
+              return (e.judul || '').toLowerCase().includes(q) || (e.perusahaan || '').toLowerCase().includes(q);
+       });
+       renderMOMTable(filtered);
 }
 
 function renderMOMTable(data) {
-  const tbody = document.getElementById('mom-tbody');
-  if (!tbody) return;
-  if (data.length === 0) { tbody.innerHTML = `<tr><td colspan="6">${emptyState('Belum ada data MOM Meeting')}</td></tr>`; return; }
-  tbody.innerHTML = data.map(e => `
+       const tbody = document.getElementById('mom-tbody');
+       if (!tbody) return;
+       if (data.length === 0) { tbody.innerHTML = `<tr><td colspan="6">${emptyState('Belum ada data MOM Meeting')}</td></tr>`; return; }
+       tbody.innerHTML = data.map(e => `
     <tr>
       <td>${e.tanggal ? formatDate(e.tanggal) : '-'}</td>
       <td class="fw-bold">${escHtml(e.judul)}</td>
@@ -5480,166 +5480,166 @@ function renderMOMTable(data) {
 }
 
 function addMOMPesertaRow(data = {}) {
-  const tbody = document.getElementById('mom-peserta-tbody');
-  if (!tbody) return;
-  const tr = document.createElement('tr');
-  tr.innerHTML = `
+       const tbody = document.getElementById('mom-peserta-tbody');
+       if (!tbody) return;
+       const tr = document.createElement('tr');
+       tr.innerHTML = `
     <td class="mom-peserta-no" style="text-align:center;font-size:12px"></td>
     <td><input type="text" class="mom-peserta-nama" placeholder="Nama" value="${escHtml(data.nama || '')}"></td>
     <td><input type="text" class="mom-peserta-jabatan" placeholder="Jabatan" value="${escHtml(data.jabatan || '')}"></td>
     <td style="text-align:center"><input type="checkbox" class="mom-peserta-hadir" ${data.hadir === 0 ? '' : 'checked'}></td>
     <td><button type="button" onclick="this.closest('tr').remove();renumberMOMPeserta()" class="btn-remove-row">✕</button></td>`;
-  tbody.appendChild(tr);
-  renumberMOMPeserta();
+       tbody.appendChild(tr);
+       renumberMOMPeserta();
 }
 
 function renumberMOMPeserta() {
-  document.querySelectorAll('#mom-peserta-tbody tr').forEach((r, i) => {
-    const cell = r.querySelector('.mom-peserta-no');
-    if (cell) cell.textContent = i + 1;
-  });
+       document.querySelectorAll('#mom-peserta-tbody tr').forEach((r, i) => {
+              const cell = r.querySelector('.mom-peserta-no');
+              if (cell) cell.textContent = i + 1;
+       });
 }
 
 function getMOMPesertaFromDOM() {
-  return Array.from(document.querySelectorAll('#mom-peserta-tbody tr')).map((row, idx) => ({
-    nama: row.querySelector('.mom-peserta-nama')?.value.trim() || '',
-    jabatan: row.querySelector('.mom-peserta-jabatan')?.value.trim() || '',
-    hadir: row.querySelector('.mom-peserta-hadir')?.checked ? 1 : 0,
-    urutan: idx,
-  })).filter(p => p.nama);
+       return Array.from(document.querySelectorAll('#mom-peserta-tbody tr')).map((row, idx) => ({
+              nama: row.querySelector('.mom-peserta-nama')?.value.trim() || '',
+              jabatan: row.querySelector('.mom-peserta-jabatan')?.value.trim() || '',
+              hadir: row.querySelector('.mom-peserta-hadir')?.checked ? 1 : 0,
+              urutan: idx,
+       })).filter(p => p.nama);
 }
 
 function addMOMPoinRow(text) {
-  text = text || '';
-  const container = document.getElementById('mom-poin-container');
-  const empty = container.querySelector('.mom-poin-empty');
-  if (empty) empty.remove();
+       text = text || '';
+       const container = document.getElementById('mom-poin-container');
+       const empty = container.querySelector('.mom-poin-empty');
+       if (empty) empty.remove();
 
-  const row = document.createElement('div');
-  row.className = 'mom-poin-row';
-  row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px';
-  row.innerHTML = `<input type="text" class="mom-poin-input" placeholder="Poin yang dibahas..."
+       const row = document.createElement('div');
+       row.className = 'mom-poin-row';
+       row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px';
+       row.innerHTML = `<input type="text" class="mom-poin-input" placeholder="Poin yang dibahas..."
     style="flex:1;padding:8px 10px;border:1px solid var(--gray-border);border-radius:6px;font-size:13px">
     <button type="button" onclick="this.parentElement.remove();checkMOMPoinEmpty()" class="btn-remove-row">✕</button>`;
-  container.appendChild(row);
-  row.querySelector('input').value = text;
+       container.appendChild(row);
+       row.querySelector('input').value = text;
 }
 
 function checkMOMPoinEmpty() {
-  const container = document.getElementById('mom-poin-container');
-  if (!container.querySelector('.mom-poin-row')) {
-    container.innerHTML = '<p class="mom-poin-empty" style="color:var(--text-light);font-size:13px;margin:0">Belum ada poin. Klik "+ Tambah Poin" untuk menambah.</p>';
-  }
+       const container = document.getElementById('mom-poin-container');
+       if (!container.querySelector('.mom-poin-row')) {
+              container.innerHTML = '<p class="mom-poin-empty" style="color:var(--text-light);font-size:13px;margin:0">Belum ada poin. Klik "+ Tambah Poin" untuk menambah.</p>';
+       }
 }
 
 function getMOMPoinFromDOM() {
-  return Array.from(document.querySelectorAll('.mom-poin-input')).map(inp => inp.value.trim()).filter(Boolean);
+       return Array.from(document.querySelectorAll('.mom-poin-input')).map(inp => inp.value.trim()).filter(Boolean);
 }
 
 async function openMOMForm(id = null) {
-  momEditId = id;
-  document.getElementById('mom-form-error').style.display = 'none';
-  document.getElementById('mom-form-title').textContent = id ? 'Edit MOM Meeting' : 'Tambah MOM Meeting';
-  document.getElementById('mom-peserta-tbody').innerHTML = '';
-  document.getElementById('mom-poin-container').innerHTML = '<p class="mom-poin-empty" style="color:var(--text-light);font-size:13px;margin:0">Belum ada poin. Klik "+ Tambah Poin" untuk menambah.</p>';
+       momEditId = id;
+       document.getElementById('mom-form-error').style.display = 'none';
+       document.getElementById('mom-form-title').textContent = id ? 'Edit MOM Meeting' : 'Tambah MOM Meeting';
+       document.getElementById('mom-peserta-tbody').innerHTML = '';
+       document.getElementById('mom-poin-container').innerHTML = '<p class="mom-poin-empty" style="color:var(--text-light);font-size:13px;margin:0">Belum ada poin. Klik "+ Tambah Poin" untuk menambah.</p>';
 
-  if (id) {
-    try {
-      const res = await api(`/api/mom/${id}`);
-      const data = await res.json();
-      if (!res.ok) { showToast(data.error || 'Gagal memuat data', 'error'); return; }
-      document.getElementById('mom-judul').value = data.judul || '';
-      document.getElementById('mom-perusahaan').value = data.perusahaan || '';
-      document.getElementById('mom-tanggal').value = data.tanggal || '';
-      document.getElementById('mom-waktu').value = data.waktu || '';
-      document.getElementById('mom-lokasi').value = data.lokasi || '';
-      document.getElementById('mom-agenda').value = data.agenda || '';
-      document.getElementById('mom-keterangan').value = data.keterangan || '';
-      (data.peserta || []).forEach(p => addMOMPesertaRow(p));
-      (data.poin || []).forEach(p => addMOMPoinRow(p.poin));
-    } catch { showToast('Gagal memuat data', 'error'); return; }
-  } else {
-    document.getElementById('mom-judul').value = '';
-    document.getElementById('mom-perusahaan').value = '';
-    document.getElementById('mom-tanggal').value = '';
-    document.getElementById('mom-waktu').value = '';
-    document.getElementById('mom-lokasi').value = '';
-    document.getElementById('mom-agenda').value = '';
-    document.getElementById('mom-keterangan').value = '';
-  }
-  showModal('modal-mom-form');
+       if (id) {
+              try {
+                     const res = await api(`/api/mom/${id}`);
+                     const data = await res.json();
+                     if (!res.ok) { showToast(data.error || 'Gagal memuat data', 'error'); return; }
+                     document.getElementById('mom-judul').value = data.judul || '';
+                     document.getElementById('mom-perusahaan').value = data.perusahaan || '';
+                     document.getElementById('mom-tanggal').value = data.tanggal || '';
+                     document.getElementById('mom-waktu').value = data.waktu || '';
+                     document.getElementById('mom-lokasi').value = data.lokasi || '';
+                     document.getElementById('mom-agenda').value = data.agenda || '';
+                     document.getElementById('mom-keterangan').value = data.keterangan || '';
+                     (data.peserta || []).forEach(p => addMOMPesertaRow(p));
+                     (data.poin || []).forEach(p => addMOMPoinRow(p.poin));
+              } catch { showToast('Gagal memuat data', 'error'); return; }
+       } else {
+              document.getElementById('mom-judul').value = '';
+              document.getElementById('mom-perusahaan').value = '';
+              document.getElementById('mom-tanggal').value = '';
+              document.getElementById('mom-waktu').value = '';
+              document.getElementById('mom-lokasi').value = '';
+              document.getElementById('mom-agenda').value = '';
+              document.getElementById('mom-keterangan').value = '';
+       }
+       showModal('modal-mom-form');
 }
 
 function openMOMEdit(id) {
-  openMOMForm(id);
+       openMOMForm(id);
 }
 
 async function saveMOMForm() {
-  const errEl = document.getElementById('mom-form-error');
-  errEl.style.display = 'none';
-  const judul = document.getElementById('mom-judul').value.trim();
-  const tanggal = document.getElementById('mom-tanggal').value;
-  if (!judul) { errEl.textContent = 'Judul rapat wajib diisi'; errEl.style.display = 'block'; return; }
-  if (!tanggal) { errEl.textContent = 'Tanggal rapat wajib diisi'; errEl.style.display = 'block'; return; }
+       const errEl = document.getElementById('mom-form-error');
+       errEl.style.display = 'none';
+       const judul = document.getElementById('mom-judul').value.trim();
+       const tanggal = document.getElementById('mom-tanggal').value;
+       if (!judul) { errEl.textContent = 'Judul rapat wajib diisi'; errEl.style.display = 'block'; return; }
+       if (!tanggal) { errEl.textContent = 'Tanggal rapat wajib diisi'; errEl.style.display = 'block'; return; }
 
-  const payload = {
-    judul,
-    perusahaan: document.getElementById('mom-perusahaan').value.trim(),
-    tanggal,
-    waktu: document.getElementById('mom-waktu').value,
-    lokasi: document.getElementById('mom-lokasi').value.trim(),
-    agenda: document.getElementById('mom-agenda').value.trim(),
-    keterangan: document.getElementById('mom-keterangan').value.trim(),
-    peserta: getMOMPesertaFromDOM(),
-    poin: getMOMPoinFromDOM(),
-  };
+       const payload = {
+              judul,
+              perusahaan: document.getElementById('mom-perusahaan').value.trim(),
+              tanggal,
+              waktu: document.getElementById('mom-waktu').value,
+              lokasi: document.getElementById('mom-lokasi').value.trim(),
+              agenda: document.getElementById('mom-agenda').value.trim(),
+              keterangan: document.getElementById('mom-keterangan').value.trim(),
+              peserta: getMOMPesertaFromDOM(),
+              poin: getMOMPoinFromDOM(),
+       };
 
-  try {
-    const btn = document.getElementById('btn-save-mom');
-    btn.disabled = true;
-    const res = momEditId
-      ? await api(`/api/mom/${momEditId}`, 'PUT', payload)
-      : await api('/api/mom', 'POST', payload);
-    const data = await res.json();
-    btn.disabled = false;
-    if (res.ok) {
-      closeModal('modal-mom-form');
-      showToast('✅ MOM Meeting berhasil disimpan', 'success');
-      loadMOMList();
-    } else {
-      errEl.textContent = data.error || 'Gagal menyimpan';
-      errEl.style.display = 'block';
-    }
-  } catch {
-    errEl.textContent = 'Koneksi ke server gagal';
-    errEl.style.display = 'block';
-  }
+       try {
+              const btn = document.getElementById('btn-save-mom');
+              btn.disabled = true;
+              const res = momEditId
+                     ? await api(`/api/mom/${momEditId}`, 'PUT', payload)
+                     : await api('/api/mom', 'POST', payload);
+              const data = await res.json();
+              btn.disabled = false;
+              if (res.ok) {
+                     closeModal('modal-mom-form');
+                     showToast('✅ MOM Meeting berhasil disimpan', 'success');
+                     loadMOMList();
+              } else {
+                     errEl.textContent = data.error || 'Gagal menyimpan';
+                     errEl.style.display = 'block';
+              }
+       } catch {
+              errEl.textContent = 'Koneksi ke server gagal';
+              errEl.style.display = 'block';
+       }
 }
 
 async function deleteMOMEntry(id) {
-  if (!confirm('Hapus MOM Meeting ini beserta daftar peserta dan poin pembahasannya?')) return;
-  try {
-    const res = await api(`/api/mom/${id}`, 'DELETE');
-    if (res.ok) {
-      showToast('✅ Data berhasil dihapus', 'success');
-      closeModal('modal-mom-detail');
-      loadMOMList();
-    } else {
-      const data = await res.json();
-      showToast(data.error || 'Gagal menghapus', 'error');
-    }
-  } catch { showToast('Koneksi ke server gagal', 'error'); }
+       if (!confirm('Hapus MOM Meeting ini beserta daftar peserta dan poin pembahasannya?')) return;
+       try {
+              const res = await api(`/api/mom/${id}`, 'DELETE');
+              if (res.ok) {
+                     showToast('✅ Data berhasil dihapus', 'success');
+                     closeModal('modal-mom-detail');
+                     loadMOMList();
+              } else {
+                     const data = await res.json();
+                     showToast(data.error || 'Gagal menghapus', 'error');
+              }
+       } catch { showToast('Koneksi ke server gagal', 'error'); }
 }
 
 async function openMOMDetail(id) {
-  try {
-    const res = await api(`/api/mom/${id}`);
-    const data = await res.json();
-    if (!res.ok) { showToast(data.error || 'Gagal memuat detail', 'error'); return; }
+       try {
+              const res = await api(`/api/mom/${id}`);
+              const data = await res.json();
+              if (!res.ok) { showToast(data.error || 'Gagal memuat detail', 'error'); return; }
 
-    document.getElementById('mom-detail-title').textContent = `📝 ${data.judul}`;
+              document.getElementById('mom-detail-title').textContent = `📝 ${data.judul}`;
 
-    const pesertaRows = (data.peserta || []).map((p, i) => `
+              const pesertaRows = (data.peserta || []).map((p, i) => `
       <tr>
         <td>${i + 1}</td>
         <td>${escHtml(p.nama || '-')}</td>
@@ -5647,9 +5647,9 @@ async function openMOMDetail(id) {
         <td>${p.hadir ? '<span class="badge" style="background:#def7ec;color:var(--green)">✅ Hadir</span>' : '<span class="badge" style="background:var(--gray-light);color:var(--text-light)">— Tidak Hadir</span>'}</td>
       </tr>`).join('');
 
-    const poinList = (data.poin || []).map(p => `<li>${escHtml(p.poin)}</li>`).join('');
+              const poinList = (data.poin || []).map(p => `<li>${escHtml(p.poin)}</li>`).join('');
 
-    document.getElementById('mom-detail-body').innerHTML = `
+              document.getElementById('mom-detail-body').innerHTML = `
       <div class="detail-section-title">📋 Info Rapat</div>
       <div class="detail-grid" style="grid-template-columns:1fr 1fr">
         <div class="detail-item"><label>Judul Rapat</label><div class="value">${escHtml(data.judul)}</div></div>
@@ -5674,14 +5674,14 @@ async function openMOMDetail(id) {
       <ul style="font-size:13px;padding-left:20px;margin:0">${poinList || '<li>Belum ada poin</li>'}</ul>
     `;
 
-    document.getElementById('mom-detail-footer').innerHTML = `
+              document.getElementById('mom-detail-footer').innerHTML = `
       <button onclick="closeModal('modal-mom-detail');setTimeout(()=>openMOMEdit(${id}),200)" class="btn btn-secondary">✏️ Edit</button>
       <button onclick="deleteMOMEntry(${id})" class="btn btn-danger">🗑️ Hapus</button>
       <button onclick="closeModal('modal-mom-detail')" class="btn btn-outline">Tutup</button>
     `;
 
-    showModal('modal-mom-detail');
-  } catch { showToast('Gagal memuat detail', 'error'); }
+              showModal('modal-mom-detail');
+       } catch { showToast('Gagal memuat detail', 'error'); }
 }
 
 // ===================== PENGAJUAN UANG MUKA =====================
@@ -5692,65 +5692,65 @@ let umRealisasiNominal = 0;
 let eumTargetId = null;
 
 function renderUMProgressBadge(r) {
-  const lvl = r.approval_level;
-  const status = r.status;
-  const short = ['AM', 'MK', 'GM1', 'GM2', 'DO', 'DU'];
-  const lvlStatus = [null, r.lvl1_status, r.lvl2_status, r.lvl3_status, r.lvl4_status, r.lvl5_status, r.lvl6_status];
+       const lvl = r.approval_level;
+       const status = r.status;
+       const short = ['AM', 'MK', 'GM1', 'GM2', 'DO', 'DU'];
+       const lvlStatus = [null, r.lvl1_status, r.lvl2_status, r.lvl3_status, r.lvl4_status, r.lvl5_status, r.lvl6_status];
 
-  const steps = [1, 2, 3, 4, 5, 6].map(i => {
-    let icon, cls;
-    const actualStatus = lvlStatus[i];
-    const isAutoSkip = i === 1 && !!r.am_auto_skipped;
-    const isGmParallel = (i === 4) && (lvl === 3);
+       const steps = [1, 2, 3, 4, 5, 6].map(i => {
+              let icon, cls;
+              const actualStatus = lvlStatus[i];
+              const isAutoSkip = i === 1 && !!r.am_auto_skipped;
+              const isGmParallel = (i === 4) && (lvl === 3);
 
-    if (!actualStatus || actualStatus === 'pending') {
-      if (status === 'approved' || status === 'selesai') {
-        icon = '○'; cls = 'waiting';
-      } else if (status !== 'rejected' && (lvl === i || isGmParallel)) {
-        icon = '⏳'; cls = 'current';
-      } else {
-        icon = '○'; cls = 'waiting';
-      }
-    } else if (actualStatus === 'approved') {
-      if (isAutoSkip) { icon = '⏭️'; cls = 'skipped'; }
-      else { icon = '✅'; cls = 'approved'; }
-    } else {
-      icon = '❌'; cls = 'rejected';
-    }
-    return `<span class="kk-ps kk-ps-${cls}" title="${KK_LEVEL_LABELS[i]}">${icon} ${short[i - 1]}</span>`;
-  }).join('<span class="kk-ps-sep">›</span>');
-  return `<div class="kk-progress-steps">${steps}</div>`;
+              if (!actualStatus || actualStatus === 'pending') {
+                     if (status === 'approved' || status === 'selesai') {
+                            icon = '○'; cls = 'waiting';
+                     } else if (status !== 'rejected' && (lvl === i || isGmParallel)) {
+                            icon = '⏳'; cls = 'current';
+                     } else {
+                            icon = '○'; cls = 'waiting';
+                     }
+              } else if (actualStatus === 'approved') {
+                     if (isAutoSkip) { icon = '⏭️'; cls = 'skipped'; }
+                     else { icon = '✅'; cls = 'approved'; }
+              } else {
+                     icon = '❌'; cls = 'rejected';
+              }
+              return `<span class="kk-ps kk-ps-${cls}" title="${KK_LEVEL_LABELS[i]}">${icon} ${short[i - 1]}</span>`;
+       }).join('<span class="kk-ps-sep">›</span>');
+       return `<div class="kk-progress-steps">${steps}</div>`;
 }
 
 function refreshUMList() {
-  const page = document.querySelector('.menu-item.active')?.getAttribute('data-page');
-  if (page === 'my-uang-muka') loadMyUM();
-  else if (page === 'uang-muka-approvals') loadUMApprovals();
-  else if (page === 'admin-uang-muka') loadAdminUM();
+       const page = document.querySelector('.menu-item.active')?.getAttribute('data-page');
+       if (page === 'my-uang-muka') loadMyUM();
+       else if (page === 'uang-muka-approvals') loadUMApprovals();
+       else if (page === 'admin-uang-muka') loadAdminUM();
 }
 
 function renderUMTable(rows, { showCreator = false, showApproveBtn = false } = {}) {
-  if (rows.length === 0) return emptyState('Belum ada Pengajuan Uang Muka');
-  const myLvl = { area_manager: 1, manager_keuangan: 2, gm: 3, gm2: 4, direktur_ops: 5, direktur_utama: 6 }[currentUser.role];
-  const tableRows = rows.map(r => {
-    const lvl = r.approval_level;
-    const approvalBadge = r.status === 'selesai'
-      ? '<span class="badge badge-info">📦 Selesai</span>'
-      : renderUMProgressBadge(r);
-    let canAct = false;
-    if (showApproveBtn && r.status === 'pending') {
-      if (currentUser.role === 'admin') {
-        canAct = true;
-      } else if (currentUser.role === 'gm') {
-        canAct = lvl === 3 && r.lvl3_status !== 'approved';
-      } else if (currentUser.role === 'gm2') {
-        canAct = lvl === 3 && r.lvl4_status !== 'approved';
-      } else if (myLvl) {
-        canAct = myLvl === lvl;
-      }
-    }
-    const canRealisasi = r.status === 'approved' && !r.has_realisasi && (currentUser.role === 'admin' || r.created_by === currentUser.id);
-    return `<tr>
+       if (rows.length === 0) return emptyState('Belum ada Pengajuan Uang Muka');
+       const myLvl = { area_manager: 1, manager_keuangan: 2, gm: 3, gm2: 4, direktur_ops: 5, direktur_utama: 6 }[currentUser.role];
+       const tableRows = rows.map(r => {
+              const lvl = r.approval_level;
+              const approvalBadge = r.status === 'selesai'
+                     ? '<span class="badge badge-info">📦 Selesai</span>'
+                     : renderUMProgressBadge(r);
+              let canAct = false;
+              if (showApproveBtn && r.status === 'pending') {
+                     if (currentUser.role === 'admin') {
+                            canAct = true;
+                     } else if (currentUser.role === 'gm') {
+                            canAct = lvl === 3 && r.lvl3_status !== 'approved';
+                     } else if (currentUser.role === 'gm2') {
+                            canAct = lvl === 3 && r.lvl4_status !== 'approved';
+                     } else if (myLvl) {
+                            canAct = myLvl === lvl;
+                     }
+              }
+              const canRealisasi = r.status === 'approved' && !r.has_realisasi && (currentUser.role === 'admin' || r.created_by === currentUser.id);
+              return `<tr>
       <td><div class="fw-bold">${escHtml(r.keperluan)}</div>
           <div style="font-size:11px;color:var(--text-light)">${escHtml(r.nomor || '-')}</div></td>
       ${showCreator ? `<td style="font-size:12px">${escHtml(r.creator_name || '-')}</td>` : ''}
@@ -5770,8 +5770,8 @@ function renderUMTable(rows, { showCreator = false, showApproveBtn = false } = {
         </div>
       </td>
     </tr>`;
-  }).join('');
-  return `<div class="table-responsive"><table class="table">
+       }).join('');
+       return `<div class="table-responsive"><table class="table">
     <thead><tr>
       <th>Keperluan</th>
       ${showCreator ? '<th>Diajukan Oleh</th>' : ''}
@@ -5785,62 +5785,62 @@ function renderUMTable(rows, { showCreator = false, showApproveBtn = false } = {
 }
 
 async function loadMyUM() {
-  const container = document.getElementById('my-um-container');
-  if (!container) return;
-  container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
-  const filterStatus = document.getElementById('my-um-filter')?.value || '';
-  try {
-    const res = await api('/api/uang-muka');
-    let rows = await res.json();
-    rows = rows.filter(r => r.created_by === currentUser.id);
-    if (filterStatus) rows = rows.filter(r => r.status === filterStatus);
-    container.innerHTML = renderUMTable(rows);
-  } catch { container.innerHTML = '<div class="alert alert-error">Gagal memuat data</div>'; }
+       const container = document.getElementById('my-um-container');
+       if (!container) return;
+       container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
+       const filterStatus = document.getElementById('my-um-filter')?.value || '';
+       try {
+              const res = await api('/api/uang-muka');
+              let rows = await res.json();
+              rows = rows.filter(r => r.created_by === currentUser.id);
+              if (filterStatus) rows = rows.filter(r => r.status === filterStatus);
+              container.innerHTML = renderUMTable(rows);
+       } catch { container.innerHTML = '<div class="alert alert-error">Gagal memuat data</div>'; }
 }
 
 async function loadUMApprovals() {
-  const container = document.getElementById('um-approvals-container');
-  if (!container) return;
-  container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
-  const filterStatus = document.getElementById('um-approvals-filter')?.value || 'pending';
-  try {
-    const res = await api('/api/uang-muka');
-    let rows = await res.json();
-    if (filterStatus) rows = rows.filter(r => r.status === filterStatus);
-    container.innerHTML = renderUMTable(rows, { showApproveBtn: true, showCreator: true });
-  } catch { container.innerHTML = '<div class="alert alert-error">Gagal memuat data</div>'; }
+       const container = document.getElementById('um-approvals-container');
+       if (!container) return;
+       container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
+       const filterStatus = document.getElementById('um-approvals-filter')?.value || 'pending';
+       try {
+              const res = await api('/api/uang-muka');
+              let rows = await res.json();
+              if (filterStatus) rows = rows.filter(r => r.status === filterStatus);
+              container.innerHTML = renderUMTable(rows, { showApproveBtn: true, showCreator: true });
+       } catch { container.innerHTML = '<div class="alert alert-error">Gagal memuat data</div>'; }
 }
 
 async function loadAdminUM() {
-  const container = document.getElementById('admin-um-container');
-  if (!container) return;
-  container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
-  const filterStatus = document.getElementById('admin-um-filter')?.value || '';
-  try {
-    const res = await api('/api/uang-muka');
-    let rows = await res.json();
-    if (filterStatus) rows = rows.filter(r => r.status === filterStatus);
-    container.innerHTML = renderUMTable(rows, { showCreator: true, showApproveBtn: true });
-  } catch { container.innerHTML = '<div class="alert alert-error">Gagal memuat data</div>'; }
+       const container = document.getElementById('admin-um-container');
+       if (!container) return;
+       container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
+       const filterStatus = document.getElementById('admin-um-filter')?.value || '';
+       try {
+              const res = await api('/api/uang-muka');
+              let rows = await res.json();
+              if (filterStatus) rows = rows.filter(r => r.status === filterStatus);
+              container.innerHTML = renderUMTable(rows, { showCreator: true, showApproveBtn: true });
+       } catch { container.innerHTML = '<div class="alert alert-error">Gagal memuat data</div>'; }
 }
 
 async function viewUMDetail(id) {
-  try {
-    const res = await api(`/api/uang-muka/${id}`);
-    const um = await res.json();
-    if (!res.ok) { showToast(um.error || 'Gagal memuat', 'error'); return; }
-    const approvals = um.approvals || [];
+       try {
+              const res = await api(`/api/uang-muka/${id}`);
+              const um = await res.json();
+              if (!res.ok) { showToast(um.error || 'Gagal memuat', 'error'); return; }
+              const approvals = um.approvals || [];
 
-    const approvalSteps = [1, 2, 3, 4, 5, 6].map(lvl => {
-      const a = approvals.find(x => x.level === lvl);
-      const isAutoSkip = a?.status === 'approved' && !a?.approver_user_id;
-      let icon, color;
-      if (!a || a.status === 'pending') { icon = '⬜'; color = 'var(--text-light)'; }
-      else if (a.status === 'approved' && isAutoSkip) { icon = '⏭️'; color = 'var(--blue)'; }
-      else if (a.status === 'approved') { icon = '✅'; color = 'var(--green)'; }
-      else { icon = '❌'; color = 'var(--red)'; }
-      const isGmParallel = (lvl === 3 || lvl === 4) ? ' <small style="color:var(--blue)">(paralel)</small>' : '';
-      return `<div class="kk-step">
+              const approvalSteps = [1, 2, 3, 4, 5, 6].map(lvl => {
+                     const a = approvals.find(x => x.level === lvl);
+                     const isAutoSkip = a?.status === 'approved' && !a?.approver_user_id;
+                     let icon, color;
+                     if (!a || a.status === 'pending') { icon = '⬜'; color = 'var(--text-light)'; }
+                     else if (a.status === 'approved' && isAutoSkip) { icon = '⏭️'; color = 'var(--blue)'; }
+                     else if (a.status === 'approved') { icon = '✅'; color = 'var(--green)'; }
+                     else { icon = '❌'; color = 'var(--red)'; }
+                     const isGmParallel = (lvl === 3 || lvl === 4) ? ' <small style="color:var(--blue)">(paralel)</small>' : '';
+                     return `<div class="kk-step">
         <div class="kk-step-icon" style="color:${color}">${icon}</div>
         <div class="kk-step-label">
           <strong>${KK_LEVEL_LABELS[lvl]}</strong>${isGmParallel}
@@ -5849,10 +5849,10 @@ async function viewUMDetail(id) {
           ${a?.acted_at ? `<br><small style="color:var(--text-light)">${formatDate(a.acted_at)}</small>` : ''}
         </div>
       </div>`;
-    }).join('<div class="kk-step-arrow">→</div>');
+              }).join('<div class="kk-step-arrow">→</div>');
 
-    const realisasi = um.realisasi;
-    const realisasiHtml = realisasi ? `
+              const realisasi = um.realisasi;
+              const realisasiHtml = realisasi ? `
       <div class="detail-section-title">🧾 Realisasi / Pertanggungjawaban</div>
       <div class="detail-grid" style="grid-template-columns:1fr 1fr 1fr">
         <div class="detail-item"><label>Tanggal Realisasi</label><div class="value">${realisasi.tanggal_realisasi ? formatDate(realisasi.tanggal_realisasi) : '-'}</div></div>
@@ -5871,8 +5871,8 @@ async function viewUMDetail(id) {
           </tr>`).join('') || '<tr><td colspan="4">Belum ada rincian</td></tr>'}</tbody>
       </table>` : '';
 
-    document.getElementById('um-detail-title').textContent = `Uang Muka — ${um.keperluan}`;
-    document.getElementById('um-detail-body').innerHTML = `
+              document.getElementById('um-detail-title').textContent = `Uang Muka — ${um.keperluan}`;
+              document.getElementById('um-detail-body').innerHTML = `
       <div class="detail-grid" style="grid-template-columns:repeat(3,1fr)">
         <div class="detail-item"><label>Status</label><div class="value"><span class="badge badge-${um.status === 'selesai' ? 'info' : um.status}">${statusLabel(um.status)}</span></div></div>
         <div class="detail-item"><label>Nomor</label><div class="value">${escHtml(um.nomor || '-')}</div></div>
@@ -5890,202 +5890,202 @@ async function viewUMDetail(id) {
       ${realisasiHtml}
     `;
 
-    const lvl = um.approval_level;
-    const myRole = currentUser.role;
-    const myLvl = { area_manager: 1, manager_keuangan: 2, gm: 3, gm2: 4, direktur_ops: 5, direktur_utama: 6 }[myRole];
-    let canAct = false;
-    if (myRole === 'admin') {
-      canAct = um.status === 'pending';
-    } else if (myRole === 'gm') {
-      const myApproval = approvals.find(a => a.level === 3);
-      canAct = um.status === 'pending' && lvl === 3 && (!myApproval || myApproval.status === 'pending');
-    } else if (myRole === 'gm2') {
-      const myApproval = approvals.find(a => a.level === 4);
-      canAct = um.status === 'pending' && lvl === 3 && (!myApproval || myApproval.status === 'pending');
-    } else if (myLvl) {
-      canAct = um.status === 'pending' && myLvl === lvl;
-    }
-    let footer = '';
-    if (canAct) {
-      footer += `<button onclick="closeModal('modal-um-detail');setTimeout(()=>openUMAction(${id},'approve'),200)" class="btn btn-success">✅ Setujui</button>`;
-      footer += `<button onclick="closeModal('modal-um-detail');setTimeout(()=>openUMAction(${id},'reject'),200)" class="btn btn-danger">❌ Tolak</button>`;
-    }
-    if (um.status === 'approved' && !realisasi && (currentUser.role === 'admin' || um.created_by === currentUser.id)) {
-      footer += `<button onclick="closeModal('modal-um-detail');setTimeout(()=>openUMRealisasi(${id}),200)" class="btn btn-secondary">🧾 Isi Realisasi</button>`;
-    }
-    if (um.status === 'pending' && (currentUser.role === 'admin' || um.created_by === currentUser.id)) {
-      footer += `<button onclick="closeModal('modal-um-detail');setTimeout(()=>openEditUM(${id}),200)" class="btn btn-secondary">✏️ Edit</button>`;
-    }
-    if (currentUser.role === 'admin') {
-      footer += `<button onclick="deleteUM(${id})" class="btn btn-danger">🗑️ Hapus</button>`;
-    }
-    footer += `<button onclick="closeModal('modal-um-detail')" class="btn btn-outline">Tutup</button>`;
-    document.getElementById('um-detail-footer').innerHTML = footer;
-    showModal('modal-um-detail');
-  } catch { showToast('Gagal memuat detail Uang Muka', 'error'); }
+              const lvl = um.approval_level;
+              const myRole = currentUser.role;
+              const myLvl = { area_manager: 1, manager_keuangan: 2, gm: 3, gm2: 4, direktur_ops: 5, direktur_utama: 6 }[myRole];
+              let canAct = false;
+              if (myRole === 'admin') {
+                     canAct = um.status === 'pending';
+              } else if (myRole === 'gm') {
+                     const myApproval = approvals.find(a => a.level === 3);
+                     canAct = um.status === 'pending' && lvl === 3 && (!myApproval || myApproval.status === 'pending');
+              } else if (myRole === 'gm2') {
+                     const myApproval = approvals.find(a => a.level === 4);
+                     canAct = um.status === 'pending' && lvl === 3 && (!myApproval || myApproval.status === 'pending');
+              } else if (myLvl) {
+                     canAct = um.status === 'pending' && myLvl === lvl;
+              }
+              let footer = '';
+              if (canAct) {
+                     footer += `<button onclick="closeModal('modal-um-detail');setTimeout(()=>openUMAction(${id},'approve'),200)" class="btn btn-success">✅ Setujui</button>`;
+                     footer += `<button onclick="closeModal('modal-um-detail');setTimeout(()=>openUMAction(${id},'reject'),200)" class="btn btn-danger">❌ Tolak</button>`;
+              }
+              if (um.status === 'approved' && !realisasi && (currentUser.role === 'admin' || um.created_by === currentUser.id)) {
+                     footer += `<button onclick="closeModal('modal-um-detail');setTimeout(()=>openUMRealisasi(${id}),200)" class="btn btn-secondary">🧾 Isi Realisasi</button>`;
+              }
+              if (um.status === 'pending' && (currentUser.role === 'admin' || um.created_by === currentUser.id)) {
+                     footer += `<button onclick="closeModal('modal-um-detail');setTimeout(()=>openEditUM(${id}),200)" class="btn btn-secondary">✏️ Edit</button>`;
+              }
+              if (currentUser.role === 'admin') {
+                     footer += `<button onclick="deleteUM(${id})" class="btn btn-danger">🗑️ Hapus</button>`;
+              }
+              footer += `<button onclick="closeModal('modal-um-detail')" class="btn btn-outline">Tutup</button>`;
+              document.getElementById('um-detail-footer').innerHTML = footer;
+              showModal('modal-um-detail');
+       } catch { showToast('Gagal memuat detail Uang Muka', 'error'); }
 }
 
 function openUMAction(id, type) {
-  umActionTargetId = id;
-  umActionType = type;
-  document.getElementById('um-action-note').value = '';
-  document.getElementById('um-action-error').style.display = 'none';
-  document.getElementById('um-action-title').textContent = type === 'approve' ? '✅ Setujui Pengajuan Uang Muka' : '❌ Tolak Pengajuan Uang Muka';
-  const footer = type === 'approve'
-    ? `<button onclick="submitUMAction()" class="btn btn-success">✅ Konfirmasi Setuju</button>`
-    : `<button onclick="submitUMAction()" class="btn btn-danger">❌ Konfirmasi Tolak</button>`;
-  document.getElementById('um-action-footer').innerHTML = footer + `<button onclick="closeModal('modal-um-action')" class="btn btn-outline">Batal</button>`;
-  showModal('modal-um-action');
+       umActionTargetId = id;
+       umActionType = type;
+       document.getElementById('um-action-note').value = '';
+       document.getElementById('um-action-error').style.display = 'none';
+       document.getElementById('um-action-title').textContent = type === 'approve' ? '✅ Setujui Pengajuan Uang Muka' : '❌ Tolak Pengajuan Uang Muka';
+       const footer = type === 'approve'
+              ? `<button onclick="submitUMAction()" class="btn btn-success">✅ Konfirmasi Setuju</button>`
+              : `<button onclick="submitUMAction()" class="btn btn-danger">❌ Konfirmasi Tolak</button>`;
+       document.getElementById('um-action-footer').innerHTML = footer + `<button onclick="closeModal('modal-um-action')" class="btn btn-outline">Batal</button>`;
+       showModal('modal-um-action');
 }
 
 async function submitUMAction() {
-  const note = document.getElementById('um-action-note').value.trim();
-  const errEl = document.getElementById('um-action-error');
-  errEl.style.display = 'none';
-  if (umActionType === 'reject' && !note) {
-    errEl.textContent = 'Harap isi alasan penolakan';
-    errEl.style.display = 'block'; return;
-  }
-  try {
-    const res = await api(`/api/uang-muka/${umActionTargetId}/${umActionType}`, 'POST', { note });
-    const data = await res.json();
-    if (res.ok) {
-      showToast(umActionType === 'approve' ? '✅ Disetujui!' : '❌ Ditolak', 'success');
-      closeModal('modal-um-action');
-      refreshUMList();
-    } else {
-      errEl.textContent = data.error || 'Gagal';
-      errEl.style.display = 'block';
-    }
-  } catch {
-    errEl.textContent = 'Koneksi gagal';
-    errEl.style.display = 'block';
-  }
+       const note = document.getElementById('um-action-note').value.trim();
+       const errEl = document.getElementById('um-action-error');
+       errEl.style.display = 'none';
+       if (umActionType === 'reject' && !note) {
+              errEl.textContent = 'Harap isi alasan penolakan';
+              errEl.style.display = 'block'; return;
+       }
+       try {
+              const res = await api(`/api/uang-muka/${umActionTargetId}/${umActionType}`, 'POST', { note });
+              const data = await res.json();
+              if (res.ok) {
+                     showToast(umActionType === 'approve' ? '✅ Disetujui!' : '❌ Ditolak', 'success');
+                     closeModal('modal-um-action');
+                     refreshUMList();
+              } else {
+                     errEl.textContent = data.error || 'Gagal';
+                     errEl.style.display = 'block';
+              }
+       } catch {
+              errEl.textContent = 'Koneksi gagal';
+              errEl.style.display = 'block';
+       }
 }
 
 function initUMForm() {
-  document.getElementById('um-form-error').style.display = 'none';
-  document.getElementById('um-keperluan').value = '';
-  document.getElementById('um-nominal').value = '';
-  document.getElementById('um-tanggal-dibutuhkan').value = '';
-  document.getElementById('um-catatan').value = '';
+       document.getElementById('um-form-error').style.display = 'none';
+       document.getElementById('um-keperluan').value = '';
+       document.getElementById('um-nominal').value = '';
+       document.getElementById('um-tanggal-dibutuhkan').value = '';
+       document.getElementById('um-catatan').value = '';
 }
 
 async function submitUMForm(e) {
-  e.preventDefault();
-  const errEl = document.getElementById('um-form-error');
-  errEl.style.display = 'none';
-  const keperluan = document.getElementById('um-keperluan').value.trim();
-  const nominal = parseNum(document.getElementById('um-nominal').value);
-  const tanggal_dibutuhkan = document.getElementById('um-tanggal-dibutuhkan').value;
-  if (!keperluan) { errEl.textContent = 'Keperluan wajib diisi'; errEl.style.display = 'block'; return; }
-  if (nominal <= 0) { errEl.textContent = 'Nominal harus lebih dari 0'; errEl.style.display = 'block'; return; }
-  if (!tanggal_dibutuhkan) { errEl.textContent = 'Tanggal dibutuhkan wajib diisi'; errEl.style.display = 'block'; return; }
+       e.preventDefault();
+       const errEl = document.getElementById('um-form-error');
+       errEl.style.display = 'none';
+       const keperluan = document.getElementById('um-keperluan').value.trim();
+       const nominal = parseNum(document.getElementById('um-nominal').value);
+       const tanggal_dibutuhkan = document.getElementById('um-tanggal-dibutuhkan').value;
+       if (!keperluan) { errEl.textContent = 'Keperluan wajib diisi'; errEl.style.display = 'block'; return; }
+       if (nominal <= 0) { errEl.textContent = 'Nominal harus lebih dari 0'; errEl.style.display = 'block'; return; }
+       if (!tanggal_dibutuhkan) { errEl.textContent = 'Tanggal dibutuhkan wajib diisi'; errEl.style.display = 'block'; return; }
 
-  const payload = {
-    keperluan, nominal, tanggal_dibutuhkan,
-    catatan: document.getElementById('um-catatan').value.trim(),
-  };
+       const payload = {
+              keperluan, nominal, tanggal_dibutuhkan,
+              catatan: document.getElementById('um-catatan').value.trim(),
+       };
 
-  try {
-    const res = await api('/api/uang-muka', 'POST', payload);
-    const data = await res.json();
-    if (res.ok) {
-      showToast('✅ Pengajuan Uang Muka berhasil dikirim', 'success');
-      showPage('my-uang-muka');
-    } else {
-      errEl.textContent = data.error || 'Gagal mengirim pengajuan';
-      errEl.style.display = 'block';
-    }
-  } catch {
-    errEl.textContent = 'Koneksi ke server gagal';
-    errEl.style.display = 'block';
-  }
+       try {
+              const res = await api('/api/uang-muka', 'POST', payload);
+              const data = await res.json();
+              if (res.ok) {
+                     showToast('✅ Pengajuan Uang Muka berhasil dikirim', 'success');
+                     showPage('my-uang-muka');
+              } else {
+                     errEl.textContent = data.error || 'Gagal mengirim pengajuan';
+                     errEl.style.display = 'block';
+              }
+       } catch {
+              errEl.textContent = 'Koneksi ke server gagal';
+              errEl.style.display = 'block';
+       }
 }
 
 async function openEditUM(id) {
-  try {
-    const res = await api(`/api/uang-muka/${id}`);
-    const um = await res.json();
-    if (!res.ok) { showToast(um.error || 'Gagal memuat data', 'error'); return; }
-    eumTargetId = id;
-    document.getElementById('eum-error').style.display = 'none';
-    document.getElementById('eum-keperluan').value = um.keperluan || '';
-    document.getElementById('eum-nominal').value = um.nominal ? fmtNumStr(um.nominal) : '';
-    document.getElementById('eum-tanggal-dibutuhkan').value = um.tanggal_dibutuhkan || '';
-    document.getElementById('eum-catatan').value = um.catatan || '';
-    showModal('modal-um-edit');
-  } catch { showToast('Gagal memuat data', 'error'); }
+       try {
+              const res = await api(`/api/uang-muka/${id}`);
+              const um = await res.json();
+              if (!res.ok) { showToast(um.error || 'Gagal memuat data', 'error'); return; }
+              eumTargetId = id;
+              document.getElementById('eum-error').style.display = 'none';
+              document.getElementById('eum-keperluan').value = um.keperluan || '';
+              document.getElementById('eum-nominal').value = um.nominal ? fmtNumStr(um.nominal) : '';
+              document.getElementById('eum-tanggal-dibutuhkan').value = um.tanggal_dibutuhkan || '';
+              document.getElementById('eum-catatan').value = um.catatan || '';
+              showModal('modal-um-edit');
+       } catch { showToast('Gagal memuat data', 'error'); }
 }
 
 async function submitEditUM() {
-  const errEl = document.getElementById('eum-error');
-  errEl.style.display = 'none';
-  const keperluan = document.getElementById('eum-keperluan').value.trim();
-  const nominal = parseNum(document.getElementById('eum-nominal').value);
-  const tanggal_dibutuhkan = document.getElementById('eum-tanggal-dibutuhkan').value;
-  if (!keperluan) { errEl.textContent = 'Keperluan wajib diisi'; errEl.style.display = 'block'; return; }
-  if (nominal <= 0) { errEl.textContent = 'Nominal harus lebih dari 0'; errEl.style.display = 'block'; return; }
-  if (!tanggal_dibutuhkan) { errEl.textContent = 'Tanggal dibutuhkan wajib diisi'; errEl.style.display = 'block'; return; }
+       const errEl = document.getElementById('eum-error');
+       errEl.style.display = 'none';
+       const keperluan = document.getElementById('eum-keperluan').value.trim();
+       const nominal = parseNum(document.getElementById('eum-nominal').value);
+       const tanggal_dibutuhkan = document.getElementById('eum-tanggal-dibutuhkan').value;
+       if (!keperluan) { errEl.textContent = 'Keperluan wajib diisi'; errEl.style.display = 'block'; return; }
+       if (nominal <= 0) { errEl.textContent = 'Nominal harus lebih dari 0'; errEl.style.display = 'block'; return; }
+       if (!tanggal_dibutuhkan) { errEl.textContent = 'Tanggal dibutuhkan wajib diisi'; errEl.style.display = 'block'; return; }
 
-  const payload = { keperluan, nominal, tanggal_dibutuhkan, catatan: document.getElementById('eum-catatan').value.trim() };
-  try {
-    const res = await api(`/api/uang-muka/${eumTargetId}`, 'PUT', payload);
-    const data = await res.json();
-    if (res.ok) {
-      showToast('✅ Pengajuan berhasil diperbarui', 'success');
-      closeModal('modal-um-edit');
-      refreshUMList();
-    } else {
-      errEl.textContent = data.error || 'Gagal menyimpan';
-      errEl.style.display = 'block';
-    }
-  } catch {
-    errEl.textContent = 'Koneksi ke server gagal';
-    errEl.style.display = 'block';
-  }
+       const payload = { keperluan, nominal, tanggal_dibutuhkan, catatan: document.getElementById('eum-catatan').value.trim() };
+       try {
+              const res = await api(`/api/uang-muka/${eumTargetId}`, 'PUT', payload);
+              const data = await res.json();
+              if (res.ok) {
+                     showToast('✅ Pengajuan berhasil diperbarui', 'success');
+                     closeModal('modal-um-edit');
+                     refreshUMList();
+              } else {
+                     errEl.textContent = data.error || 'Gagal menyimpan';
+                     errEl.style.display = 'block';
+              }
+       } catch {
+              errEl.textContent = 'Koneksi ke server gagal';
+              errEl.style.display = 'block';
+       }
 }
 
 async function deleteUM(id) {
-  if (!confirm('Hapus pengajuan uang muka ini?')) return;
-  try {
-    const res = await api(`/api/uang-muka/${id}`, 'DELETE');
-    const data = await res.json();
-    if (res.ok) {
-      showToast('✅ Pengajuan berhasil dihapus', 'success');
-      closeModal('modal-um-detail');
-      refreshUMList();
-    } else {
-      showToast(data.error || 'Gagal menghapus', 'error');
-    }
-  } catch { showToast('Koneksi ke server gagal', 'error'); }
+       if (!confirm('Hapus pengajuan uang muka ini?')) return;
+       try {
+              const res = await api(`/api/uang-muka/${id}`, 'DELETE');
+              const data = await res.json();
+              if (res.ok) {
+                     showToast('✅ Pengajuan berhasil dihapus', 'success');
+                     closeModal('modal-um-detail');
+                     refreshUMList();
+              } else {
+                     showToast(data.error || 'Gagal menghapus', 'error');
+              }
+       } catch { showToast('Koneksi ke server gagal', 'error'); }
 }
 
 // ── Realisasi / pertanggungjawaban ────────────────────────────────────────────
 async function openUMRealisasi(id) {
-  try {
-    const res = await api(`/api/uang-muka/${id}`);
-    const um = await res.json();
-    if (!res.ok) { showToast(um.error || 'Gagal memuat data', 'error'); return; }
-    umRealisasiTargetId = id;
-    umRealisasiNominal = um.nominal || 0;
-    document.getElementById('um-real-error').style.display = 'none';
-    document.getElementById('um-real-nominal-info').textContent = 'Rp ' + formatRupiah(um.nominal);
-    document.getElementById('um-real-tanggal').value = '';
-    document.getElementById('um-real-keterangan').value = '';
-    document.getElementById('um-real-tbody').innerHTML = '';
-    updateUMRealisasiTotal();
-    showModal('modal-um-realisasi');
-  } catch { showToast('Gagal memuat data', 'error'); }
+       try {
+              const res = await api(`/api/uang-muka/${id}`);
+              const um = await res.json();
+              if (!res.ok) { showToast(um.error || 'Gagal memuat data', 'error'); return; }
+              umRealisasiTargetId = id;
+              umRealisasiNominal = um.nominal || 0;
+              document.getElementById('um-real-error').style.display = 'none';
+              document.getElementById('um-real-nominal-info').textContent = 'Rp ' + formatRupiah(um.nominal);
+              document.getElementById('um-real-tanggal').value = '';
+              document.getElementById('um-real-keterangan').value = '';
+              document.getElementById('um-real-tbody').innerHTML = '';
+              updateUMRealisasiTotal();
+              showModal('modal-um-realisasi');
+       } catch { showToast('Gagal memuat data', 'error'); }
 }
 
 function addUMRealisasiRow(data = {}) {
-  const tbody = document.getElementById('um-real-tbody');
-  if (!tbody) return;
-  const idx = tbody.querySelectorAll('tr').length + 1;
-  const previewId = `um-real-preview-${Date.now()}-${idx}`;
-  const tr = document.createElement('tr');
-  tr.innerHTML = `
+       const tbody = document.getElementById('um-real-tbody');
+       if (!tbody) return;
+       const idx = tbody.querySelectorAll('tr').length + 1;
+       const previewId = `um-real-preview-${Date.now()}-${idx}`;
+       const tr = document.createElement('tr');
+       tr.innerHTML = `
     <td style="text-align:center;font-size:12px" class="um-real-no">${idx}</td>
     <td><input type="text" class="um-real-ket" placeholder="Keterangan" value="${escHtml(data.keterangan || '')}"></td>
     <td><input type="text" inputmode="numeric" class="um-real-jml num-fmt" value="${data.jumlah ? fmtNumStr(data.jumlah) : ''}" oninput="formatNumInput(this);updateUMRealisasiTotal()" onfocus="if(this.value==='0')this.value=''"></td>
@@ -6097,164 +6097,164 @@ function addUMRealisasiRow(data = {}) {
       </div>
     </td>
     <td><button type="button" onclick="this.closest('tr').remove();renumberUMRealisasi();updateUMRealisasiTotal()" class="btn-remove-row">✕</button></td>`;
-  tbody.appendChild(tr);
-  if (data.bukti) tr.querySelector(`#${previewId}`).dataset.bukti = data.bukti;
-  renumberUMRealisasi();
-  updateUMRealisasiTotal();
+       tbody.appendChild(tr);
+       if (data.bukti) tr.querySelector(`#${previewId}`).dataset.bukti = data.bukti;
+       renumberUMRealisasi();
+       updateUMRealisasiTotal();
 }
 
 function renumberUMRealisasi() {
-  document.querySelectorAll('#um-real-tbody tr').forEach((r, i) => {
-    const cell = r.querySelector('.um-real-no');
-    if (cell) cell.textContent = i + 1;
-  });
+       document.querySelectorAll('#um-real-tbody tr').forEach((r, i) => {
+              const cell = r.querySelector('.um-real-no');
+              if (cell) cell.textContent = i + 1;
+       });
 }
 
 async function previewUMRealisasiBukti(input, previewId) {
-  if (!input.files || !input.files[0]) return;
-  const base64 = await compressImage(input.files[0]);
-  const preview = document.getElementById(previewId);
-  if (!preview) return;
-  preview.style.display = 'block';
-  preview.querySelector('.um-real-bukti-img').src = base64;
-  preview.dataset.bukti = base64;
+       if (!input.files || !input.files[0]) return;
+       const base64 = await compressImage(input.files[0]);
+       const preview = document.getElementById(previewId);
+       if (!preview) return;
+       preview.style.display = 'block';
+       preview.querySelector('.um-real-bukti-img').src = base64;
+       preview.dataset.bukti = base64;
 }
 
 function updateUMRealisasiTotal() {
-  let total = 0;
-  document.querySelectorAll('#um-real-tbody .um-real-jml').forEach(inp => { total += parseNum(inp.value); });
-  const sisa = umRealisasiNominal - total;
-  document.getElementById('um-real-total').textContent = 'Rp ' + formatRupiah(total);
-  const sisaEl = document.getElementById('um-real-sisa');
-  sisaEl.textContent = 'Rp ' + formatRupiah(Math.abs(sisa)) + (sisa < 0 ? ' (kurang bayar)' : '');
-  sisaEl.style.color = sisa >= 0 ? 'var(--green)' : 'var(--red)';
+       let total = 0;
+       document.querySelectorAll('#um-real-tbody .um-real-jml').forEach(inp => { total += parseNum(inp.value); });
+       const sisa = umRealisasiNominal - total;
+       document.getElementById('um-real-total').textContent = 'Rp ' + formatRupiah(total);
+       const sisaEl = document.getElementById('um-real-sisa');
+       sisaEl.textContent = 'Rp ' + formatRupiah(Math.abs(sisa)) + (sisa < 0 ? ' (kurang bayar)' : '');
+       sisaEl.style.color = sisa >= 0 ? 'var(--green)' : 'var(--red)';
 }
 
 function getUMRealisasiRincianFromDOM() {
-  return Array.from(document.querySelectorAll('#um-real-tbody tr')).map(row => ({
-    keterangan: row.querySelector('.um-real-ket')?.value.trim() || '',
-    jumlah: parseNum(row.querySelector('.um-real-jml')?.value),
-    bukti: row.querySelector('[id^="um-real-preview-"]')?.dataset.bukti || null,
-  })).filter(r => r.keterangan || r.jumlah);
+       return Array.from(document.querySelectorAll('#um-real-tbody tr')).map(row => ({
+              keterangan: row.querySelector('.um-real-ket')?.value.trim() || '',
+              jumlah: parseNum(row.querySelector('.um-real-jml')?.value),
+              bukti: row.querySelector('[id^="um-real-preview-"]')?.dataset.bukti || null,
+       })).filter(r => r.keterangan || r.jumlah);
 }
 
 async function submitUMRealisasi() {
-  const errEl = document.getElementById('um-real-error');
-  errEl.style.display = 'none';
-  const rincian = getUMRealisasiRincianFromDOM();
-  if (rincian.length === 0) { errEl.textContent = 'Tambahkan minimal 1 rincian penggunaan'; errEl.style.display = 'block'; return; }
+       const errEl = document.getElementById('um-real-error');
+       errEl.style.display = 'none';
+       const rincian = getUMRealisasiRincianFromDOM();
+       if (rincian.length === 0) { errEl.textContent = 'Tambahkan minimal 1 rincian penggunaan'; errEl.style.display = 'block'; return; }
 
-  const payload = {
-    tanggal_realisasi: document.getElementById('um-real-tanggal').value,
-    keterangan: document.getElementById('um-real-keterangan').value.trim(),
-    rincian,
-  };
+       const payload = {
+              tanggal_realisasi: document.getElementById('um-real-tanggal').value,
+              keterangan: document.getElementById('um-real-keterangan').value.trim(),
+              rincian,
+       };
 
-  try {
-    const btn = document.getElementById('btn-save-um-real');
-    btn.disabled = true;
-    const res = await api(`/api/uang-muka/${umRealisasiTargetId}/realisasi`, 'POST', payload);
-    const data = await res.json();
-    btn.disabled = false;
-    if (res.ok) {
-      closeModal('modal-um-realisasi');
-      showToast('✅ Realisasi berhasil disimpan', 'success');
-      refreshUMList();
-    } else {
-      errEl.textContent = data.error || 'Gagal menyimpan realisasi';
-      errEl.style.display = 'block';
-    }
-  } catch {
-    errEl.textContent = 'Koneksi ke server gagal';
-    errEl.style.display = 'block';
-  }
+       try {
+              const btn = document.getElementById('btn-save-um-real');
+              btn.disabled = true;
+              const res = await api(`/api/uang-muka/${umRealisasiTargetId}/realisasi`, 'POST', payload);
+              const data = await res.json();
+              btn.disabled = false;
+              if (res.ok) {
+                     closeModal('modal-um-realisasi');
+                     showToast('✅ Realisasi berhasil disimpan', 'success');
+                     refreshUMList();
+              } else {
+                     errEl.textContent = data.error || 'Gagal menyimpan realisasi';
+                     errEl.style.display = 'block';
+              }
+       } catch {
+              errEl.textContent = 'Koneksi ke server gagal';
+              errEl.style.display = 'block';
+       }
 }
 
 // ===================== UPLOAD RINCIAN PENJUALAN (ODOO) =====================
 function initUploadPenjualan() {
-  document.getElementById('penj-upload-error').style.display = 'none';
-  document.getElementById('penj-upload-result').style.display = 'none';
-  document.getElementById('penj-file-order').value = '';
-  document.getElementById('penj-file-report').value = '';
-  const periodeInput = document.getElementById('penj-cek-periode');
-  if (periodeInput && !periodeInput.value) {
-    const d = new Date();
-    periodeInput.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  }
+       document.getElementById('penj-upload-error').style.display = 'none';
+       document.getElementById('penj-upload-result').style.display = 'none';
+       document.getElementById('penj-file-order').value = '';
+       document.getElementById('penj-file-report').value = '';
+       const periodeInput = document.getElementById('penj-cek-periode');
+       if (periodeInput && !periodeInput.value) {
+              const d = new Date();
+              periodeInput.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+       }
 }
 
 async function submitUploadPenjualan() {
-  const errEl = document.getElementById('penj-upload-error');
-  const resultEl = document.getElementById('penj-upload-result');
-  errEl.style.display = 'none';
-  resultEl.style.display = 'none';
+       const errEl = document.getElementById('penj-upload-error');
+       const resultEl = document.getElementById('penj-upload-result');
+       errEl.style.display = 'none';
+       resultEl.style.display = 'none';
 
-  const fileOrder  = document.getElementById('penj-file-order').files[0];
-  const fileReport = document.getElementById('penj-file-report').files[0];
-  if (!fileOrder) { errEl.textContent = 'File Sales Order (sale.order) wajib diupload'; errEl.style.display = 'block'; return; }
+       const fileOrder = document.getElementById('penj-file-order').files[0];
+       const fileReport = document.getElementById('penj-file-report').files[0];
+       if (!fileOrder) { errEl.textContent = 'File Sales Order (sale.order) wajib diupload'; errEl.style.display = 'block'; return; }
 
-  const formData = new FormData();
-  formData.append('file_order', fileOrder);
-  if (fileReport) formData.append('file_report', fileReport);
+       const formData = new FormData();
+       formData.append('file_order', fileOrder);
+       if (fileReport) formData.append('file_report', fileReport);
 
-  const btn = document.getElementById('btn-upload-penjualan');
-  btn.disabled = true;
-  btn.textContent = '⏳ Memproses...';
-  try {
-    const res = await fetch('/api/penjualan/upload', { method: 'POST', body: formData, credentials: 'same-origin' });
-    const data = await res.json();
-    if (!res.ok) {
-      errEl.textContent = data.error || 'Gagal mengupload file';
-      errEl.style.display = 'block';
-    } else {
-      const warnHtml = data.salesperson_tidak_terpetakan?.length
-        ? `<div class="alert alert-error" style="margin-top:10px">
+       const btn = document.getElementById('btn-upload-penjualan');
+       btn.disabled = true;
+       btn.textContent = '⏳ Memproses...';
+       try {
+              const res = await fetch('/api/penjualan/upload', { method: 'POST', body: formData, credentials: 'same-origin' });
+              const data = await res.json();
+              if (!res.ok) {
+                     errEl.textContent = data.error || 'Gagal mengupload file';
+                     errEl.style.display = 'block';
+              } else {
+                     const warnHtml = data.salesperson_tidak_terpetakan?.length
+                            ? `<div class="alert alert-error" style="margin-top:10px">
              ⚠️ ${data.salesperson_tidak_terpetakan.length} salesperson tidak terpetakan ke area kerja (masuk ke
              "(Belum Dipetakan)"). Perbaiki <strong>Area Kerja</strong> pada akun berikut agar penjualannya
              tercatat di area yang benar:<br>${data.salesperson_tidak_terpetakan.map(escHtml).join(', ')}
            </div>`
-        : '';
-      resultEl.innerHTML = `
+                            : '';
+                     resultEl.innerHTML = `
         <div class="alert alert-success">
           ✅ ${data.orders_diproses} order berhasil diproses untuk periode:
           <strong>${(data.periode_terpengaruh || []).map(formatPeriode).join(', ') || '-'}</strong>
         </div>
         ${warnHtml}`;
-      resultEl.style.display = 'block';
-      showToast('✅ Upload berhasil diproses', 'success');
-      if (data.periode_terpengaruh?.length) {
-        document.getElementById('penj-cek-periode').value = data.periode_terpengaruh[0];
-        loadPenjualanSummary();
-      }
-    }
-  } catch {
-    errEl.textContent = 'Koneksi ke server gagal';
-    errEl.style.display = 'block';
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '📤 Upload & Proses';
-  }
+                     resultEl.style.display = 'block';
+                     showToast('✅ Upload berhasil diproses', 'success');
+                     if (data.periode_terpengaruh?.length) {
+                            document.getElementById('penj-cek-periode').value = data.periode_terpengaruh[0];
+                            loadPenjualanSummary();
+                     }
+              }
+       } catch {
+              errEl.textContent = 'Koneksi ke server gagal';
+              errEl.style.display = 'block';
+       } finally {
+              btn.disabled = false;
+              btn.textContent = '📤 Upload & Proses';
+       }
 }
 
 async function loadPenjualanSummary() {
-  const container = document.getElementById('penj-summary-container');
-  const periode = document.getElementById('penj-cek-periode')?.value;
-  if (!periode) return;
-  container.innerHTML = '<div class="loading" style="padding:16px">⏳ Memuat...</div>';
-  try {
-    const res = await api(`/api/penjualan/summary?periode=${periode}`);
-    const rows = await res.json();
-    if (!res.ok) { container.innerHTML = `<div class="alert alert-error" style="margin:16px">${rows.error || 'Gagal memuat'}</div>`; return; }
-    if (!rows.length) { container.innerHTML = emptyState('Belum ada data penjualan untuk periode ini'); return; }
+       const container = document.getElementById('penj-summary-container');
+       const periode = document.getElementById('penj-cek-periode')?.value;
+       if (!periode) return;
+       container.innerHTML = '<div class="loading" style="padding:16px">⏳ Memuat...</div>';
+       try {
+              const res = await api(`/api/penjualan/summary?periode=${periode}`);
+              const rows = await res.json();
+              if (!res.ok) { container.innerHTML = `<div class="alert alert-error" style="margin:16px">${rows.error || 'Gagal memuat'}</div>`; return; }
+              if (!rows.length) { container.innerHTML = emptyState('Belum ada data penjualan untuk periode ini'); return; }
 
-    let sumPenj = 0, sumDifaktur = 0, sumLaba = 0, sumTarget = 0;
-    const bodyRows = rows.map(r => {
-      sumPenj += r.total_penjualan || 0;
-      sumDifaktur += r.difaktur || 0;
-      sumLaba += r.laba_kotor || 0;
-      sumTarget += r.target || 0;
-      const pct = r.total_penjualan > 0 ? Math.round((r.difaktur / r.total_penjualan) * 100) : 0;
-      return `<tr>
+              let sumPenj = 0, sumDifaktur = 0, sumLaba = 0, sumTarget = 0;
+              const bodyRows = rows.map(r => {
+                     sumPenj += r.total_penjualan || 0;
+                     sumDifaktur += r.difaktur || 0;
+                     sumLaba += r.laba_kotor || 0;
+                     sumTarget += r.target || 0;
+                     const pct = r.total_penjualan > 0 ? Math.round((r.difaktur / r.total_penjualan) * 100) : 0;
+                     return `<tr>
         <td>${escHtml(r.area_kerja)}</td>
         <td class="text-right">Rp ${formatRupiah(r.total_penjualan)}</td>
         <td class="text-right">Rp ${formatRupiah(r.difaktur)}</td>
@@ -6262,9 +6262,9 @@ async function loadPenjualanSummary() {
         <td class="text-right">Rp ${formatRupiah(r.laba_kotor)}</td>
         <td class="text-right">Rp ${formatRupiah(r.target)}</td>
       </tr>`;
-    }).join('');
+              }).join('');
 
-    container.innerHTML = `
+              container.innerHTML = `
       <div class="table-responsive">
         <table class="table">
           <thead><tr>
@@ -6280,13 +6280,13 @@ async function loadPenjualanSummary() {
             <td class="fw-bold">Total</td>
             <td class="text-right fw-bold">Rp ${formatRupiah(sumPenj)}</td>
             <td class="text-right fw-bold">Rp ${formatRupiah(sumDifaktur)}</td>
-            <td class="text-right fw-bold">${sumPenj > 0 ? Math.round((sumDifaktur/sumPenj)*100) + '%' : '—'}</td>
+            <td class="text-right fw-bold">${sumPenj > 0 ? Math.round((sumDifaktur / sumPenj) * 100) + '%' : '—'}</td>
             <td class="text-right fw-bold">Rp ${formatRupiah(sumLaba)}</td>
             <td class="text-right fw-bold">Rp ${formatRupiah(sumTarget)}</td>
           </tr></tfoot>
         </table>
       </div>`;
-  } catch {
-    container.innerHTML = '<div class="alert alert-error" style="margin:16px">Koneksi ke server gagal</div>';
-  }
+       } catch {
+              container.innerHTML = '<div class="alert alert-error" style="margin:16px">Koneksi ke server gagal</div>';
+       }
 }
