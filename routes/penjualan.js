@@ -67,6 +67,62 @@ function buildSalesAreaMap() {
   return map;
 }
 
+// ── Helper: map nama salesperson -> area_kerja hasil pemetaan manual (admin) ─
+function buildSalespersonMappingMap() {
+  const rows = db.prepare('SELECT salesperson, area_kerja FROM salesperson_mapping').all();
+  const map = {};
+  rows.forEach(r => {
+    const key = (r.salesperson || '').trim().toLowerCase();
+    if (key) map[key] = (r.area_kerja || '').trim();
+  });
+  return map;
+}
+
+// ── Helper: tentukan area_kerja final untuk 1 salesperson ───────────────────
+// Prioritas: 1) salesperson_mapping (manual), 2) users.full_name, 3) '(Belum Dipetakan)'
+function resolveArea(salesperson, mappingMap, salesAreaMap, tidakTerpetakan) {
+  const key = salesperson.toLowerCase();
+  let area = mappingMap[key];
+  if (area) return area;
+
+  area = salesAreaMap[key];
+  if (area === undefined) {
+    if (salesperson) tidakTerpetakan.add(salesperson);
+    return TIDAK_DIPETAKAN;
+  }
+  return area || TIDAK_DIPETAKAN;
+}
+
+// ── Helper: rekalkulasi sales_target untuk sekumpulan pasangan (area, periode) ─
+// Dipakai bersama oleh upload & pemetaan manual agar konsisten. Hanya menghitung
+// dari order yang sudah difaktur (periode NOT NULL); target & pendapatan_lain
+// tidak pernah disentuh.
+const aggUntukTargetStmt = db.prepare(`
+  SELECT SUM(total) as penjualan,
+         SUM(total) as difaktur,
+         SUM(laba_kotor) as laba_kotor
+  FROM penjualan_order WHERE area_kerja=? AND periode=? AND difaktur=1
+`);
+const upsertTargetStmt = db.prepare(`
+  INSERT INTO sales_target (area_kerja, periode, penjualan, difaktur, laba_kotor, updated_at)
+  VALUES (?, ?, ?, ?, ?, datetime('now','localtime'))
+  ON CONFLICT(area_kerja, periode)
+  DO UPDATE SET penjualan=excluded.penjualan, difaktur=excluded.difaktur, laba_kotor=excluded.laba_kotor, updated_at=excluded.updated_at
+`);
+function recalcSalesTarget(areaPeriodePairs) {
+  areaPeriodePairs.forEach(function (pair) {
+    const agg = aggUntukTargetStmt.get(pair.area, pair.periode);
+    upsertTargetStmt.run(pair.area, pair.periode, agg.penjualan || 0, agg.difaktur || 0, agg.laba_kotor || 0);
+  });
+}
+
+// ── Helper: kumpulkan pasangan (area, periode) yang sedang dipakai 1 salesperson ─
+function pairsUntukSalesperson(salesperson, out) {
+  db.prepare('SELECT DISTINCT area_kerja, periode FROM penjualan_order WHERE salesperson=? AND periode IS NOT NULL')
+    .all(salesperson)
+    .forEach(r => out.set(r.area_kerja + '::' + r.periode, { area: r.area_kerja, periode: r.periode }));
+}
+
 // ── POST /api/penjualan/upload ──────────────────────────────────────────────
 router.post('/upload', requireLogin, requireAdmin, upload.fields([
   { name: 'file_order', maxCount: 1 },
@@ -113,6 +169,7 @@ router.post('/upload', requireLogin, requireAdmin, upload.fields([
 
     // ── Gabungkan & mapping area kerja ─────────────────────────────────────
     const salesAreaMap = buildSalesAreaMap();
+    const mappingMap = buildSalespersonMappingMap();
     const tidakTerpetakan = new Set();
     const orders = [];
 
@@ -129,14 +186,7 @@ router.post('/upload', requireLogin, requireAdmin, upload.fields([
       const invoiceStatus  = String(cellValue(row, colA['Invoice Status']) || '').trim();
       const difaktur       = invoiceDateRaw ? 1 : 0; // periode by Invoice Date; kosong = belum difaktur
 
-      const key = salesperson.toLowerCase();
-      let area = salesAreaMap[key];
-      if (area === undefined) {
-        if (salesperson) tidakTerpetakan.add(salesperson);
-        area = TIDAK_DIPETAKAN;
-      } else if (!area) {
-        area = TIDAK_DIPETAKAN;
-      }
+      const area = resolveArea(salesperson, mappingMap, salesAreaMap, tidakTerpetakan);
 
       const gmKey = ref + '||' + customer.toLowerCase();
       orders.push({
@@ -168,20 +218,6 @@ router.post('/upload', requireLogin, requireAdmin, upload.fields([
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))
     `);
 
-    const aggStmt = db.prepare(`
-      SELECT SUM(total) as penjualan,
-             SUM(total) as difaktur,
-             SUM(laba_kotor) as laba_kotor
-      FROM penjualan_order WHERE area_kerja=? AND periode=? AND difaktur=1
-    `);
-
-    const upsertTarget = db.prepare(`
-      INSERT INTO sales_target (area_kerja, periode, penjualan, difaktur, laba_kotor, updated_at)
-      VALUES (?, ?, ?, ?, ?, datetime('now','localtime'))
-      ON CONFLICT(area_kerja, periode)
-      DO UPDATE SET penjualan=excluded.penjualan, difaktur=excluded.difaktur, laba_kotor=excluded.laba_kotor, updated_at=excluded.updated_at
-    `);
-
     const periodeTerpengaruh = new Set();
     const areaPeriodePairs = new Map(); // key unik -> {area, periode}
     let jumlahDifaktur = 0, jumlahBelumDifaktur = 0;
@@ -203,10 +239,7 @@ router.post('/upload', requireLogin, requireAdmin, upload.fields([
         }
       });
 
-      areaPeriodePairs.forEach(function (pair) {
-        const agg = aggStmt.get(pair.area, pair.periode);
-        upsertTarget.run(pair.area, pair.periode, agg.penjualan || 0, agg.difaktur || 0, agg.laba_kotor || 0);
-      });
+      recalcSalesTarget(areaPeriodePairs);
     });
     txn();
 
@@ -272,6 +305,89 @@ router.get('/outstanding', requireLogin, (req, res) => {
   const total = rows.reduce((s, r) => s + (r.total || 0), 0);
   const jumlah_order = rows.reduce((s, r) => s + (r.jumlah_order || 0), 0);
   res.json({ rows, total, jumlah_order });
+});
+
+// ── GET /api/penjualan/unmapped — salesperson yang area-nya '(Belum Dipetakan)' ─
+router.get('/unmapped', requireLogin, requireAdmin, (req, res) => {
+  const rows = db.prepare(`
+    SELECT salesperson, COUNT(*) as jumlah_order, SUM(total) as total
+    FROM penjualan_order WHERE area_kerja=? GROUP BY salesperson ORDER BY salesperson
+  `).all(TIDAK_DIPETAKAN);
+  res.json(rows);
+});
+
+// ── GET /api/penjualan/mapping — daftar pemetaan manual + daftar user ───────
+router.get('/mapping', requireLogin, requireAdmin, (req, res) => {
+  const mapping = db.prepare('SELECT * FROM salesperson_mapping ORDER BY salesperson').all();
+  const users = db.prepare('SELECT id, full_name, area_kerja FROM users ORDER BY full_name').all();
+  res.json({ mapping, users });
+});
+
+// ── POST /api/penjualan/mapping — simpan pemetaan 1 salesperson ────────────
+router.post('/mapping', requireLogin, requireAdmin, (req, res) => {
+  const salesperson = String(req.body.salesperson || '').trim();
+  const { user_id } = req.body;
+  const areaKerjaInput = String(req.body.area_kerja || '').trim();
+  if (!salesperson) return res.status(400).json({ error: 'Salesperson wajib diisi' });
+  if (!user_id && !areaKerjaInput) return res.status(400).json({ error: 'Pilih salah satu: Akun atau Area Kerja' });
+
+  let areaFinal = areaKerjaInput;
+  if (user_id) {
+    const u = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(user_id);
+    if (!u) return res.status(400).json({ error: 'Akun tidak ditemukan' });
+    areaFinal = (u.area_kerja || '').trim();
+    if (!areaFinal) return res.status(400).json({ error: 'Akun tersebut belum memiliki area kerja' });
+  }
+
+  try {
+    const txn = db.transaction(() => {
+      db.prepare(`
+        INSERT INTO salesperson_mapping (salesperson, user_id, area_kerja, updated_by, updated_at)
+        VALUES (?, ?, ?, ?, datetime('now','localtime'))
+        ON CONFLICT(salesperson) DO UPDATE SET user_id=excluded.user_id, area_kerja=excluded.area_kerja, updated_by=excluded.updated_by, updated_at=excluded.updated_at
+      `).run(salesperson, user_id || null, areaFinal, req.session.user.id);
+
+      // Kumpulkan periode terdampak SEBELUM & SESUDAH re-tag (area lama & baru)
+      const pairs = new Map();
+      pairsUntukSalesperson(salesperson, pairs);
+      db.prepare('UPDATE penjualan_order SET area_kerja=? WHERE salesperson=?').run(areaFinal, salesperson);
+      pairsUntukSalesperson(salesperson, pairs);
+
+      recalcSalesTarget(pairs);
+    });
+    txn();
+    res.json({ success: true, area_kerja: areaFinal });
+  } catch (e) {
+    res.status(500).json({ error: 'Gagal menyimpan pemetaan: ' + e.message });
+  }
+});
+
+// ── DELETE /api/penjualan/mapping/:salesperson — hapus pemetaan manual ─────
+router.delete('/mapping/:salesperson', requireLogin, requireAdmin, (req, res) => {
+  const salesperson = String(req.params.salesperson || '').trim();
+  if (!salesperson) return res.status(400).json({ error: 'Salesperson tidak valid' });
+
+  try {
+    const txn = db.transaction(() => {
+      db.prepare('DELETE FROM salesperson_mapping WHERE salesperson=?').run(salesperson);
+
+      const pairs = new Map();
+      pairsUntukSalesperson(salesperson, pairs);
+
+      // Re-resolve area tanpa pemetaan manual: fallback ke users.full_name atau '(Belum Dipetakan)'
+      const salesAreaMap = buildSalesAreaMap();
+      const key = salesperson.toLowerCase();
+      const area = salesAreaMap[key] || TIDAK_DIPETAKAN;
+      db.prepare('UPDATE penjualan_order SET area_kerja=? WHERE salesperson=?').run(area, salesperson);
+      pairsUntukSalesperson(salesperson, pairs);
+
+      recalcSalesTarget(pairs);
+    });
+    txn();
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Gagal menghapus pemetaan: ' + e.message });
+  }
 });
 
 module.exports = router;

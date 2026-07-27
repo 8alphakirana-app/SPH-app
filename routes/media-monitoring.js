@@ -101,8 +101,13 @@ router.get('/dashboard', requireLogin, requireViewer, (req, res) => {
   const total_sisa      = entries.reduce((s, e) => s + (parseFloat(e.sisa) || 0), 0);
   const total_sisa_uang_kembali = entries.reduce((s, e) => s + (parseFloat(e.sisa_uang_kembali) || 0), 0);
   const total_sisa_laba        = entries.reduce((s, e) => s + (parseFloat(e.sisa_laba) || 0), 0);
+  // Untuk widget dashboard utama: uang_belum_kembali (alias total_sisa_uang_kembali) & laba
+  // yang sudah final (hanya transaksi yang jadwal pembayarannya sudah semua lunas).
+  const uang_belum_kembali = total_sisa_uang_kembali;
+  const total_laba_selesai = entries.filter(e => e.semua_lunas)
+    .reduce((s, e) => s + ((parseFloat(e.nilai_uang_kembali) || 0) - (parseFloat(e.nilai_investasi) || 0)), 0);
 
-  res.json({ entries, total_investasi, total_terbayar, total_sisa, total_sisa_uang_kembali, total_sisa_laba });
+  res.json({ entries, total_investasi, total_terbayar, total_sisa, total_sisa_uang_kembali, total_sisa_laba, uang_belum_kembali, total_laba_selesai });
 });
 
 // ── GET /api/media-monitoring/:id ──────────────────────────────────────────────

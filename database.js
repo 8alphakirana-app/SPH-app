@@ -788,6 +788,18 @@ if (penjualanOrderDef && /order_reference\s+TEXT\s+PRIMARY\s+KEY/i.test(penjuala
   console.log('✅ penjualan_order diupgrade: order_reference bukan lagi PRIMARY KEY (bisa duplikat)');
 }
 
+// ── Pemetaan manual salesperson -> akun/area kerja (untuk yang '(Belum Dipetakan)') ─
+db.exec(`
+  CREATE TABLE IF NOT EXISTS salesperson_mapping (
+    salesperson TEXT PRIMARY KEY,
+    user_id INTEGER,
+    area_kerja TEXT,
+    updated_by INTEGER,
+    updated_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+`);
+
 // ── MIGRATION: notifications table ───────────────────────────────────────────
 db.exec(`
   CREATE TABLE IF NOT EXISTS notifications (

@@ -354,6 +354,8 @@ let _dashChartNilai = null;
 let _dashChartSales = null;
 let _dashFiltersInited = false;
 let _lastDashLapRows = [];
+let dashSalesMode = 'bulanan'; // 'bulanan' | 'kumulatif'
+let _dashSalesRaw = null; // { areasRaw, monthsList, year, bulananIdx, kumulatifIdx, outstandingByArea, outstandingTotal }
 
 async function loadDashboard() {
        try {
@@ -392,17 +394,19 @@ async function loadDashboard() {
               const salesPeriode = month || (() => {
                      const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
               })();
+              const salesYear = parseInt(salesPeriode.split('-')[0]);
+              const bulananIdx = parseInt(salesPeriode.split('-')[1]); // 1-12, bulan terpilih (atau bulan ini)
+              const kumulatifIdx = month ? parseInt(month.split('-')[1]) : 12; // "Semua Bulan" -> sepanjang tahun berjalan
 
               const moduleQS = (() => { const p = new URLSearchParams(); if (month) p.set('month', month); if (area) p.set('area', area); const s = p.toString(); return s ? '?' + s : ''; })();
 
-              const [sphR, kkR, sppdR, lapR, recentR, salesR, salesMonthlyR, outstandingR] = await Promise.allSettled([
+              const [sphR, kkR, sppdR, lapR, recentR, byAreaR, outstandingR] = await Promise.allSettled([
                      api('/api/submissions/dashboard-stats' + moduleQS).then(r => r.ok ? r.json() : null),
                      api('/api/kk/stats' + moduleQS).then(r => r.ok ? r.json() : null),
                      api('/api/sppd/dashboard-stats' + moduleQS).then(r => r.ok ? r.json() : null),
                      api(`/api/laporan/dashboard?${lapParams}`).then(r => r.ok ? r.json() : []),
                      api('/api/submissions').then(r => r.ok ? r.json() : []),
-                     api(`/api/sales-target?periode=${salesPeriode}`).then(r => r.ok ? r.json() : []),
-                     api('/api/sales-target/monthly?months=12').then(r => r.ok ? r.json() : []),
+                     api(`/api/sales-target/by-area?year=${salesYear}`).then(r => r.ok ? r.json() : { months: [], areas: [] }),
                      api('/api/penjualan/outstanding').then(r => r.ok ? r.json() : null)
               ]);
 
@@ -416,12 +420,22 @@ async function loadDashboard() {
               const kk = kkR.status === 'fulfilled' ? kkR.value : null;
               const sppd = sppdR.status === 'fulfilled' ? sppdR.value?.summary : null;
               const lapRows = lapR.status === 'fulfilled' ? (lapR.value || []) : [];
-              const salesRows = salesR.status === 'fulfilled' ? (salesR.value || []) : [];
-              const salesMonthly = salesMonthlyR.status === 'fulfilled' ? (salesMonthlyR.value || []) : [];
-              const outstandingRows = outstandingR.status === 'fulfilled' ? (outstandingR.value?.rows || []) : [];
+              const byAreaData = byAreaR.status === 'fulfilled' ? (byAreaR.value || { months: [], areas: [] }) : { months: [], areas: [] };
+              const outstandingData = outstandingR.status === 'fulfilled' ? outstandingR.value : null;
+              const outstandingRows = outstandingData?.rows || [];
               const outstandingByArea = Object.fromEntries(outstandingRows.map(r => [r.area_kerja, r.total || 0]));
-              salesRows.forEach(r => { r.belum_difaktur = outstandingByArea[r.area_kerja] || 0; });
               const lapPrognosa = lapRows.reduce((s, r) => s + (r.prognosa_bulan_depan || 0), 0);
+
+              // Simpan data mentah sales target — dipakai render ulang saat toggle mode tanpa fetch lagi
+              _dashSalesRaw = {
+                     areasRaw: byAreaData.areas || [],
+                     monthsList: byAreaData.months || [],
+                     year: salesYear,
+                     bulananIdx,
+                     kumulatifIdx,
+                     outstandingByArea,
+                     outstandingTotal: outstandingData?.total || 0,
+              };
 
               // SPH card
               _setDEl('d-sph-total', sph.total || 0);
@@ -460,13 +474,8 @@ async function loadDashboard() {
               if (projH2) projH2.textContent = filterLabel ? `💼 Rincian Prognosa — ${filterLabel}` : '💼 Rincian Prognosa';
               _renderDashProjects(lapRows);
 
-              // Sales hero chart
-              _renderSalesHero(salesMonthly, salesRows, salesPeriode);
-
-              // Sales target table
-              const salesH2 = document.getElementById('dash-sales-title');
-              if (salesH2) salesH2.textContent = `🎯 Target & Realisasi Penjualan — ${formatPeriode(salesPeriode)}`;
-              _renderDashSalesTarget(salesRows);
+              // Sales hero + tabel target & realisasi (hero, chart, tabel sekaligus)
+              _renderDashSalesAll();
 
               // Recent SPH
               const recentEl = document.getElementById('recent-submissions');
@@ -490,7 +499,10 @@ async function loadDashboard() {
               const canViewMMDash = ['admin', 'kantor_pusat', 'manager_keuangan'].includes(currentUser.role)
                      || (currentUser.area_kerja || '').trim().toLowerCase() === 'kantor pusat';
               if (canViewMMDash) {
-                     loadMMDashboardWidget();
+                     loadDashMMInvest();
+              } else {
+                     const mmSection = document.getElementById('dash-mm-invest-section');
+                     if (mmSection) mmSection.style.display = 'none';
               }
 
        } catch (e) {
@@ -780,7 +792,63 @@ function downloadRincianPrognosaExcel() {
        document.body.removeChild(a);
 }
 
-function _renderSalesHero(monthly, currentRows, periode) {
+function setDashSalesMode(mode) {
+       if (dashSalesMode === mode) return;
+       dashSalesMode = mode;
+       document.querySelectorAll('#dash-sales-mode button').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+       _renderDashSalesAll();
+}
+
+// Agregasi per area sesuai dashSalesMode ('bulanan' = bulan terpilih, 'kumulatif' = Jan..bulan terpilih
+// atau sepanjang tahun bila "Semua Bulan"), lalu render hero + tabel + chart sekaligus.
+function _renderDashSalesAll() {
+       const raw = _dashSalesRaw;
+       if (!raw) return;
+
+       const isKumulatif = dashSalesMode === 'kumulatif';
+       const idx = isKumulatif ? raw.kumulatifIdx : raw.bulananIdx;
+
+       const aggRows = raw.areasRaw.map(a => {
+              let row;
+              if (isKumulatif && idx >= 12) {
+                     row = { area_kerja: a.area_kerja, target: a.total_target || 0, penjualan: a.total_penjualan || 0, laba_kotor: a.total_laba_kotor || 0, pendapatan_lain: a.total_pendapatan_lain || 0, difaktur: a.total_difaktur || 0 };
+              } else if (isKumulatif) {
+                     const slice = (a.months || []).slice(0, idx);
+                     row = {
+                            area_kerja: a.area_kerja,
+                            target: slice.reduce((s, m) => s + (m.target || 0), 0),
+                            penjualan: slice.reduce((s, m) => s + (m.penjualan || 0), 0),
+                            laba_kotor: slice.reduce((s, m) => s + (m.laba_kotor || 0), 0),
+                            pendapatan_lain: slice.reduce((s, m) => s + (m.pendapatan_lain || 0), 0),
+                            difaktur: slice.reduce((s, m) => s + (m.difaktur || 0), 0),
+                     };
+              } else {
+                     const m = (a.months || [])[idx - 1] || {};
+                     row = { area_kerja: a.area_kerja, target: m.target || 0, penjualan: m.penjualan || 0, laba_kotor: m.laba_kotor || 0, pendapatan_lain: m.pendapatan_lain || 0, difaktur: m.difaktur || 0 };
+              }
+              row.belum_difaktur = raw.outstandingByArea[a.area_kerja] || 0;
+              return row;
+       });
+
+       // Tren bulanan (Jan..Des tahun terpilih), dijumlah lintas area — untuk chart
+       const monthlyAgg = (raw.monthsList || []).map((periode, i) => {
+              let target = 0, penjualan = 0;
+              raw.areasRaw.forEach(a => { const m = (a.months || [])[i]; if (m) { target += m.target || 0; penjualan += m.penjualan || 0; } });
+              return { periode, target, penjualan };
+       });
+
+       const rangeLabel = isKumulatif
+              ? (idx >= 12 ? `Kumulatif — Sepanjang ${raw.year}` : `Kumulatif s/d ${formatPeriode(`${raw.year}-${String(idx).padStart(2, '0')}`)}`)
+              : formatPeriode(`${raw.year}-${String(idx).padStart(2, '0')}`);
+
+       const salesH2 = document.getElementById('dash-sales-title');
+       if (salesH2) salesH2.textContent = `🎯 Target & Realisasi Penjualan — ${rangeLabel}`;
+
+       _renderSalesHero(monthlyAgg, aggRows, rangeLabel, raw.outstandingTotal);
+       _renderDashSalesTarget(aggRows);
+}
+
+function _renderSalesHero(monthly, currentRows, rangeLabel, outstandingTotal) {
        const hero = document.getElementById('dash-sales-hero');
        if (!hero) return;
 
@@ -797,7 +865,7 @@ function _renderSalesHero(monthly, currentRows, periode) {
 
        // Update periode badge
        const periodeEl = document.getElementById('sales-hero-periode');
-       if (periodeEl) periodeEl.textContent = formatPeriode(periode);
+       if (periodeEl) periodeEl.textContent = rangeLabel;
 
        // Update KPI boxes (angka singkat agar tidak wrap)
        const _s = id => document.getElementById(id);
@@ -807,6 +875,7 @@ function _renderSalesHero(monthly, currentRows, periode) {
        if (_s('sh-real')) _s('sh-real').textContent = 'Rp ' + formatRupiahShort(curPenj);
        if (_s('sh-laba')) _s('sh-laba').textContent = 'Rp ' + formatRupiahShort(curLaba);
        if (_s('sh-pendapatan')) _s('sh-pendapatan').textContent = 'Rp ' + formatRupiahShort(curPendapatan);
+       if (_s('sh-outstanding')) _s('sh-outstanding').textContent = 'Rp ' + formatRupiahShort(outstandingTotal || 0);
 
        const pctEl = _s('sh-pct');
        if (pctEl) {
@@ -835,13 +904,18 @@ function _renderSalesHero(monthly, currentRows, periode) {
        const penjualan = monthly.map(r => r.penjualan);
        const pctLine = monthly.map(r => r.target > 0 ? Math.round((r.penjualan / r.target) * 100) : null);
 
-       // Plugin 1: angka singkat di atas setiap bar
+       // Realisasi kumulatif (running total) — hanya ditampilkan saat mode Kumulatif, menindih bar bulanan
+       let runningTotal = 0;
+       const kumulatifLine = penjualan.map(v => { runningTotal += (v || 0); return runningTotal; });
+
+       // Plugin 1: angka singkat di atas setiap bar (dilewati untuk dataset garis kumulatif)
        const barValLabels = {
               id: 'barValLabels',
               afterDraw(chart) {
                      const c = chart.ctx;
                      const colors = ['rgba(147,197,253,.95)', 'rgba(110,231,183,.95)'];
                      chart.data.datasets.forEach((ds, i) => {
+                            if (ds.type === 'line') return;
                             const meta = chart.getDatasetMeta(i);
                             if (!meta.visible) return;
                             c.save();
@@ -910,7 +984,19 @@ function _renderSalesHero(monthly, currentRows, periode) {
                                    borderRadius: 6,
                                    borderSkipped: false,
                                    order: 2
-                            }
+                            },
+                            ...(dashSalesMode === 'kumulatif' ? [{
+                                   type: 'line',
+                                   label: 'Realisasi Kumulatif',
+                                   data: kumulatifLine,
+                                   borderColor: 'rgba(250,204,21,.95)',
+                                   backgroundColor: 'rgba(250,204,21,.15)',
+                                   borderWidth: 2,
+                                   pointRadius: 3,
+                                   pointBackgroundColor: 'rgba(250,204,21,1)',
+                                   tension: 0.3,
+                                   order: 0
+                            }] : [])
                      ]
               },
               options: {
@@ -940,8 +1026,8 @@ function _renderSalesHero(monthly, currentRows, periode) {
                                           label: c => {
                                                  const pct = pctLine[c.dataIndex];
                                                  if (c.datasetIndex === 1 && pct !== null)
-                                                        return [` ${c.dataset.label}: Rp ${fmtNumStr(c.raw)}`, ` Pencapaian: ${pct}%`];
-                                                 return ` ${c.dataset.label}: Rp ${fmtNumStr(c.raw)}`;
+                                                        return [` ${c.dataset.label}: Rp ${formatRupiah(c.raw)}`, ` Pencapaian: ${pct}%`];
+                                                 return ` ${c.dataset.label}: Rp ${formatRupiah(c.raw)}`;
                                           }
                                    }
                             }
@@ -1001,13 +1087,13 @@ function _renderDashSalesTarget(rows) {
               const difakturPctText = r.penjualan > 0 ? `${difakturPct}%` : '—';
               return `<tr>
                      <td><strong>${escHtml(r.area_kerja)}</strong></td>
-                     <td class="text-right">Rp ${fmtNumStr(r.target)}</td>
-                     <td class="text-right">Rp ${fmtNumStr(r.penjualan)}</td>
-                     <td class="text-right" style="color:#0e9f6e">Rp ${fmtNumStr(r.difaktur || 0)}</td>
+                     <td class="text-right">Rp ${formatRupiah(r.target)}</td>
+                     <td class="text-right">Rp ${formatRupiah(r.penjualan)}</td>
+                     <td class="text-right" style="color:#0e9f6e">Rp ${formatRupiah(r.difaktur || 0)}</td>
                      <td class="text-right">${difakturPctText}</td>
-                     <td class="text-right" style="color:#f05252">Rp ${fmtNumStr(r.belum_difaktur || 0)}</td>
-                     <td class="text-right" style="color:#0e9f6e">Rp ${fmtNumStr(r.laba_kotor || 0)}</td>
-                     <td class="text-right" style="color:#7c3aed">Rp ${fmtNumStr(r.pendapatan_lain || 0)}</td>
+                     <td class="text-right" style="color:#f05252">Rp ${formatRupiah(r.belum_difaktur || 0)}</td>
+                     <td class="text-right" style="color:#0e9f6e">Rp ${formatRupiah(r.laba_kotor || 0)}</td>
+                     <td class="text-right" style="color:#7c3aed">Rp ${formatRupiah(r.pendapatan_lain || 0)}</td>
                      <td class="text-right">
                             <span class="sales-pct-badge" style="color:${barColor}">${pctText}</span>
                      </td>
@@ -1022,13 +1108,13 @@ function _renderDashSalesTarget(rows) {
        const totalPct = sumTarget > 0 ? Math.round((sumPenj / sumTarget) * 100) : 0;
        const totColor = totalPct >= 100 ? '#0e9f6e' : totalPct >= 75 ? '#3b82f6' : totalPct >= 50 ? '#e3a008' : '#f05252';
        const totalDifakturPct = sumPenj > 0 ? Math.round((sumDifaktur / sumPenj) * 100) : 0;
-       if (totTgt) totTgt.textContent = 'Rp ' + fmtNumStr(sumTarget);
-       if (totPenj) totPenj.textContent = 'Rp ' + fmtNumStr(sumPenj);
-       if (totLaba) totLaba.textContent = 'Rp ' + fmtNumStr(sumLaba);
-       if (totPendapatan) totPendapatan.textContent = 'Rp ' + fmtNumStr(sumPendapatan);
-       if (totDifaktur) totDifaktur.textContent = 'Rp ' + fmtNumStr(sumDifaktur);
+       if (totTgt) totTgt.textContent = 'Rp ' + formatRupiah(sumTarget);
+       if (totPenj) totPenj.textContent = 'Rp ' + formatRupiah(sumPenj);
+       if (totLaba) totLaba.textContent = 'Rp ' + formatRupiah(sumLaba);
+       if (totPendapatan) totPendapatan.textContent = 'Rp ' + formatRupiah(sumPendapatan);
+       if (totDifaktur) totDifaktur.textContent = 'Rp ' + formatRupiah(sumDifaktur);
        if (totDifakturPct) totDifakturPct.textContent = sumPenj > 0 ? `${totalDifakturPct}%` : '—';
-       if (totBelumDifaktur) totBelumDifaktur.textContent = 'Rp ' + fmtNumStr(sumBelumDifaktur);
+       if (totBelumDifaktur) totBelumDifaktur.textContent = 'Rp ' + formatRupiah(sumBelumDifaktur);
        if (totPct) { totPct.textContent = sumTarget > 0 ? `${totalPct}%` : '—'; totPct.style.color = totColor; }
 }
 
@@ -5403,10 +5489,17 @@ async function toggleMMPembayaranStatus(pid, newStatus, monitoringId) {
        } catch { showToast('Koneksi ke server gagal', 'error'); }
 }
 
-async function loadMMDashboardWidget() {
-       const section = document.getElementById('mm-dashboard-section');
-       const cardsEl = document.getElementById('mm-dashboard-cards');
-       if (!section || !cardsEl) return;
+function _mmDashStatusBadge(e) {
+       if (e.ada_keterlambatan) return `<span class="badge" style="background:#fde8e8;color:var(--red);font-weight:700">⚠️ Telat ${e.max_telat_hari} hari</span>`;
+       if (e.semua_lunas) return `<span class="badge" style="background:#def7ec;color:var(--green)">✅ Semua Lunas</span>`;
+       if (!e.ada_jadwal) return `<span class="badge" style="background:var(--gray-light);color:var(--text-light)">—</span>`;
+       return `<span class="badge" style="background:var(--blue-light);color:var(--blue)">🔵 Berjalan</span>`;
+}
+
+async function loadDashMMInvest() {
+       const section = document.getElementById('dash-mm-invest-section');
+       const tbody = document.getElementById('dash-mm-tbody');
+       if (!section || !tbody) return;
        try {
               const res = await api('/api/media-monitoring/dashboard');
               if (!res.ok) { section.style.display = 'none'; return; }
@@ -5414,26 +5507,29 @@ async function loadMMDashboardWidget() {
               if (!data.entries || data.entries.length === 0) { section.style.display = 'none'; return; }
 
               section.style.display = '';
-              cardsEl.innerHTML = data.entries.map(e => {
-                     const pct = e.nilai_investasi > 0 ? Math.min(100, (e.terbayar / e.nilai_investasi) * 100) : 0;
-                     let badge;
-                     if (e.ada_keterlambatan) badge = `<span class="badge" style="background:#fde8e8;color:var(--red);font-weight:700">⚠️ Telat ${e.max_telat_hari} hari</span>`;
-                     else if (e.semua_lunas) badge = `<span class="badge" style="background:#def7ec;color:var(--green)">✅ Semua Lunas</span>`;
-                     else if (!e.ada_jadwal) badge = `<span class="badge" style="background:var(--gray-light);color:var(--text-light)">—</span>`;
-                     else badge = `<span class="badge" style="background:var(--blue-light);color:var(--blue)">🔵 Berjalan</span>`;
+              const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+              setTxt('dash-mm-investasi', 'Rp ' + formatRupiah(data.total_investasi));
+              setTxt('dash-mm-terbayar', 'Rp ' + formatRupiah(data.total_terbayar));
+              setTxt('dash-mm-belum-kembali', 'Rp ' + formatRupiah(data.uang_belum_kembali));
+              setTxt('dash-mm-laba', 'Rp ' + formatRupiah(data.total_laba_selesai));
 
+              tbody.innerHTML = data.entries.map(e => {
+                     const belumKembali = (parseFloat(e.nilai_uang_kembali) || 0) - (parseFloat(e.terbayar) || 0);
+                     const laba = (parseFloat(e.nilai_uang_kembali) || 0) - (parseFloat(e.nilai_investasi) || 0);
+                     const labaHtml = e.semua_lunas
+                            ? `<span style="color:${laba >= 0 ? 'var(--green)' : 'var(--red)'}">Rp ${formatRupiah(laba)}</span>`
+                            : `<span style="color:var(--text-light)" title="Belum selesai">Rp ${formatRupiah(laba)}</span>`;
                      return `
-      <div class="mm-dash-card ${e.ada_keterlambatan ? 'mm-telat' : ''}" onclick="openMMDetail(${e.id})">
-        <div class="mm-dash-card-name">📡 ${escHtml(e.nama_perusahaan)}</div>
-        <div class="mm-dash-card-job">${escHtml(e.pekerjaan || '-')}</div>
-        <div class="mm-dash-row"><span class="lbl">Investasi</span><span>Rp ${formatRupiah(e.nilai_investasi)}</span></div>
-        <div class="mm-dash-row"><span class="lbl">Terbayar</span><span>Rp ${formatRupiah(e.terbayar)}</span></div>
-        <div class="mm-progress-bar"><div class="mm-progress-fill" style="width:${pct}%"></div></div>
-        <div class="mm-dash-row"><span class="lbl">Sisa (Uang Kembali)</span><span>Rp ${formatRupiah(e.sisa_uang_kembali ?? e.sisa)}</span></div>
-        <div class="mm-dash-row"><span class="lbl">Sisa (Laba)</span><span>Rp ${formatRupiah(e.sisa_laba)}</span></div>
-        <div class="mm-dash-row"><span class="lbl">Margin</span><span style="color:${e.margin_pct >= 0 ? 'var(--green)' : 'var(--red)'}">${e.margin_pct.toFixed(2)}%</span></div>
-        <div style="margin-top:8px">${badge}</div>
-      </div>`;
+      <tr onclick="openMMDetail(${e.id})">
+        <td class="fw-bold">${escHtml(e.nama_perusahaan)}</td>
+        <td>${escHtml(e.pekerjaan || '-')}</td>
+        <td class="text-right">Rp ${formatRupiah(e.nilai_investasi)}</td>
+        <td class="text-right">Rp ${formatRupiah(e.terbayar)}</td>
+        <td class="text-right" style="color:${belumKembali >= 0 ? 'var(--red)' : 'var(--green)'}">Rp ${formatRupiah(belumKembali)}</td>
+        <td class="text-right">${labaHtml}</td>
+        <td class="text-right" style="color:${e.margin_pct >= 0 ? 'var(--green)' : 'var(--red)'}">${e.margin_pct.toFixed(2)}%</td>
+        <td>${_mmDashStatusBadge(e)}</td>
+      </tr>`;
               }).join('');
        } catch {
               section.style.display = 'none';
@@ -6190,6 +6286,7 @@ function initUploadPenjualan() {
               periodeInput.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
        }
        loadPenjualanOutstanding();
+       loadPenjualanUnmapped();
 }
 
 async function submitUploadPenjualan() {
@@ -6237,6 +6334,7 @@ async function submitUploadPenjualan() {
                             loadPenjualanSummary();
                      }
                      loadPenjualanOutstanding();
+                     loadPenjualanUnmapped();
               }
        } catch {
               errEl.textContent = 'Koneksi ke server gagal';
@@ -6336,5 +6434,81 @@ async function loadPenjualanOutstanding() {
       </div>`;
        } catch {
               container.innerHTML = '<div class="alert alert-error" style="margin:16px">Koneksi ke server gagal</div>';
+       }
+}
+
+let _penjUnmappedRows = [];
+let _penjMappingUsers = [];
+
+async function loadPenjualanUnmapped() {
+       const container = document.getElementById('penj-unmapped-container');
+       if (!container) return;
+       container.innerHTML = '<div class="loading" style="padding:16px">⏳ Memuat...</div>';
+       try {
+              const [unmappedRes, mappingRes] = await Promise.all([
+                     api('/api/penjualan/unmapped'),
+                     api('/api/penjualan/mapping'),
+              ]);
+              const rows = await unmappedRes.json();
+              const mappingData = await mappingRes.json();
+              if (!unmappedRes.ok) { container.innerHTML = `<div class="alert alert-error" style="margin:16px">${rows.error || 'Gagal memuat'}</div>`; return; }
+
+              _penjUnmappedRows = rows;
+              _penjMappingUsers = mappingData.users || [];
+              if (!rows.length) { container.innerHTML = emptyState('Semua salesperson sudah terpetakan ke area kerja'); return; }
+
+              const userOptions = _penjMappingUsers.map(u => `<option value="${u.id}">${escHtml(u.full_name)} (${escHtml(u.area_kerja || '-')})</option>`).join('');
+              const areaOptions = AREA_KERJA_LIST.map(a => `<option value="${escHtml(a)}">${escHtml(a)}</option>`).join('');
+
+              const bodyRows = rows.map((r, i) => `<tr>
+        <td>${escHtml(r.salesperson)}</td>
+        <td class="text-right">${r.jumlah_order}</td>
+        <td class="text-right">Rp ${formatRupiah(r.total)}</td>
+        <td><select id="penj-map-user-${i}" onchange="if(this.value) document.getElementById('penj-map-area-${i}').value=''">
+          <option value="">-- Pilih Akun --</option>${userOptions}
+        </select></td>
+        <td><select id="penj-map-area-${i}" onchange="if(this.value) document.getElementById('penj-map-user-${i}').value=''">
+          <option value="">-- Pilih Area --</option>${areaOptions}
+        </select></td>
+        <td><button class="btn btn-primary btn-sm" onclick="saveSalespersonMapping(${i})">💾 Simpan</button></td>
+      </tr>`).join('');
+
+              container.innerHTML = `
+      <div class="table-responsive">
+        <table class="table">
+          <thead><tr>
+            <th>Salesperson</th>
+            <th class="text-right">Jumlah Order</th>
+            <th class="text-right">Total Nilai</th>
+            <th>Cocokkan ke Akun</th>
+            <th>atau ke Area Kerja</th>
+            <th></th>
+          </tr></thead>
+          <tbody>${bodyRows}</tbody>
+        </table>
+      </div>`;
+       } catch {
+              container.innerHTML = '<div class="alert alert-error" style="margin:16px">Koneksi ke server gagal</div>';
+       }
+}
+
+async function saveSalespersonMapping(i) {
+       const row = _penjUnmappedRows[i];
+       if (!row) return;
+       const userId = document.getElementById(`penj-map-user-${i}`)?.value || '';
+       const areaKerja = document.getElementById(`penj-map-area-${i}`)?.value || '';
+       if (!userId && !areaKerja) { showToast('Pilih Akun atau Area Kerja terlebih dahulu', 'error'); return; }
+
+       try {
+              const res = await api('/api/penjualan/mapping', 'POST', { salesperson: row.salesperson, user_id: userId || null, area_kerja: areaKerja || null });
+              const data = await res.json();
+              if (!res.ok) { showToast(data.error || 'Gagal menyimpan pemetaan', 'error'); return; }
+              showToast(`✅ ${row.salesperson} dipetakan ke ${data.area_kerja}`, 'success');
+              loadPenjualanUnmapped();
+              const periode = document.getElementById('penj-cek-periode')?.value;
+              if (periode) loadPenjualanSummary();
+              loadPenjualanOutstanding();
+       } catch {
+              showToast('Koneksi ke server gagal', 'error');
        }
 }

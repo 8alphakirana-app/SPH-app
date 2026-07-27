@@ -809,7 +809,36 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
 .sales-kpi-pct    .sales-kpi-val { color: #fde68a; font-size: 32px; }
 .sales-kpi-gap    .sales-kpi-val { color: #fca5a5; }
 .sales-kpi-gap.achieved .sales-kpi-val { color: #6ee7b7; }
+.sales-kpi-outstanding .sales-kpi-val { color: #fdba74; }
 .sales-hero-chart-col { position: relative; height: 280px; }
+
+/* ── Segmented toggle (Per Bulan / Kumulatif) ────────────────────────────── */
+.seg-toggle {
+  display: inline-flex;
+  background: var(--gray-light);
+  border: 1px solid var(--gray-border);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 2px;
+}
+.seg-toggle button {
+  border: none;
+  background: transparent;
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--text-light);
+  transition: background var(--transition), color var(--transition);
+  white-space: nowrap;
+}
+.seg-toggle button:hover:not(.active) { background: rgba(0,0,0,.05); }
+.seg-toggle button.active { background: var(--blue); color: #fff; }
+@media (max-width: 480px) {
+  .seg-toggle { width: 100%; }
+  .seg-toggle button { flex: 1; }
+}
 
 /* Sales target dashboard table */
 .sales-pct-badge { font-size: 14px; font-weight: 700; }
@@ -1225,30 +1254,22 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
 .mm-green     { color: var(--green); }
 .mm-red       { color: var(--red); }
 
-.mm-dashboard-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px; margin-bottom: 20px;
+/* Tabel rincian Media Monitoring di dashboard: scroll dengan header sticky */
+.mm-table-scroll {
+  max-height: 360px;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
-.mm-dash-card {
-  background: white; border: 1px solid var(--gray-border);
-  border-radius: 10px; padding: 14px 16px; cursor: pointer;
-  transition: box-shadow .2s;
+.mm-table-scroll thead th {
+  position: sticky;
+  top: 0;
+  background: var(--gray-light);
+  z-index: 1;
 }
-.mm-dash-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.12); }
-.mm-dash-card.mm-telat { border-color: var(--red); border-width: 2px; }
-.mm-dash-card-name { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
-.mm-dash-card-job  { font-size: 12px; color: var(--text-light); margin-bottom: 10px; }
-.mm-dash-row {
-  display: flex; justify-content: space-between;
-  font-size: 13px; margin-bottom: 4px;
-}
-.mm-dash-row .lbl { color: var(--text-light); }
-.mm-progress-bar {
-  height: 6px; background: var(--gray-border); border-radius: 3px;
-  margin: 8px 0; overflow: hidden;
-}
-.mm-progress-fill {
-  height: 100%; background: var(--green); border-radius: 3px;
-  transition: width .4s;
+.mm-table-scroll tbody tr { cursor: pointer; transition: background var(--transition); }
+.mm-table-scroll tbody tr:hover { background: var(--gray-light); }
+
+@media (max-width: 700px) {
+  .mm-summary-row { flex-direction: column; }
+  .mm-sum-card { min-width: 0; }
 }

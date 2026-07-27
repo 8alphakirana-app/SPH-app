@@ -235,6 +235,10 @@
                 <select id="dash-filter-month" onchange="loadDashboard()" style="min-width:150px">
                   <option value="">Semua Bulan</option>
                 </select>
+                <div class="seg-toggle" id="dash-sales-mode">
+                  <button data-mode="bulanan" class="active" onclick="setDashSalesMode('bulanan')">Per Bulan</button>
+                  <button data-mode="kumulatif" onclick="setDashSalesMode('kumulatif')">Kumulatif</button>
+                </div>
                 <div id="dash-admin-filters" style="display:none;align-items:center;gap:8px;flex-wrap:wrap">
                   <div id="dash-filter-area-group" style="display:flex;align-items:center;gap:8px">
                     <label class="filter-label">Area:</label>
@@ -291,9 +295,104 @@
                       <div class="sales-kpi-val" id="sh-pendapatan">Rp 0</div>
                       <div class="sales-kpi-lbl">Pendapatan Lain</div>
                     </div>
+                    <div class="sales-kpi-box sales-kpi-outstanding">
+                      <div class="sales-kpi-icon">⏳</div>
+                      <div class="sales-kpi-val" id="sh-outstanding">Rp 0</div>
+                      <div class="sales-kpi-lbl">Belum Difaktur (Outstanding)</div>
+                    </div>
                   </div>
                   <div class="sales-hero-chart-col">
                     <canvas id="chart-sales-monthly" style="width:100%;height:100%"></canvas>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Media Monitoring Investasi: summary + tabel rincian -->
+            <div id="dash-mm-invest-section" style="display:none">
+              <div class="section-divider">
+                <h2>📡 Media Monitoring Investasi</h2>
+              </div>
+              <div class="mm-summary-row">
+                <div class="mm-sum-card">
+                  <div class="mm-sum-label">Total Investasi</div>
+                  <div class="mm-sum-val" id="dash-mm-investasi">Rp 0</div>
+                </div>
+                <div class="mm-sum-card">
+                  <div class="mm-sum-label">Total Terbayar</div>
+                  <div class="mm-sum-val mm-green" id="dash-mm-terbayar">Rp 0</div>
+                </div>
+                <div class="mm-sum-card">
+                  <div class="mm-sum-label">Uang Belum Kembali</div>
+                  <div class="mm-sum-val mm-red" id="dash-mm-belum-kembali">Rp 0</div>
+                </div>
+                <div class="mm-sum-card">
+                  <div class="mm-sum-label">Laba (transaksi selesai)</div>
+                  <div class="mm-sum-val mm-green" id="dash-mm-laba">Rp 0</div>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-body no-padding">
+                  <div class="mm-table-scroll">
+                    <table class="table" id="dash-mm-table">
+                      <thead>
+                        <tr>
+                          <th>Perusahaan</th>
+                          <th>Pekerjaan</th>
+                          <th class="text-right">Investasi</th>
+                          <th class="text-right">Terbayar</th>
+                          <th class="text-right">Belum Kembali</th>
+                          <th class="text-right">Laba</th>
+                          <th class="text-right">Margin</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody id="dash-mm-tbody"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Target & Realisasi Penjualan -->
+            <div id="dash-sales-section" style="display:none">
+              <div class="section-divider">
+                <h2 id="dash-sales-title">🎯 Target &amp; Realisasi Penjualan</h2>
+              </div>
+              <div class="card">
+                <div class="card-body no-padding">
+                  <div class="table-responsive">
+                    <table class="table" id="dash-sales-table">
+                      <thead>
+                        <tr>
+                          <th>Area Kerja</th>
+                          <th class="text-right">Target (Rp)</th>
+                          <th class="text-right">Realisasi (Rp)</th>
+                          <th class="text-right">Sudah Difaktur (Rp)</th>
+                          <th class="text-right" width="90">% Difaktur</th>
+                          <th class="text-right">Belum Difaktur (Outstanding)</th>
+                          <th class="text-right">Laba Kotor (Rp)</th>
+                          <th class="text-right">Pendapatan Lain (Rp)</th>
+                          <th class="text-right" width="110">Pencapaian</th>
+                          <th width="180">Progress</th>
+                        </tr>
+                      </thead>
+                      <tbody id="dash-sales-tbody"></tbody>
+                      <tfoot>
+                        <tr>
+                          <td class="fw-bold">Total</td>
+                          <td class="text-right fw-bold" id="dash-sales-total-target">Rp 0</td>
+                          <td class="text-right fw-bold" id="dash-sales-total-penjualan">Rp 0</td>
+                          <td class="text-right fw-bold" id="dash-sales-total-difaktur">Rp 0</td>
+                          <td class="text-right fw-bold" id="dash-sales-total-difaktur-pct">0%</td>
+                          <td class="text-right fw-bold" id="dash-sales-total-belumdifaktur">Rp 0</td>
+                          <td class="text-right fw-bold" id="dash-sales-total-laba">Rp 0</td>
+                          <td class="text-right fw-bold" id="dash-sales-total-pendapatan">Rp 0</td>
+                          <td class="text-right fw-bold" id="dash-sales-total-pct">0%</td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
                   </div>
                 </div>
               </div>
@@ -347,14 +446,6 @@
                       class="dash-lbl">Total Prognosa</span></div>
                 </div>
               </div>
-            </div>
-
-            <!-- Media Monitoring dashboard widget -->
-            <div id="mm-dashboard-section" style="display:none">
-              <div class="section-divider">
-                <h2>📡 Media Monitoring — Status Pembayaran</h2>
-              </div>
-              <div id="mm-dashboard-cards" class="mm-dashboard-grid"></div>
             </div>
 
             <!-- Charts row -->
@@ -424,50 +515,6 @@
                           <td colspan="5" class="text-right fw-bold">Total Nilai</td>
                           <td class="fw-bold" id="dash-project-total">Rp 0</td>
                           <td colspan="2"></td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Target & Realisasi Penjualan -->
-            <div id="dash-sales-section" style="display:none">
-              <div class="section-divider">
-                <h2 id="dash-sales-title">🎯 Target &amp; Realisasi Penjualan</h2>
-              </div>
-              <div class="card">
-                <div class="card-body no-padding">
-                  <div class="table-responsive">
-                    <table class="table" id="dash-sales-table">
-                      <thead>
-                        <tr>
-                          <th>Area Kerja</th>
-                          <th class="text-right">Target (Rp)</th>
-                          <th class="text-right">Realisasi (Rp)</th>
-                          <th class="text-right">Sudah Difaktur (Rp)</th>
-                          <th class="text-right" width="90">% Difaktur</th>
-                          <th class="text-right">Belum Difaktur (Rp)</th>
-                          <th class="text-right">Laba Kotor (Rp)</th>
-                          <th class="text-right">Pendapatan Lain (Rp)</th>
-                          <th class="text-right" width="110">Pencapaian</th>
-                          <th width="180">Progress</th>
-                        </tr>
-                      </thead>
-                      <tbody id="dash-sales-tbody"></tbody>
-                      <tfoot>
-                        <tr>
-                          <td class="fw-bold">Total</td>
-                          <td class="text-right fw-bold" id="dash-sales-total-target">Rp 0</td>
-                          <td class="text-right fw-bold" id="dash-sales-total-penjualan">Rp 0</td>
-                          <td class="text-right fw-bold" id="dash-sales-total-difaktur">Rp 0</td>
-                          <td class="text-right fw-bold" id="dash-sales-total-difaktur-pct">0%</td>
-                          <td class="text-right fw-bold" id="dash-sales-total-belumdifaktur">Rp 0</td>
-                          <td class="text-right fw-bold" id="dash-sales-total-laba">Rp 0</td>
-                          <td class="text-right fw-bold" id="dash-sales-total-pendapatan">Rp 0</td>
-                          <td class="text-right fw-bold" id="dash-sales-total-pct">0%</td>
-                          <td></td>
                         </tr>
                       </tfoot>
                     </table>
@@ -1362,6 +1409,22 @@
                 <div class="form-actions" style="padding:0;margin-top:16px">
                   <button onclick="submitUploadPenjualan()" id="btn-upload-penjualan" class="btn btn-primary">📤
                     Upload &amp; Proses</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="card" style="margin-bottom:16px">
+              <div class="card-header">
+                <h3>🧩 Salesperson Belum Dipetakan</h3>
+              </div>
+              <div class="card-body no-padding">
+                <p style="color:var(--text-light);font-size:13px;padding:16px 16px 0">
+                  Cocokkan ke <strong>Akun</strong> bila salesperson punya login (area kerja akan mengikuti akun
+                  tersebut), atau ke <strong>Area Kerja</strong> saja bila hanya ingin menetapkan areanya. Pemetaan
+                  tersimpan permanen — upload berikutnya otomatis mengikuti pemetaan ini.
+                </p>
+                <div id="penj-unmapped-container">
+                  <div class="loading" style="padding:16px">⏳ Memuat...</div>
                 </div>
               </div>
             </div>
