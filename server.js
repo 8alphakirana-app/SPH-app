@@ -13,14 +13,14 @@ const isProd = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVI
 // menyebabkan PayloadTooLargeError yang tertutup pesan "Internal server error" generik.
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Service Worker: pastikan header yang benar
-app.get('/sw.js', (req, res, next) => {
-    res.setHeader('Service-Worker-Allowed', '/');
-    res.setHeader('Cache-Control', 'no-cache');
-    next();
-});
+app.use(express.static(path.join(__dirname, 'public'), {
+    setHeaders(res, filePath) {
+        if (filePath.endsWith('sw.js')) {
+            res.setHeader('Service-Worker-Allowed', '/');
+            res.setHeader('Cache-Control', 'no-cache');
+        }
+    }
+}));
 
 // Trust proxy (Railway / reverse proxy)
 app.set('trust proxy', 1);
@@ -51,8 +51,11 @@ app.use('/api/media-monitoring', require('./routes/media-monitoring'));
 app.use('/api/mom', require('./routes/mom'));
 app.use('/api/uang-muka', require('./routes/uang-muka'));
 
-// SPA fallback - semua route ke index.html
+// SPA fallback — hanya untuk path tanpa ekstensi file
 app.get('*', (req, res) => {
+    if (/\.[a-zA-Z0-9]+$/.test(req.path)) {
+        return res.status(404).end();
+    }
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 

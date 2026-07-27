@@ -10,5 +10,15 @@ services:
     volumes:
       - ./data:/app/data
       - ./uploads:/app/uploads
+      - ./public/img:/app/public/img
     environment:
       - NODE_ENV=production
+    networks:
+      - proxy-net
+      - sph-internal
+
+networks:
+  proxy-net:
+    external: true
+  sph-internal:
+    name: sph-internal

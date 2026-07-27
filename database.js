@@ -379,10 +379,13 @@ db.exec(`
 // ── MIGRATION: rename username gm2 → danny ────────────────────────────────────
 const oldGm2User = db.prepare("SELECT id FROM users WHERE username = 'gm2' AND role = 'gm2'").get();
 if (oldGm2User) {
-  // Hapus user danny yang baru saja di-seed (belum punya data) agar tidak konflik UNIQUE
-  db.prepare("DELETE FROM users WHERE username='danny' AND role='gm2' AND id != ?").run(oldGm2User.id);
-  db.prepare("UPDATE users SET username='danny', full_name='Danny' WHERE id=?").run(oldGm2User.id);
-  console.log('✅ User gm2 direname menjadi danny');
+  const dannyExists = db.prepare("SELECT id FROM users WHERE username = 'danny'").get();
+  if (dannyExists) {
+    console.log('⏭️ Migration gm2→danny dilewati, danny sudah ada');
+  } else {
+    db.prepare("UPDATE users SET username='danny', full_name='Danny' WHERE id=?").run(oldGm2User.id);
+    console.log('✅ User gm2 direname menjadi danny');
+  }
 }
 
 // ── MIGRATION: sppd_itinerary new columns (rencana kunjungan) ─────────────────
@@ -931,5 +934,22 @@ db.exec(`
     console.error('Auto-backup gagal:', e.message);
   }
 })();
+
+
+// ── MIGRATION: create sppd_pengembalian table if not exists ───────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sppd_pengembalian (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    sppd_id        INTEGER NOT NULL UNIQUE,
+    nomor          TEXT,
+    realisasi_biaya REAL DEFAULT 0,
+    uang_muka      REAL DEFAULT 0,
+    selisih        REAL DEFAULT 0,
+    status         TEXT DEFAULT 'draft',
+    catatan        TEXT DEFAULT '',
+    created_by     INTEGER,
+    created_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`);
 
 module.exports = db;
