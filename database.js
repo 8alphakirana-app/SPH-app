@@ -504,7 +504,19 @@ const pendingLaporans = db.prepare(`
     AND NOT EXISTS (SELECT 1 FROM sppd_laporan_approvals a WHERE a.laporan_id = l.id AND a.level = 5)
 `).all();
 
+let laporanMigratedCount = 0;
 for (const laporan of pendingLaporans) {
+  // Sudah pernah dimigrasi sebelumnya (marker dari migrasi ini sendiri) TAPI
+  // masih 'pending' menunggu approval level 5/6 -> itu state NORMAL yang
+  // valid, BUKAN "belum dimigrasi". Lewati supaya tidak DELETE+reinsert
+  // approval record yang sudah benar (sebelumnya ini bug: migrasi berjalan
+  // ulang tiap restart selama laporan masih pending, menghasilkan approval
+  // duplikat & remapping level yang salah).
+  const alreadyMigrated = db.prepare(
+    "SELECT 1 FROM sppd_laporan_approvals WHERE laporan_id=? AND note='Auto-migrasi sistem' LIMIT 1"
+  ).get(laporan.id);
+  if (alreadyMigrated) continue;
+
   const oldLevel = laporan.laporan_approval_level;
   if (oldLevel === 0) {
     // Not yet started: set to 1 (waiting for area_manager)
@@ -538,9 +550,10 @@ for (const laporan of pendingLaporans) {
 
   const newSubmLevel = oldLevelToNewSubmLevel[oldLevel] ?? oldLevel;
   db.prepare('UPDATE sppd_laporan SET laporan_approval_level=? WHERE id=?').run(newSubmLevel, laporan.id);
+  laporanMigratedCount++;
 }
-if (pendingLaporans.length > 0) {
-  console.log(`✅ Migrasi Laporan: ${pendingLaporans.length} laporan pending diupgrade ke sistem 6 level`);
+if (laporanMigratedCount > 0) {
+  console.log(`✅ Migrasi Laporan: ${laporanMigratedCount} laporan pending diupgrade ke sistem 6 level`);
 }
 
 // ── MIGRATION: KK 4-level → 6-level approval system ──────────────────────────
