@@ -395,14 +395,15 @@ async function loadDashboard() {
 
               const moduleQS = (() => { const p = new URLSearchParams(); if (month) p.set('month', month); if (area) p.set('area', area); const s = p.toString(); return s ? '?' + s : ''; })();
 
-              const [sphR, kkR, sppdR, lapR, recentR, salesR, salesMonthlyR] = await Promise.allSettled([
+              const [sphR, kkR, sppdR, lapR, recentR, salesR, salesMonthlyR, outstandingR] = await Promise.allSettled([
                      api('/api/submissions/dashboard-stats' + moduleQS).then(r => r.ok ? r.json() : null),
                      api('/api/kk/stats' + moduleQS).then(r => r.ok ? r.json() : null),
                      api('/api/sppd/dashboard-stats' + moduleQS).then(r => r.ok ? r.json() : null),
                      api(`/api/laporan/dashboard?${lapParams}`).then(r => r.ok ? r.json() : []),
                      api('/api/submissions').then(r => r.ok ? r.json() : []),
                      api(`/api/sales-target?periode=${salesPeriode}`).then(r => r.ok ? r.json() : []),
-                     api('/api/sales-target/monthly?months=12').then(r => r.ok ? r.json() : [])
+                     api('/api/sales-target/monthly?months=12').then(r => r.ok ? r.json() : []),
+                     api('/api/penjualan/outstanding').then(r => r.ok ? r.json() : null)
               ]);
 
               const sphFull = sphR.status === 'fulfilled' ? sphR.value : null;
@@ -417,6 +418,9 @@ async function loadDashboard() {
               const lapRows = lapR.status === 'fulfilled' ? (lapR.value || []) : [];
               const salesRows = salesR.status === 'fulfilled' ? (salesR.value || []) : [];
               const salesMonthly = salesMonthlyR.status === 'fulfilled' ? (salesMonthlyR.value || []) : [];
+              const outstandingRows = outstandingR.status === 'fulfilled' ? (outstandingR.value?.rows || []) : [];
+              const outstandingByArea = Object.fromEntries(outstandingRows.map(r => [r.area_kerja, r.total || 0]));
+              salesRows.forEach(r => { r.belum_difaktur = outstandingByArea[r.area_kerja] || 0; });
               const lapPrognosa = lapRows.reduce((s, r) => s + (r.prognosa_bulan_depan || 0), 0);
 
               // SPH card
@@ -975,19 +979,21 @@ function _renderDashSalesTarget(rows) {
        const totPct = document.getElementById('dash-sales-total-pct');
        const totDifaktur = document.getElementById('dash-sales-total-difaktur');
        const totDifakturPct = document.getElementById('dash-sales-total-difaktur-pct');
+       const totBelumDifaktur = document.getElementById('dash-sales-total-belumdifaktur');
        if (!section || !tbody) return;
 
-       const meaningful = (rows || []).filter(r => r.target > 0 || r.penjualan > 0 || r.laba_kotor > 0 || r.pendapatan_lain > 0 || r.difaktur > 0);
+       const meaningful = (rows || []).filter(r => r.target > 0 || r.penjualan > 0 || r.laba_kotor > 0 || r.pendapatan_lain > 0 || r.difaktur > 0 || r.belum_difaktur > 0);
        if (!meaningful.length) { section.style.display = 'none'; return; }
        section.style.display = '';
 
-       let sumTarget = 0, sumPenj = 0, sumLaba = 0, sumPendapatan = 0, sumDifaktur = 0;
+       let sumTarget = 0, sumPenj = 0, sumLaba = 0, sumPendapatan = 0, sumDifaktur = 0, sumBelumDifaktur = 0;
        tbody.innerHTML = meaningful.map(r => {
               sumTarget += r.target || 0;
               sumPenj += r.penjualan || 0;
               sumLaba += r.laba_kotor || 0;
               sumPendapatan += r.pendapatan_lain || 0;
               sumDifaktur += r.difaktur || 0;
+              sumBelumDifaktur += r.belum_difaktur || 0;
               const pct = r.target > 0 ? Math.round((r.penjualan / r.target) * 100) : 0;
               const barColor = pct >= 100 ? '#0e9f6e' : pct >= 75 ? '#3b82f6' : pct >= 50 ? '#e3a008' : '#f05252';
               const pctText = r.target > 0 ? `${pct}%` : '—';
@@ -999,6 +1005,7 @@ function _renderDashSalesTarget(rows) {
                      <td class="text-right">Rp ${fmtNumStr(r.penjualan)}</td>
                      <td class="text-right" style="color:#0e9f6e">Rp ${fmtNumStr(r.difaktur || 0)}</td>
                      <td class="text-right">${difakturPctText}</td>
+                     <td class="text-right" style="color:#f05252">Rp ${fmtNumStr(r.belum_difaktur || 0)}</td>
                      <td class="text-right" style="color:#0e9f6e">Rp ${fmtNumStr(r.laba_kotor || 0)}</td>
                      <td class="text-right" style="color:#7c3aed">Rp ${fmtNumStr(r.pendapatan_lain || 0)}</td>
                      <td class="text-right">
@@ -1021,6 +1028,7 @@ function _renderDashSalesTarget(rows) {
        if (totPendapatan) totPendapatan.textContent = 'Rp ' + fmtNumStr(sumPendapatan);
        if (totDifaktur) totDifaktur.textContent = 'Rp ' + fmtNumStr(sumDifaktur);
        if (totDifakturPct) totDifakturPct.textContent = sumPenj > 0 ? `${totalDifakturPct}%` : '—';
+       if (totBelumDifaktur) totBelumDifaktur.textContent = 'Rp ' + fmtNumStr(sumBelumDifaktur);
        if (totPct) { totPct.textContent = sumTarget > 0 ? `${totalPct}%` : '—'; totPct.style.color = totColor; }
 }
 
@@ -6170,7 +6178,7 @@ async function submitUMRealisasi() {
        }
 }
 
-// ===================== UPLOAD RINCIAN PENJUALAN (ODOO) =====================
+// ===================== UPLOAD RINCIAN PENJUALAN =====================
 function initUploadPenjualan() {
        document.getElementById('penj-upload-error').style.display = 'none';
        document.getElementById('penj-upload-result').style.display = 'none';
@@ -6181,6 +6189,7 @@ function initUploadPenjualan() {
               const d = new Date();
               periodeInput.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
        }
+       loadPenjualanOutstanding();
 }
 
 async function submitUploadPenjualan() {
@@ -6191,7 +6200,7 @@ async function submitUploadPenjualan() {
 
        const fileOrder = document.getElementById('penj-file-order').files[0];
        const fileReport = document.getElementById('penj-file-report').files[0];
-       if (!fileOrder) { errEl.textContent = 'File Sales Order (sale.order) wajib diupload'; errEl.style.display = 'block'; return; }
+       if (!fileOrder) { errEl.textContent = 'File Sales Order wajib diupload'; errEl.style.display = 'block'; return; }
 
        const formData = new FormData();
        formData.append('file_order', fileOrder);
@@ -6216,7 +6225,8 @@ async function submitUploadPenjualan() {
                             : '';
                      resultEl.innerHTML = `
         <div class="alert alert-success">
-          ✅ ${data.orders_diproses} order berhasil diproses untuk periode:
+          ✅ ${data.orders_diproses} order berhasil diproses — <strong>${data.difaktur || 0}</strong> sudah difaktur,
+          <strong>${data.belum_difaktur || 0}</strong> belum difaktur. Periode terpengaruh:
           <strong>${(data.periode_terpengaruh || []).map(formatPeriode).join(', ') || '-'}</strong>
         </div>
         ${warnHtml}`;
@@ -6226,6 +6236,7 @@ async function submitUploadPenjualan() {
                             document.getElementById('penj-cek-periode').value = data.periode_terpengaruh[0];
                             loadPenjualanSummary();
                      }
+                     loadPenjualanOutstanding();
               }
        } catch {
               errEl.textContent = 'Koneksi ke server gagal';
@@ -6283,6 +6294,43 @@ async function loadPenjualanSummary() {
             <td class="text-right fw-bold">${sumPenj > 0 ? Math.round((sumDifaktur / sumPenj) * 100) + '%' : '—'}</td>
             <td class="text-right fw-bold">Rp ${formatRupiah(sumLaba)}</td>
             <td class="text-right fw-bold">Rp ${formatRupiah(sumTarget)}</td>
+          </tr></tfoot>
+        </table>
+      </div>`;
+       } catch {
+              container.innerHTML = '<div class="alert alert-error" style="margin:16px">Koneksi ke server gagal</div>';
+       }
+}
+
+async function loadPenjualanOutstanding() {
+       const container = document.getElementById('penj-outstanding-container');
+       if (!container) return;
+       container.innerHTML = '<div class="loading" style="padding:16px">⏳ Memuat...</div>';
+       try {
+              const res = await api('/api/penjualan/outstanding');
+              const data = await res.json();
+              if (!res.ok) { container.innerHTML = `<div class="alert alert-error" style="margin:16px">${data.error || 'Gagal memuat'}</div>`; return; }
+              if (!data.rows?.length) { container.innerHTML = emptyState('Tidak ada order yang belum difaktur'); return; }
+
+              const bodyRows = data.rows.map(r => `<tr>
+        <td>${escHtml(r.area_kerja)}</td>
+        <td class="text-right">${r.jumlah_order}</td>
+        <td class="text-right" style="color:#f05252">Rp ${formatRupiah(r.total)}</td>
+      </tr>`).join('');
+
+              container.innerHTML = `
+      <div class="table-responsive">
+        <table class="table">
+          <thead><tr>
+            <th>Area Kerja</th>
+            <th class="text-right">Jumlah Order</th>
+            <th class="text-right">Total Belum Difaktur</th>
+          </tr></thead>
+          <tbody>${bodyRows}</tbody>
+          <tfoot><tr>
+            <td class="fw-bold">Total</td>
+            <td class="text-right fw-bold">${data.jumlah_order}</td>
+            <td class="text-right fw-bold" style="color:#f05252">Rp ${formatRupiah(data.total)}</td>
           </tr></tfoot>
         </table>
       </div>`;

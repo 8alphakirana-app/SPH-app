@@ -723,18 +723,19 @@ db.exec(`
 try { db.exec("ALTER TABLE sales_target ADD COLUMN laba_kotor REAL DEFAULT 0"); } catch {}
 // ── MIGRATION: pendapatan_lain on sales_target ───────────────────────────────
 try { db.exec("ALTER TABLE sales_target ADD COLUMN pendapatan_lain REAL DEFAULT 0"); } catch {}
-// ── MIGRATION: difaktur on sales_target (upload rincian penjualan Odoo) ─────
+// ── MIGRATION: difaktur on sales_target (upload rincian penjualan) ──────────
 try { db.exec("ALTER TABLE sales_target ADD COLUMN difaktur REAL DEFAULT 0"); } catch {}
 
-// ── Rincian order penjualan (upload dari Odoo, agregat ke sales_target) ─────
-// Catatan: 'Order Reference' pada data Odoo TIDAK selalu unik (ditemukan 2 nomor
+// ── Rincian order penjualan (upload Excel, agregat ke sales_target) ─────────
+// Catatan: 'Order Reference' pada data sumber TIDAK selalu unik (ditemukan 2 nomor
 // yang dipakai untuk 2 order berbeda), sehingga id AUTOINCREMENT dipakai sebagai
 // primary key dan order_reference disimpan sebagai kolom biasa (bukan unique).
+// periode diisi dari INVOICE DATE (bukan Order Date); NULL bila belum difaktur.
 db.exec(`
   CREATE TABLE IF NOT EXISTS penjualan_order (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     order_reference TEXT,
-    order_date TEXT, periode TEXT,
+    order_date TEXT, invoice_date TEXT, periode TEXT,
     customer TEXT, salesperson TEXT, area_kerja TEXT,
     total REAL DEFAULT 0,
     invoice_status TEXT,
@@ -744,6 +745,8 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_penjualan_order_periode ON penjualan_order(area_kerja, periode);
 `);
+// ── MIGRATION: invoice_date on penjualan_order (periode kini dari Invoice Date) ─
+try { db.exec("ALTER TABLE penjualan_order ADD COLUMN invoice_date TEXT"); } catch {}
 
 // ── MIGRATION: penjualan_order dari skema lama (order_reference PRIMARY KEY) ─
 const penjualanOrderDef = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='penjualan_order'").get();
