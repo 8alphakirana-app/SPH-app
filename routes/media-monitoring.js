@@ -41,6 +41,12 @@ function calcEntry(row, pembayaran = []) {
   const sisa_laba         = laba - terbayar;
   const sisa              = sisa_uang_kembali;
 
+  // Definisi resmi (samakan dgn dashboard, lihat loadDashMMInvest di app.js):
+  // - selesai: ada jadwal pembayaran DAN semua sudah lunas
+  // - uang_belum_kembali: sama seperti sisa_uang_kembali, nama baru yang dipakai UI
+  const selesai            = pembayaran.length > 0 && pembayaran.every(p => p.status === 'lunas');
+  const uang_belum_kembali = sisa_uang_kembali;
+
   // Cari keterlambatan: pembayaran belum lunas dengan tanggal sudah lewat
   let max_telat_hari = 0;
   let ada_keterlambatan = false;
@@ -52,7 +58,7 @@ function calcEntry(row, pembayaran = []) {
       ada_keterlambatan = true;
     }
   });
-  return { ...row, margin_pct, terbayar, laba, sisa, sisa_uang_kembali, sisa_laba, ada_keterlambatan, max_telat_hari, pembayaran };
+  return { ...row, margin_pct, terbayar, laba, sisa, sisa_uang_kembali, sisa_laba, selesai, uang_belum_kembali, ada_keterlambatan, max_telat_hari, pembayaran };
 }
 
 function getPembayaran(monitoringId) {
@@ -89,6 +95,9 @@ router.get('/dashboard', requireLogin, requireViewer, (req, res) => {
       sisa: calc.sisa,
       sisa_uang_kembali: calc.sisa_uang_kembali,
       sisa_laba: calc.sisa_laba,
+      laba: calc.laba,
+      selesai: calc.selesai,
+      uang_belum_kembali: calc.uang_belum_kembali,
       ada_keterlambatan: calc.ada_keterlambatan,
       max_telat_hari: calc.max_telat_hari,
       ada_jadwal: pembayaran.length > 0,

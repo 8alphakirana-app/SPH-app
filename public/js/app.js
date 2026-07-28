@@ -5186,6 +5186,19 @@ function _sendWebNotif(title, body) {
 let mmData = [];
 let mmEditId = null;
 
+function mmLabaValue(e) {
+       return (parseFloat(e.nilai_uang_kembali) || 0) - (parseFloat(e.nilai_investasi) || 0);
+}
+
+// Badge laba: sama persis dgn definisi dashboard (loadDashMMInvest) — hijau/merah
+// hanya bila transaksi selesai (semua jadwal lunas), abu-abu + tooltip bila belum.
+function mmLabaHtml(e) {
+       const laba = e.laba ?? mmLabaValue(e);
+       return e.selesai
+              ? `<span style="color:${laba >= 0 ? 'var(--green)' : 'var(--red)'}">Rp ${formatRupiah(laba)}</span>`
+              : `<span style="color:var(--text-light)" title="Belum selesai">Rp ${formatRupiah(laba)}</span>`;
+}
+
 function mmStatusBadge(entry) {
        if (entry.ada_keterlambatan) return `<span class="badge" style="background:#fde8e8;color:var(--red)">⚠️ Telat ${entry.max_telat_hari} hari</span>`;
        if (!entry.pembayaran || entry.pembayaran.length === 0) return `<span class="badge" style="background:var(--gray-light);color:var(--text-light)">—</span>`;
@@ -5204,13 +5217,13 @@ async function loadMediaMonitoring() {
 
               const totInvestasi = mmData.reduce((s, e) => s + (parseFloat(e.nilai_investasi) || 0), 0);
               const totTerbayar = mmData.reduce((s, e) => s + (parseFloat(e.terbayar) || 0), 0);
-              const totSisa = mmData.reduce((s, e) => s + (parseFloat(e.sisa_uang_kembali ?? e.sisa) || 0), 0);
-              const totSisaLaba = mmData.reduce((s, e) => s + (parseFloat(e.sisa_laba) || 0), 0);
+              const totBelumKembali = mmData.reduce((s, e) => s + (parseFloat(e.uang_belum_kembali ?? e.sisa_uang_kembali ?? e.sisa) || 0), 0);
+              const totLaba = mmData.filter(e => e.selesai).reduce((s, e) => s + (e.laba ?? mmLabaValue(e)), 0);
               const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
               setTxt('mm-sum-investasi', 'Rp ' + formatRupiah(totInvestasi));
               setTxt('mm-sum-terbayar', 'Rp ' + formatRupiah(totTerbayar));
-              setTxt('mm-sum-sisa', 'Rp ' + formatRupiah(totSisa));
-              setTxt('mm-sum-sisa-laba', 'Rp ' + formatRupiah(totSisaLaba));
+              setTxt('mm-sum-sisa', 'Rp ' + formatRupiah(totBelumKembali));
+              setTxt('mm-sum-sisa-laba', 'Rp ' + formatRupiah(totLaba));
 
               renderMMTable(mmData);
        } catch {
@@ -5251,8 +5264,8 @@ function renderMMTable(data) {
       <td class="text-right">Rp ${formatRupiah(e.nilai_uang_kembali)}</td>
       <td class="text-right" style="color:${e.margin_pct >= 0 ? 'var(--green)' : 'var(--red)'}">${e.margin_pct.toFixed(2)}%</td>
       <td class="text-right">Rp ${formatRupiah(e.terbayar)}</td>
-      <td class="text-right" style="color:${(e.sisa_uang_kembali ?? e.sisa) >= 0 ? 'var(--red)' : 'var(--green)'}">Rp ${formatRupiah(e.sisa_uang_kembali ?? e.sisa)}</td>
-      <td class="text-right" style="color:${(e.sisa_laba ?? 0) >= 0 ? 'var(--red)' : 'var(--green)'}">Rp ${formatRupiah(e.sisa_laba)}</td>
+      <td class="text-right" style="color:${(e.uang_belum_kembali ?? e.sisa_uang_kembali ?? e.sisa) > 0 ? 'var(--red)' : 'var(--green)'}">Rp ${formatRupiah(e.uang_belum_kembali ?? e.sisa_uang_kembali ?? e.sisa)}</td>
+      <td class="text-right">${mmLabaHtml(e)}</td>
       <td>${mmStatusBadge(e)}</td>
       <td>
         <div style="display:flex;gap:4px;flex-wrap:wrap">
@@ -5454,8 +5467,8 @@ async function openMMDetail(id) {
       <div style="margin-bottom:10px;font-size:13px">
         Total Investasi: <strong>Rp ${formatRupiah(data.nilai_investasi)}</strong> &nbsp;|&nbsp;
         Terbayar: <strong style="color:var(--green)">Rp ${formatRupiah(data.terbayar)}</strong> &nbsp;|&nbsp;
-        Sisa (Uang Kembali): <strong style="color:var(--red)">Rp ${formatRupiah(data.sisa_uang_kembali ?? data.sisa)}</strong> &nbsp;|&nbsp;
-        Sisa (Laba): <strong style="color:var(--red)">Rp ${formatRupiah(data.sisa_laba)}</strong>
+        Uang Belum Kembali: <strong style="color:${(data.uang_belum_kembali ?? data.sisa_uang_kembali ?? data.sisa) > 0 ? 'var(--red)' : 'var(--green)'}">Rp ${formatRupiah(data.uang_belum_kembali ?? data.sisa_uang_kembali ?? data.sisa)}</strong> &nbsp;|&nbsp;
+        Laba: <strong>${mmLabaHtml(data)}</strong>
       </div>
       <table class="table">
         <thead><tr><th>No</th><th>Tanggal</th><th class="text-right">Nilai</th><th>Status</th><th>Catatan</th><th></th></tr></thead>
@@ -5514,19 +5527,15 @@ async function loadDashMMInvest() {
               setTxt('dash-mm-laba', 'Rp ' + formatRupiah(data.total_laba_selesai));
 
               tbody.innerHTML = data.entries.map(e => {
-                     const belumKembali = (parseFloat(e.nilai_uang_kembali) || 0) - (parseFloat(e.terbayar) || 0);
-                     const laba = (parseFloat(e.nilai_uang_kembali) || 0) - (parseFloat(e.nilai_investasi) || 0);
-                     const labaHtml = e.semua_lunas
-                            ? `<span style="color:${laba >= 0 ? 'var(--green)' : 'var(--red)'}">Rp ${formatRupiah(laba)}</span>`
-                            : `<span style="color:var(--text-light)" title="Belum selesai">Rp ${formatRupiah(laba)}</span>`;
+                     const belumKembali = e.uang_belum_kembali ?? ((parseFloat(e.nilai_uang_kembali) || 0) - (parseFloat(e.terbayar) || 0));
                      return `
       <tr onclick="openMMDetail(${e.id})">
         <td class="fw-bold">${escHtml(e.nama_perusahaan)}</td>
         <td>${escHtml(e.pekerjaan || '-')}</td>
         <td class="text-right">Rp ${formatRupiah(e.nilai_investasi)}</td>
         <td class="text-right">Rp ${formatRupiah(e.terbayar)}</td>
-        <td class="text-right" style="color:${belumKembali >= 0 ? 'var(--red)' : 'var(--green)'}">Rp ${formatRupiah(belumKembali)}</td>
-        <td class="text-right">${labaHtml}</td>
+        <td class="text-right" style="color:${belumKembali > 0 ? 'var(--red)' : 'var(--green)'}">Rp ${formatRupiah(belumKembali)}</td>
+        <td class="text-right">${mmLabaHtml({ ...e, selesai: e.selesai ?? e.semua_lunas })}</td>
         <td class="text-right" style="color:${e.margin_pct >= 0 ? 'var(--green)' : 'var(--red)'}">${e.margin_pct.toFixed(2)}%</td>
         <td>${_mmDashStatusBadge(e)}</td>
       </tr>`;
