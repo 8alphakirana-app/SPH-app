@@ -921,7 +921,7 @@ function _renderSalesHero(monthly, currentRows, rangeLabel, outstandingTotal, pr
               id: 'barValLabels',
               afterDraw(chart) {
                      const c = chart.ctx;
-                     const colors = ['rgba(147,197,253,.95)', 'rgba(110,231,183,.95)'];
+                     const colors = ['rgba(110,231,183,.95)', 'rgba(147,197,253,.95)'];
                      chart.data.datasets.forEach((ds, i) => {
                             if (ds.type === 'line') return;
                             const meta = chart.getDatasetMeta(i);
@@ -974,20 +974,20 @@ function _renderSalesHero(monthly, currentRows, rangeLabel, outstandingTotal, pr
                      labels,
                      datasets: [
                             {
-                                   label: 'Target',
-                                   data: targets,
-                                   backgroundColor: 'rgba(147,197,253,.18)',
-                                   borderColor: 'rgba(147,197,253,.7)',
+                                   label: 'Realisasi',
+                                   data: penjualan,
+                                   backgroundColor: 'rgba(110,231,183,.32)',
+                                   borderColor: 'rgba(110,231,183,.9)',
                                    borderWidth: 2,
                                    borderRadius: 6,
                                    borderSkipped: false,
                                    order: 1
                             },
                             {
-                                   label: 'Realisasi',
-                                   data: penjualan,
-                                   backgroundColor: 'rgba(110,231,183,.32)',
-                                   borderColor: 'rgba(110,231,183,.9)',
+                                   label: 'Target',
+                                   data: targets,
+                                   backgroundColor: 'rgba(147,197,253,.18)',
+                                   borderColor: 'rgba(147,197,253,.7)',
                                    borderWidth: 2,
                                    borderRadius: 6,
                                    borderSkipped: false,
@@ -1033,7 +1033,7 @@ function _renderSalesHero(monthly, currentRows, rangeLabel, outstandingTotal, pr
                                    callbacks: {
                                           label: c => {
                                                  const pct = pctLine[c.dataIndex];
-                                                 if (c.datasetIndex === 1 && pct !== null)
+                                                 if (c.datasetIndex === 0 && pct !== null)
                                                         return [` ${c.dataset.label}: Rp ${formatRupiah(c.raw)}`, ` Pencapaian: ${pct}%`];
                                                  return ` ${c.dataset.label}: Rp ${formatRupiah(c.raw)}`;
                                           }
