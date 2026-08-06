@@ -562,6 +562,168 @@ router.get('/rincian-prognosa-excel', (req, res) => {
   wb.xlsx.write(res).then(() => res.end()).catch(e => res.end());
 });
 
+// GET /api/laporan/laporan-bulanan-excel — unduh laporan gabungan lengkap 1 bulan dalam format Excel
+router.get('/laporan-bulanan-excel', (req, res) => {
+  const user = req.session.user;
+  const { periode, area_kerja, user_id } = req.query;
+
+  let sql = `
+    SELECT lb.id, lb.user_id, lb.periode, lb.aktivitas_bulan_ini, lb.rencana_bulan_depan, lb.prognosa_bulan_depan,
+           u.full_name, u.area_kerja
+    FROM laporan_bulanan lb
+    JOIN users u ON lb.user_id = u.id
+    WHERE 1=1
+  `;
+  const params = [];
+
+  if (canSeeAllAreas(user.role)) {
+    if (user_id)    { sql += ' AND lb.user_id = ?';                              params.push(parseInt(user_id)); }
+    if (area_kerja) { sql += ' AND LOWER(TRIM(u.area_kerja)) = LOWER(TRIM(?))'; params.push(area_kerja); }
+  } else if (user.role === 'area_manager') {
+    const myArea = getUserArea(user.id).toLowerCase();
+    sql += ` AND (lb.user_id = ? OR (LOWER(TRIM(u.area_kerja)) = ? AND u.role IN ('supervisor','marketing')))`;
+    params.push(user.id, myArea);
+    if (user_id) { sql += ' AND lb.user_id = ?'; params.push(parseInt(user_id)); }
+  } else {
+    sql += ' AND lb.user_id = ?';
+    params.push(user.id);
+  }
+
+  if (periode) { sql += ' AND lb.periode = ?'; params.push(periode); }
+  sql += ' ORDER BY u.area_kerja ASC, u.full_name ASC';
+
+  let rows;
+  try {
+    rows = db.prepare(sql).all(...params);
+    attachDetails(rows);
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+
+  const ExcelJS = require('exceljs');
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'DMS LAK';
+  wb.created = new Date();
+
+  const safePeriode = (periode || 'semua').replace(/[^a-zA-Z0-9-]/g, '');
+  const safeArea    = (area_kerja || 'semua-area').replace(/[^a-zA-Z0-9-]/g, '_');
+  const filename    = `laporan-bulanan_${safeArea}_${safePeriode}.xlsx`;
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+  const HDR_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+  const HDR_FONT = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+  const TOT_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
+  const TOT_FONT = { bold: true, size: 10 };
+  const THIN     = { style: 'thin', color: { argb: 'FFCBD5E1' } };
+  const BORDER   = { top: THIN, left: THIN, bottom: THIN, right: THIN };
+
+  const periodeLabel = periode
+    ? new Date(periode + '-01').toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
+    : 'Semua Periode';
+
+  const ws = wb.addWorksheet('Laporan Bulanan');
+  ws.columns = [
+    { key: 'no',        width: 5  },
+    { key: 'nama',      width: 22 },
+    { key: 'area',      width: 16 },
+    { key: 'periode',   width: 14 },
+    { key: 'aktivitas', width: 32 },
+    { key: 'rencana',   width: 32 },
+    { key: 'prognosa',  width: 18 },
+    { key: 'support',   width: 36 },
+  ];
+
+  const titleRow = ws.addRow(['LAPORAN BULANAN GABUNGAN']);
+  ws.mergeCells(`A${titleRow.number}:H${titleRow.number}`);
+  titleRow.getCell('A').font = { bold: true, size: 13, color: { argb: 'FF1E3A5F' } };
+  titleRow.getCell('A').alignment = { horizontal: 'center' };
+  titleRow.height = 22;
+
+  const subTitle = ws.addRow([`Periode: ${periodeLabel}   |   Dicetak: ${new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}`]);
+  ws.mergeCells(`A${subTitle.number}:H${subTitle.number}`);
+  subTitle.getCell('A').font = { italic: true, size: 10, color: { argb: 'FF64748B' } };
+  subTitle.getCell('A').alignment = { horizontal: 'center' };
+  ws.addRow([]);
+
+  const hdr = ws.addRow(['No', 'Nama', 'Area', 'Periode', 'Aktivitas Bulan Ini', 'Rencana Bulan Depan', 'Prognosa (Rp)', 'Support yang Dibutuhkan']);
+  hdr.eachCell(cell => { cell.fill = HDR_FILL; cell.font = HDR_FONT; cell.alignment = { horizontal: 'center', wrapText: true }; cell.border = BORDER; });
+  hdr.height = 26;
+
+  if (!rows.length) {
+    const r = ws.addRow(['-', 'Tidak ada data laporan untuk filter yang dipilih.']);
+    ws.mergeCells(`B${r.number}:H${r.number}`);
+  } else {
+    let totalPrognosa = 0;
+    rows.forEach((lap, i) => {
+      const prognosa = lap.prognosa_bulan_depan || 0;
+      totalPrognosa += prognosa;
+      const supportText = (lap.support || []).map(s => `• ${s.keterangan}`).join('\n') || '-';
+      const r = ws.addRow([
+        i + 1, lap.full_name, lap.area_kerja, lap.periode,
+        lap.aktivitas_bulan_ini || '-', lap.rencana_bulan_depan || '-', prognosa, supportText,
+      ]);
+      r.getCell('E').alignment = { wrapText: true, vertical: 'top' };
+      r.getCell('F').alignment = { wrapText: true, vertical: 'top' };
+      r.getCell('G').numFmt = '#,##0';
+      r.getCell('G').alignment = { horizontal: 'right', vertical: 'top' };
+      r.getCell('H').alignment = { wrapText: true, vertical: 'top' };
+      r.eachCell({ includeEmpty: true }, cell => { cell.border = BORDER; });
+    });
+    const totRow = ws.addRow(['', '', '', '', '', 'TOTAL', totalPrognosa, '']);
+    ws.mergeCells(`A${totRow.number}:E${totRow.number}`);
+    totRow.eachCell({ includeEmpty: true }, cell => { cell.fill = TOT_FILL; cell.font = TOT_FONT; cell.border = BORDER; });
+    totRow.getCell('F').alignment = { horizontal: 'center' };
+    totRow.getCell('G').numFmt = '#,##0';
+    totRow.getCell('G').alignment = { horizontal: 'right' };
+    totRow.height = 20;
+  }
+
+  // Sheet ringkasan per area (hanya bila lebih dari 1 area muncul di hasil)
+  const byArea = {};
+  rows.forEach(r => { (byArea[r.area_kerja || 'Tanpa Area'] = byArea[r.area_kerja || 'Tanpa Area'] || []).push(r); });
+  const areaEntries = Object.entries(byArea);
+
+  if (areaEntries.length > 1) {
+    const wsSum = wb.addWorksheet('Ringkasan Area');
+    wsSum.columns = [
+      { key: 'area', width: 22 }, { key: 'jml', width: 12 },
+      { key: 'support', width: 14 }, { key: 'prognosa', width: 20 },
+    ];
+    const titleS = wsSum.addRow(['RINGKASAN LAPORAN PER AREA']);
+    wsSum.mergeCells(`A${titleS.number}:D${titleS.number}`);
+    titleS.getCell('A').font = { bold: true, size: 13, color: { argb: 'FF1E3A5F' } };
+    titleS.getCell('A').alignment = { horizontal: 'center' };
+    titleS.height = 22;
+    const subS = wsSum.addRow([`Periode: ${periodeLabel}`]);
+    wsSum.mergeCells(`A${subS.number}:D${subS.number}`);
+    subS.getCell('A').font = { italic: true, size: 10, color: { argb: 'FF64748B' } };
+    subS.getCell('A').alignment = { horizontal: 'center' };
+    wsSum.addRow([]);
+    const hdrS = wsSum.addRow(['Area Kerja', 'Jml Laporan', 'Jml Support', 'Total Prognosa (Rp)']);
+    hdrS.eachCell(cell => { cell.fill = HDR_FILL; cell.font = HDR_FONT; cell.border = BORDER; cell.alignment = { horizontal: 'center' }; });
+    hdrS.height = 24;
+
+    let grandPrognosa = 0;
+    areaEntries.forEach(([areaName, laporanList]) => {
+      const jmlSupport  = laporanList.reduce((s, l) => s + (l.support || []).length, 0);
+      const sumPrognosa = laporanList.reduce((s, l) => s + (l.prognosa_bulan_depan || 0), 0);
+      grandPrognosa += sumPrognosa;
+      const r = wsSum.addRow([areaName, laporanList.length, jmlSupport, sumPrognosa]);
+      r.getCell('D').numFmt = '#,##0';
+      r.getCell('D').alignment = { horizontal: 'right' };
+      r.eachCell({ includeEmpty: true }, cell => { cell.border = BORDER; });
+    });
+    const totS = wsSum.addRow(['TOTAL', '', '', grandPrognosa]);
+    totS.eachCell({ includeEmpty: true }, cell => { cell.fill = TOT_FILL; cell.font = TOT_FONT; cell.border = BORDER; });
+    totS.getCell('D').numFmt = '#,##0';
+    totS.getCell('D').alignment = { horizontal: 'right' };
+    totS.height = 20;
+  }
+
+  wb.xlsx.write(res).then(() => res.end()).catch(e => res.end());
+});
+
 // POST /api/laporan
 router.post('/', blockViewer, (req, res) => {
   const userId = req.session.user.id;

@@ -868,6 +868,23 @@ function downloadRincianPrognosaExcel() {
        document.body.removeChild(a);
 }
 
+function downloadLaporanBulananExcel() {
+       const month = document.getElementById('dash-filter-month')?.value || '';
+       const area = document.getElementById('dash-filter-area')?.value || '';
+       const uid = document.getElementById('dash-filter-user')?.value || '';
+       const p = new URLSearchParams();
+       if (month) p.set('periode', month);
+       if (area) p.set('area_kerja', area);
+       if (uid) p.set('user_id', uid);
+       const qs = p.toString() ? '?' + p.toString() : '';
+       const a = document.createElement('a');
+       a.href = '/api/laporan/laporan-bulanan-excel' + qs;
+       a.download = 'laporan-bulanan.xlsx';
+       document.body.appendChild(a);
+       a.click();
+       document.body.removeChild(a);
+}
+
 function setDashSalesMode(mode) {
        if (dashSalesMode === mode) return;
        dashSalesMode = mode;
