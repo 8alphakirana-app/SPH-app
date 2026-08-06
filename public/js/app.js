@@ -4487,6 +4487,7 @@ function initLaporanForm() {
        document.getElementById('laporan-aktivitas').value = '';
        document.getElementById('laporan-rencana').value = '';
        document.getElementById('laporan-prognosa').value = '0';
+       document.getElementById('laporan-isu').value = '';
        document.getElementById('laporan-support-container').innerHTML =
               '<p class="laporan-support-empty" style="color:var(--text-light);font-size:13px;margin:0">Tidak ada item support. Klik "+ Tambah" untuk menambah.</p>';
        document.getElementById('laporan-project-tbody').innerHTML = '';
@@ -4508,6 +4509,7 @@ async function onLaporanPeriodeChange() {
        document.getElementById('laporan-aktivitas').value = '';
        document.getElementById('laporan-rencana').value = '';
        document.getElementById('laporan-prognosa').value = '0';
+       document.getElementById('laporan-isu').value = '';
        document.getElementById('laporan-support-container').innerHTML =
               '<p class="laporan-support-empty" style="color:var(--text-light);font-size:13px;margin:0">Tidak ada item support. Klik "+ Tambah" untuk menambah.</p>';
        document.getElementById('laporan-project-tbody').innerHTML = '';
@@ -4526,6 +4528,7 @@ async function onLaporanPeriodeChange() {
                      document.getElementById('laporan-aktivitas').value = data.aktivitas_bulan_ini || '';
                      document.getElementById('laporan-rencana').value = data.rencana_bulan_depan || '';
                      document.getElementById('laporan-prognosa').value = data.prognosa_bulan_depan ? fmtNumStr(data.prognosa_bulan_depan) : '0';
+                     document.getElementById('laporan-isu').value = data.isu_bulan_ini || '';
                      (data.support || []).forEach(s => addLaporanSupportRow(s.keterangan));
                      (data.projects || []).forEach(p => addLaporanProjectRow(p));
               } else {
@@ -4635,6 +4638,7 @@ async function submitLaporanForm(e) {
               aktivitas_bulan_ini: document.getElementById('laporan-aktivitas').value,
               rencana_bulan_depan: document.getElementById('laporan-rencana').value,
               prognosa_bulan_depan: parseNum(document.getElementById('laporan-prognosa').value),
+              isu_bulan_ini: document.getElementById('laporan-isu').value,
               support: collectLaporanSupport(),
               projects: collectLaporanProjects(),
        };
