@@ -701,29 +701,19 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
 .laporan-narasi-card .ln-block-text { font-size: 13px; color: var(--text); line-height: 1.5; white-space: pre-wrap; }
 .laporan-narasi-card .ln-prognosa { display: inline-block; margin-top: 8px; font-size: 12px; font-weight: 600; color: #7c3aed; background: #f3f0ff; padding: 3px 10px; border-radius: 20px; }
 
-/* ── Isu Bulan Ini per area (dashboard) ──────────────────────────────────── */
-.las-area-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 14px;
-  margin-bottom: 18px;
-}
-.las-area-card {
-  background: white;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 16px;
-  border-top: 3px solid #f05252;
-}
-.las-area-card .las-area-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.las-area-card .las-area-name { font-weight: 600; font-size: 14px; }
-.las-area-card .las-area-count { font-size: 11px; color: var(--text-light); background: var(--gray-light); padding: 2px 8px; border-radius: 20px; }
-.las-area-card .las-person-block { padding: 8px 0; border-top: 1px solid var(--gray-border); }
-.las-area-card .las-person-block:first-of-type { border-top: none; }
-.las-area-card .las-person-name { font-weight: 600; font-size: 12px; margin-bottom: 4px; }
-.las-area-card .las-block-title { font-size: 10px; font-weight: 600; color: var(--text-light); text-transform: uppercase; margin-top: 4px; }
-.las-area-card .las-block-text { font-size: 12px; color: var(--text); line-height: 1.45; white-space: pre-wrap; }
+/* ── Isu Bulan Ini (dashboard) — daftar dikelola GM/Admin ────────────────── */
+.las-gm-isu-list { margin-bottom: 18px; }
+.las-gm-isu-form { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 12px; }
+.las-gm-isu-form textarea { flex: 1; border: 1px solid var(--gray-border); border-radius: 6px; padding: 8px 10px; font-size: 13px; resize: vertical; min-height: 44px; }
+.las-gm-isu-form textarea:focus { outline: none; border-color: var(--blue); }
+.las-gm-isu-item { background: white; border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px 16px; margin-bottom: 10px; border-left: 4px solid #f05252; }
+.las-gm-isu-item textarea { width: 100%; border: 1px solid var(--gray-border); border-radius: 6px; padding: 8px 10px; font-size: 13px; resize: vertical; min-height: 44px; box-sizing: border-box; }
+.las-gm-isu-text { font-size: 13px; color: var(--text); line-height: 1.5; white-space: pre-wrap; }
+.las-gm-isu-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; font-size: 11px; color: var(--text-light); flex-wrap: wrap; }
+.las-gm-isu-actions { display: flex; gap: 6px; margin-top: 8px; }
+.las-gm-isu-meta .las-gm-isu-actions { margin-top: 0; }
 
+/* Ringkasan Support Dibutuhkan (dashboard) */
 .las-support-area { background: white; border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 16px; margin-bottom: 12px; }
 .las-support-area .las-support-area-title { font-weight: 600; font-size: 13px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
 .las-support-area .las-support-area-count { font-size: 11px; color: var(--text-light); background: var(--gray-light); padding: 2px 8px; border-radius: 20px; }

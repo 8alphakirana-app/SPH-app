@@ -723,6 +723,15 @@ db.exec(`
     FOREIGN KEY (support_id) REFERENCES laporan_support(id) ON DELETE CASCADE,
     UNIQUE(support_id, reviewer_id)
   );
+  CREATE TABLE IF NOT EXISTS gm_isu_bulan_ini (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    periode TEXT NOT NULL,
+    isi TEXT NOT NULL,
+    created_by INTEGER,
+    created_by_name TEXT,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    updated_at TEXT DEFAULT (datetime('now','localtime'))
+  );
 `);
 
 db.exec(`

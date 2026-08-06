@@ -734,37 +734,6 @@ function _renderLaporanAreaSummary(lapRows) {
        if (lapRows) _lastLasRows = lapRows;
        const rows = _lastLasRows;
 
-       const hasIsu = rows.some(r => r.isu_bulan_ini);
-       const hasSupport = rows.some(r => (r.support || []).length);
-       if (!hasIsu && !hasSupport) { section.style.display = 'none'; return; }
-       section.style.display = '';
-
-       // A. Isu bulan ini dikelompokkan per area
-       const byAreaIsu = {};
-       rows.forEach(r => {
-              if (!r.isu_bulan_ini) return;
-              const area = r.area_kerja || 'Tanpa Area';
-              (byAreaIsu[area] = byAreaIsu[area] || []).push(r);
-       });
-
-       const isuAreaNames = Object.keys(byAreaIsu).sort();
-       areaGrid.innerHTML = isuAreaNames.length
-              ? isuAreaNames.map(area => {
-                     const areaRows = byAreaIsu[area];
-                     const personsHtml = areaRows.map(r => `<div class="las-person-block">
-                            <div class="las-person-name">${escHtml(r.full_name || '-')}</div>
-                            <div class="las-block-text">${escHtml(r.isu_bulan_ini)}</div>
-                     </div>`).join('');
-                     return `<div class="las-area-card">
-                            <div class="las-area-header">
-                                   <div class="las-area-name">${escHtml(area)}</div>
-                                   <div class="las-area-count">${areaRows.length} isu</div>
-                            </div>
-                            ${personsHtml}
-                     </div>`;
-              }).join('')
-              : '<div class="las-support-empty">Tidak ada isu yang dilaporkan bulan ini</div>';
-
        // B. Support yang dibutuhkan, dikelompokkan per area, bisa difilter lewat dropdown
        const supportByArea = {};
        let totalSupport = 0;
@@ -786,6 +755,122 @@ function _renderLaporanAreaSummary(lapRows) {
        }
 
        _renderLasSupportList(supportByArea);
+       _lastHasSupportForSummary = totalSupport > 0;
+       _updateLaporanSummaryVisibility();
+
+       // A. Daftar isu bulan ini — dikelola terpisah oleh GM/Admin (lihat loadGmIsu)
+       loadGmIsu();
+}
+
+// ── Isu Bulan Ini: daftar dikelola GM1/GM2/Admin (CRUD), role lain read-only ──
+let _lastGmIsuRows = [];
+let _gmIsuEditingId = null;
+let _lastHasSupportForSummary = false;
+
+function _canManageGmIsu() {
+       return LAPORAN_REVIEWER_ROLES.includes(currentUser?.role);
+}
+
+function _updateLaporanSummaryVisibility() {
+       const section = document.getElementById('dash-laporan-summary-section');
+       if (!section) return;
+       const show = _lastGmIsuRows.length > 0 || _lastHasSupportForSummary || _canManageGmIsu();
+       section.style.display = show ? '' : 'none';
+}
+
+async function loadGmIsu() {
+       const month = document.getElementById('dash-filter-month')?.value || '';
+       try {
+              const qs = month ? `?periode=${encodeURIComponent(month)}` : '';
+              const res = await api(`/api/laporan/gm-isu${qs}`);
+              _lastGmIsuRows = res.ok ? await res.json() : [];
+       } catch {
+              _lastGmIsuRows = [];
+       }
+       _gmIsuEditingId = null;
+       _renderGmIsuList();
+       _updateLaporanSummaryVisibility();
+}
+
+function _renderGmIsuList() {
+       const container = document.getElementById('las-area-grid');
+       if (!container) return;
+       const canManage = _canManageGmIsu();
+       const month = document.getElementById('dash-filter-month')?.value || '';
+
+       const formHtml = canManage ? `<div class="las-gm-isu-form">
+              <textarea id="gm-isu-input" rows="2" placeholder="Tulis isu baru${month ? ' untuk ' + formatPeriode(month) : ''}..."></textarea>
+              <button onclick="addGmIsu()" class="btn btn-primary btn-sm">+ Tambah Isu</button>
+       </div>` : '';
+
+       const listHtml = _lastGmIsuRows.length
+              ? _lastGmIsuRows.map(r => {
+                     if (_gmIsuEditingId === r.id) {
+                            return `<div class="las-gm-isu-item">
+                                   <textarea id="gm-isu-edit-${r.id}" rows="2">${escHtml(r.isi)}</textarea>
+                                   <div class="las-gm-isu-actions">
+                                          <button onclick="saveGmIsuEdit(${r.id})" class="btn btn-primary btn-sm">Simpan</button>
+                                          <button onclick="cancelGmIsuEdit()" class="btn btn-secondary btn-sm">Batal</button>
+                                   </div>
+                            </div>`;
+                     }
+                     return `<div class="las-gm-isu-item">
+                            <div class="las-gm-isu-text">${escHtml(r.isi)}</div>
+                            <div class="las-gm-isu-meta">
+                                   <span>${escHtml(r.created_by_name || '-')} • ${formatPeriode(r.periode)}</span>
+                                   ${canManage ? `<span class="las-gm-isu-actions">
+                                          <button onclick="editGmIsu(${r.id})" class="btn btn-secondary btn-sm">Edit</button>
+                                          <button onclick="deleteGmIsu(${r.id})" class="btn btn-danger btn-sm">Hapus</button>
+                                   </span>` : ''}
+                            </div>
+                     </div>`;
+              }).join('')
+              : '<div class="las-support-empty">Belum ada isu bulan ini</div>';
+
+       container.innerHTML = formHtml + listHtml;
+}
+
+async function addGmIsu() {
+       const ta = document.getElementById('gm-isu-input');
+       if (!ta || !ta.value.trim()) return;
+       const periode = document.getElementById('dash-filter-month')?.value || currentMonthValue();
+       try {
+              const res = await api('/api/laporan/gm-isu', 'POST', { periode, isi: ta.value.trim() });
+              if (!res.ok) { const d = await res.json(); showToast(d.error || 'Gagal menambah isu', 'error'); return; }
+              showToast('Isu berhasil ditambahkan');
+              loadGmIsu();
+       } catch { showToast('Koneksi gagal', 'error'); }
+}
+
+function editGmIsu(id) {
+       _gmIsuEditingId = id;
+       _renderGmIsuList();
+}
+
+function cancelGmIsuEdit() {
+       _gmIsuEditingId = null;
+       _renderGmIsuList();
+}
+
+async function saveGmIsuEdit(id) {
+       const ta = document.getElementById(`gm-isu-edit-${id}`);
+       if (!ta || !ta.value.trim()) return;
+       try {
+              const res = await api(`/api/laporan/gm-isu/${id}`, 'PUT', { isi: ta.value.trim() });
+              if (!res.ok) { const d = await res.json(); showToast(d.error || 'Gagal menyimpan isu', 'error'); return; }
+              showToast('Isu berhasil diperbarui');
+              loadGmIsu();
+       } catch { showToast('Koneksi gagal', 'error'); }
+}
+
+async function deleteGmIsu(id) {
+       if (!confirm('Hapus isu ini?')) return;
+       try {
+              const res = await api(`/api/laporan/gm-isu/${id}`, 'DELETE');
+              if (!res.ok) { const d = await res.json(); showToast(d.error || 'Gagal menghapus isu', 'error'); return; }
+              showToast('Isu berhasil dihapus');
+              loadGmIsu();
+       } catch { showToast('Koneksi gagal', 'error'); }
 }
 
 function _renderLasSupportList(supportByArea) {

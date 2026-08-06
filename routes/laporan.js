@@ -24,6 +24,12 @@ function canSeeAll(role) {
 function canReview(role) {
   return ['admin', 'gm', 'gm2'].includes(role);
 }
+function blockNonReviewer(req, res, next) {
+  if (!canReview(req.session.user?.role)) {
+    return res.status(403).json({ error: 'Hanya GM1, GM2, dan Admin' });
+  }
+  next();
+}
 function getUserArea(userId) {
   return (db.prepare('SELECT area_kerja FROM users WHERE id=?').get(userId)?.area_kerja || '').trim();
 }
@@ -774,6 +780,76 @@ router.post('/', blockViewer, (req, res) => {
   try {
     const id = upsert();
     res.json({ success: true, id });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/laporan/gm-isu?periode=YYYY-MM — daftar isu bulan ini yang dikelola GM/Admin
+router.get('/gm-isu', (req, res) => {
+  const { periode } = req.query;
+  try {
+    const rows = periode
+      ? db.prepare('SELECT * FROM gm_isu_bulan_ini WHERE periode = ? ORDER BY created_at DESC').all(periode)
+      : db.prepare('SELECT * FROM gm_isu_bulan_ini ORDER BY periode DESC, created_at DESC').all();
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/laporan/gm-isu — tambah isu (hanya GM1/GM2/Admin)
+router.post('/gm-isu', blockNonReviewer, (req, res) => {
+  const { periode, isi } = req.body;
+  if (!periode || !/^\d{4}-\d{2}$/.test(periode)) {
+    return res.status(400).json({ error: 'Periode tidak valid (format: YYYY-MM)' });
+  }
+  if (!isi || !String(isi).trim()) {
+    return res.status(400).json({ error: 'Isi isu tidak boleh kosong' });
+  }
+  const user = req.session.user;
+  try {
+    const r = db.prepare(`
+      INSERT INTO gm_isu_bulan_ini (periode, isi, created_by, created_by_name)
+      VALUES (?, ?, ?, ?)
+    `).run(periode, String(isi).trim(), user.id, user.full_name);
+    const row = db.prepare('SELECT * FROM gm_isu_bulan_ini WHERE id = ?').get(r.lastInsertRowid);
+    res.json({ success: true, row });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/laporan/gm-isu/:id — edit isu (hanya GM1/GM2/Admin)
+router.put('/gm-isu/:id', blockNonReviewer, (req, res) => {
+  const id = parseInt(req.params.id);
+  if (!id) return res.status(400).json({ error: 'ID tidak valid' });
+  const { isi } = req.body;
+  if (!isi || !String(isi).trim()) {
+    return res.status(400).json({ error: 'Isi isu tidak boleh kosong' });
+  }
+  const existing = db.prepare('SELECT id FROM gm_isu_bulan_ini WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'Isu tidak ditemukan' });
+  try {
+    db.prepare(`
+      UPDATE gm_isu_bulan_ini SET isi = ?, updated_at = datetime('now','localtime') WHERE id = ?
+    `).run(String(isi).trim(), id);
+    const row = db.prepare('SELECT * FROM gm_isu_bulan_ini WHERE id = ?').get(id);
+    res.json({ success: true, row });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/laporan/gm-isu/:id — hapus isu (hanya GM1/GM2/Admin)
+router.delete('/gm-isu/:id', blockNonReviewer, (req, res) => {
+  const id = parseInt(req.params.id);
+  if (!id) return res.status(400).json({ error: 'ID tidak valid' });
+  const existing = db.prepare('SELECT id FROM gm_isu_bulan_ini WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'Isu tidak ditemukan' });
+  try {
+    db.prepare('DELETE FROM gm_isu_bulan_ini WHERE id = ?').run(id);
+    res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
