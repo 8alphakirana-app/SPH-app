@@ -574,7 +574,7 @@ router.get('/laporan-bulanan-excel', (req, res) => {
   const { periode, area_kerja, user_id } = req.query;
 
   let sql = `
-    SELECT lb.id, lb.user_id, lb.periode, lb.aktivitas_bulan_ini, lb.rencana_bulan_depan, lb.prognosa_bulan_depan, lb.isu_bulan_ini,
+    SELECT lb.id, lb.user_id, lb.periode, lb.alasan, lb.aktivitas_bulan_ini, lb.rencana_bulan_depan, lb.prognosa_bulan_depan, lb.isu_bulan_ini,
            u.full_name, u.area_kerja
     FROM laporan_bulanan lb
     JOIN users u ON lb.user_id = u.id
@@ -634,6 +634,7 @@ router.get('/laporan-bulanan-excel', (req, res) => {
     { key: 'nama',      width: 22 },
     { key: 'area',      width: 16 },
     { key: 'periode',   width: 14 },
+    { key: 'alasan',    width: 32 },
     { key: 'aktivitas', width: 32 },
     { key: 'rencana',   width: 32 },
     { key: 'prognosa',  width: 18 },
@@ -642,24 +643,24 @@ router.get('/laporan-bulanan-excel', (req, res) => {
   ];
 
   const titleRow = ws.addRow(['LAPORAN BULANAN GABUNGAN']);
-  ws.mergeCells(`A${titleRow.number}:I${titleRow.number}`);
+  ws.mergeCells(`A${titleRow.number}:J${titleRow.number}`);
   titleRow.getCell('A').font = { bold: true, size: 13, color: { argb: 'FF1E3A5F' } };
   titleRow.getCell('A').alignment = { horizontal: 'center' };
   titleRow.height = 22;
 
   const subTitle = ws.addRow([`Periode: ${periodeLabel}   |   Dicetak: ${new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}`]);
-  ws.mergeCells(`A${subTitle.number}:I${subTitle.number}`);
+  ws.mergeCells(`A${subTitle.number}:J${subTitle.number}`);
   subTitle.getCell('A').font = { italic: true, size: 10, color: { argb: 'FF64748B' } };
   subTitle.getCell('A').alignment = { horizontal: 'center' };
   ws.addRow([]);
 
-  const hdr = ws.addRow(['No', 'Nama', 'Area', 'Periode', 'Aktivitas Bulan Ini', 'Rencana Bulan Depan', 'Prognosa (Rp)', 'Support yang Dibutuhkan', 'Isu Bulan Ini']);
+  const hdr = ws.addRow(['No', 'Nama', 'Area', 'Periode', 'Alasan Tidak Tercapai', 'Aktivitas Bulan Ini', 'Rencana Bulan Depan', 'Prognosa (Rp)', 'Support yang Dibutuhkan', 'Isu Bulan Ini']);
   hdr.eachCell(cell => { cell.fill = HDR_FILL; cell.font = HDR_FONT; cell.alignment = { horizontal: 'center', wrapText: true }; cell.border = BORDER; });
   hdr.height = 26;
 
   if (!rows.length) {
     const r = ws.addRow(['-', 'Tidak ada data laporan untuk filter yang dipilih.']);
-    ws.mergeCells(`B${r.number}:I${r.number}`);
+    ws.mergeCells(`B${r.number}:J${r.number}`);
   } else {
     let totalPrognosa = 0;
     rows.forEach((lap, i) => {
@@ -667,23 +668,24 @@ router.get('/laporan-bulanan-excel', (req, res) => {
       totalPrognosa += prognosa;
       const supportText = (lap.support || []).map(s => `• ${s.keterangan}`).join('\n') || '-';
       const r = ws.addRow([
-        i + 1, lap.full_name, lap.area_kerja, lap.periode,
+        i + 1, lap.full_name, lap.area_kerja, lap.periode, lap.alasan || '-',
         lap.aktivitas_bulan_ini || '-', lap.rencana_bulan_depan || '-', prognosa, supportText, lap.isu_bulan_ini || '-',
       ]);
       r.getCell('E').alignment = { wrapText: true, vertical: 'top' };
       r.getCell('F').alignment = { wrapText: true, vertical: 'top' };
-      r.getCell('G').numFmt = '#,##0';
-      r.getCell('G').alignment = { horizontal: 'right', vertical: 'top' };
-      r.getCell('H').alignment = { wrapText: true, vertical: 'top' };
+      r.getCell('G').alignment = { wrapText: true, vertical: 'top' };
+      r.getCell('H').numFmt = '#,##0';
+      r.getCell('H').alignment = { horizontal: 'right', vertical: 'top' };
       r.getCell('I').alignment = { wrapText: true, vertical: 'top' };
+      r.getCell('J').alignment = { wrapText: true, vertical: 'top' };
       r.eachCell({ includeEmpty: true }, cell => { cell.border = BORDER; });
     });
-    const totRow = ws.addRow(['', '', '', '', '', 'TOTAL', totalPrognosa, '', '']);
-    ws.mergeCells(`A${totRow.number}:E${totRow.number}`);
+    const totRow = ws.addRow(['', '', '', '', '', '', 'TOTAL', totalPrognosa, '', '']);
+    ws.mergeCells(`A${totRow.number}:F${totRow.number}`);
     totRow.eachCell({ includeEmpty: true }, cell => { cell.fill = TOT_FILL; cell.font = TOT_FONT; cell.border = BORDER; });
-    totRow.getCell('F').alignment = { horizontal: 'center' };
-    totRow.getCell('G').numFmt = '#,##0';
-    totRow.getCell('G').alignment = { horizontal: 'right' };
+    totRow.getCell('G').alignment = { horizontal: 'center' };
+    totRow.getCell('H').numFmt = '#,##0';
+    totRow.getCell('H').alignment = { horizontal: 'right' };
     totRow.height = 20;
   }
 
