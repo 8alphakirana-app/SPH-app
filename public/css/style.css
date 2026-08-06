@@ -810,6 +810,7 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
 .sales-kpi-gap    .sales-kpi-val { color: #fca5a5; }
 .sales-kpi-gap.achieved .sales-kpi-val { color: #6ee7b7; }
 .sales-kpi-outstanding .sales-kpi-val { color: #fdba74; }
+.sales-kpi-prognosa .sales-kpi-val { color: #c4b5fd; }
 .sales-hero-chart-col { position: relative; height: 280px; }
 
 /* ── Segmented toggle (Per Bulan / Kumulatif) ────────────────────────────── */

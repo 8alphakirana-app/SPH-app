@@ -435,6 +435,7 @@ async function loadDashboard() {
                      kumulatifIdx,
                      outstandingByArea,
                      outstandingTotal: outstandingData?.total || 0,
+                     prognosaTotal: lapPrognosa,
               };
 
               // SPH card
@@ -844,11 +845,11 @@ function _renderDashSalesAll() {
        const salesH2 = document.getElementById('dash-sales-title');
        if (salesH2) salesH2.textContent = `🎯 Target & Realisasi Penjualan — ${rangeLabel}`;
 
-       _renderSalesHero(monthlyAgg, aggRows, rangeLabel, raw.outstandingTotal);
+       _renderSalesHero(monthlyAgg, aggRows, rangeLabel, raw.outstandingTotal, raw.prognosaTotal);
        _renderDashSalesTarget(aggRows);
 }
 
-function _renderSalesHero(monthly, currentRows, rangeLabel, outstandingTotal) {
+function _renderSalesHero(monthly, currentRows, rangeLabel, outstandingTotal, prognosaTotal) {
        const hero = document.getElementById('dash-sales-hero');
        if (!hero) return;
 
@@ -876,6 +877,7 @@ function _renderSalesHero(monthly, currentRows, rangeLabel, outstandingTotal) {
        if (_s('sh-laba')) _s('sh-laba').textContent = 'Rp ' + formatRupiahShort(curLaba);
        if (_s('sh-pendapatan')) _s('sh-pendapatan').textContent = 'Rp ' + formatRupiahShort(curPendapatan);
        if (_s('sh-outstanding')) _s('sh-outstanding').textContent = 'Rp ' + formatRupiahShort(outstandingTotal || 0);
+       if (_s('sh-prognosa')) _s('sh-prognosa').textContent = 'Rp ' + formatRupiahShort(prognosaTotal || 0);
 
        const pctEl = _s('sh-pct');
        if (pctEl) {
