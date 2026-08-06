@@ -436,6 +436,7 @@ async function loadDashboard() {
                      outstandingByArea,
                      outstandingTotal: outstandingData?.total || 0,
                      prognosaTotal: lapPrognosa,
+                     allMonths: !month,
               };
 
               // SPH card
@@ -808,10 +809,13 @@ function _renderDashSalesAll() {
 
        const isKumulatif = dashSalesMode === 'kumulatif';
        const idx = isKumulatif ? raw.kumulatifIdx : raw.bulananIdx;
+       // "Semua Bulan" (tidak ada filter bulan) -> selalu tampilkan total kumulatif sepanjang
+       // tahun berjalan di hero, terlepas dari posisi toggle Per Bulan/Kumulatif.
+       const useYearTotal = raw.allMonths === true || (isKumulatif && idx >= 12);
 
        const aggRows = raw.areasRaw.map(a => {
               let row;
-              if (isKumulatif && idx >= 12) {
+              if (useYearTotal) {
                      row = { area_kerja: a.area_kerja, target: a.total_target || 0, penjualan: a.total_penjualan || 0, laba_kotor: a.total_laba_kotor || 0, pendapatan_lain: a.total_pendapatan_lain || 0, difaktur: a.total_difaktur || 0 };
               } else if (isKumulatif) {
                      const slice = (a.months || []).slice(0, idx);
@@ -838,9 +842,11 @@ function _renderDashSalesAll() {
               return { periode, target, penjualan };
        });
 
-       const rangeLabel = isKumulatif
-              ? (idx >= 12 ? `Kumulatif — Sepanjang ${raw.year}` : `Kumulatif s/d ${formatPeriode(`${raw.year}-${String(idx).padStart(2, '0')}`)}`)
-              : formatPeriode(`${raw.year}-${String(idx).padStart(2, '0')}`);
+       const rangeLabel = raw.allMonths
+              ? `Sepanjang ${raw.year}`
+              : isKumulatif
+                     ? (idx >= 12 ? `Kumulatif — Sepanjang ${raw.year}` : `Kumulatif s/d ${formatPeriode(`${raw.year}-${String(idx).padStart(2, '0')}`)}`)
+                     : formatPeriode(`${raw.year}-${String(idx).padStart(2, '0')}`);
 
        const salesH2 = document.getElementById('dash-sales-title');
        if (salesH2) salesH2.textContent = `🎯 Target & Realisasi Penjualan — ${rangeLabel}`;
