@@ -470,6 +470,7 @@ async function loadDashboard() {
               const narasiH2 = document.querySelector('#laporan-narasi-section .section-divider h2');
               if (narasiH2) narasiH2.textContent = filterLabel ? `📝 Aktivitas & Rencana — ${filterLabel}` : '📝 Aktivitas & Rencana Tim';
               _renderLaporanNarasi(lapRows);
+              _renderLaporanAreaSummary(lapRows);
 
               // Rincian Prognosa
               const projH2 = document.getElementById('dash-project-title');
@@ -718,6 +719,79 @@ async function saveSupportTanggapan(supportId, lapId) {
               respEl.innerHTML = `<span class="ln-resp-who">${escHtml(currentUser.full_name)}</span>: <span class="ln-resp-text">${escHtml(ta.value.trim())}</span>`;
               inputWrap.parentElement.insertBefore(respEl, inputWrap);
        } catch { showToast('Koneksi gagal', 'error'); }
+}
+
+function _renderLaporanAreaSummary(lapRows) {
+       const section = document.getElementById('dash-laporan-summary-section');
+       const areaGrid = document.getElementById('las-area-grid');
+       const supportList = document.getElementById('las-support-list');
+       const supportTitle = document.getElementById('las-support-title');
+       if (!section || !areaGrid || !supportList) return;
+
+       const rows = lapRows || [];
+       const hasNarasi = rows.some(r => r.aktivitas_bulan_ini || r.rencana_bulan_depan);
+       const hasSupport = rows.some(r => (r.support || []).length);
+       if (!hasNarasi && !hasSupport) { section.style.display = 'none'; return; }
+       section.style.display = '';
+
+       // A. Aktivitas & rencana dikelompokkan per area
+       const byArea = {};
+       rows.forEach(r => {
+              const area = r.area_kerja || 'Tanpa Area';
+              (byArea[area] = byArea[area] || []).push(r);
+       });
+
+       const areaNames = Object.keys(byArea).sort();
+       areaGrid.innerHTML = areaNames.map(area => {
+              const areaRows = byArea[area];
+              const areaPrognosa = areaRows.reduce((s, r) => s + (r.prognosa_bulan_depan || 0), 0);
+              const withNarasi = areaRows.filter(r => r.aktivitas_bulan_ini || r.rencana_bulan_depan);
+              const personsHtml = withNarasi.length
+                     ? withNarasi.map(r => `<div class="las-person-block">
+                            <div class="las-person-name">${escHtml(r.full_name || '-')}</div>
+                            ${r.aktivitas_bulan_ini ? `<div class="las-block-title">Aktivitas Bulan Ini</div><div class="las-block-text">${escHtml(r.aktivitas_bulan_ini)}</div>` : ''}
+                            ${r.rencana_bulan_depan ? `<div class="las-block-title">Rencana Bulan Depan</div><div class="las-block-text">${escHtml(r.rencana_bulan_depan)}</div>` : ''}
+                     </div>`).join('')
+                     : '<div class="las-support-empty">Belum ada aktivitas/rencana</div>';
+              return `<div class="las-area-card">
+                     <div class="las-area-header">
+                            <div class="las-area-name">${escHtml(area)}</div>
+                            <div class="las-area-count">${areaRows.length} laporan</div>
+                     </div>
+                     ${areaPrognosa ? `<span class="las-area-prognosa">Total Prognosa: Rp ${fmtNumStr(areaPrognosa)}</span>` : ''}
+                     ${personsHtml}
+              </div>`;
+       }).join('');
+
+       // B. Support yang dibutuhkan, lintas area
+       const supportByArea = {};
+       let totalSupport = 0;
+       rows.forEach(r => {
+              const area = r.area_kerja || 'Tanpa Area';
+              (r.support || []).forEach(s => {
+                     (supportByArea[area] = supportByArea[area] || []).push({ full_name: r.full_name, keterangan: s.keterangan });
+                     totalSupport++;
+              });
+       });
+
+       if (supportTitle) supportTitle.textContent = `🤝 Ringkasan Support Dibutuhkan (${totalSupport})`;
+
+       const supportAreaNames = Object.keys(supportByArea).sort();
+       supportList.innerHTML = supportAreaNames.length
+              ? supportAreaNames.map(area => {
+                     const items = supportByArea[area];
+                     return `<div class="las-support-area">
+                            <div class="las-support-area-title">
+                                   <span>${escHtml(area)}</span>
+                                   <span class="las-support-area-count">${items.length} item</span>
+                            </div>
+                            ${items.map(it => `<div class="las-support-item">
+                                   <div class="las-support-who">${escHtml(it.full_name || '-')}</div>
+                                   <div class="las-support-text">${escHtml(it.keterangan || '-')}</div>
+                            </div>`).join('')}
+                     </div>`;
+              }).join('')
+              : '<div class="las-support-empty">Tidak ada support yang dibutuhkan</div>';
 }
 
 function _renderDashProjects(lapRows) {

@@ -701,6 +701,39 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
 .laporan-narasi-card .ln-block-text { font-size: 13px; color: var(--text); line-height: 1.5; white-space: pre-wrap; }
 .laporan-narasi-card .ln-prognosa { display: inline-block; margin-top: 8px; font-size: 12px; font-weight: 600; color: #7c3aed; background: #f3f0ff; padding: 3px 10px; border-radius: 20px; }
 
+/* ── Ringkasan Laporan Area (dashboard) ──────────────────────────────────── */
+.las-area-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.las-area-card {
+  background: white;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+  border-top: 3px solid #0e9f6e;
+}
+.las-area-card .las-area-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.las-area-card .las-area-name { font-weight: 600; font-size: 14px; }
+.las-area-card .las-area-count { font-size: 11px; color: var(--text-light); background: var(--gray-light); padding: 2px 8px; border-radius: 20px; }
+.las-area-card .las-area-prognosa { display: inline-block; margin-bottom: 10px; font-size: 12px; font-weight: 600; color: #7c3aed; background: #f3f0ff; padding: 3px 10px; border-radius: 20px; }
+.las-area-card .las-person-block { padding: 8px 0; border-top: 1px solid var(--gray-border); }
+.las-area-card .las-person-block:first-of-type { border-top: none; }
+.las-area-card .las-person-name { font-weight: 600; font-size: 12px; margin-bottom: 4px; }
+.las-area-card .las-block-title { font-size: 10px; font-weight: 600; color: var(--text-light); text-transform: uppercase; margin-top: 4px; }
+.las-area-card .las-block-text { font-size: 12px; color: var(--text); line-height: 1.45; white-space: pre-wrap; }
+
+.las-support-area { background: white; border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 16px; margin-bottom: 12px; }
+.las-support-area .las-support-area-title { font-weight: 600; font-size: 13px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+.las-support-area .las-support-area-count { font-size: 11px; color: var(--text-light); background: var(--gray-light); padding: 2px 8px; border-radius: 20px; }
+.las-support-item { font-size: 12px; padding: 6px 0; border-top: 1px solid var(--gray-border); }
+.las-support-item:first-of-type { border-top: none; }
+.las-support-item .las-support-who { font-weight: 600; }
+.las-support-item .las-support-text { color: var(--text); margin-top: 2px; }
+.las-support-empty { color: var(--text-light); font-size: 13px; padding: 8px 0; }
+
 /* Support & Tanggapan di narasi card */
 .ln-divider { border: none; border-top: 1px solid var(--gray-border); margin: 10px 0 6px; }
 .ln-support-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text-light); text-transform: uppercase; margin-top: 10px; user-select: none; }
