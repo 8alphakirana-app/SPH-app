@@ -699,6 +699,9 @@ db.exec(`
 // Migrasi: tambah kolom probability jika belum ada
 try { db.exec("ALTER TABLE laporan_project ADD COLUMN probability REAL DEFAULT 0"); } catch {}
 
+// Migrasi: tambah kolom isu_bulan_ini jika belum ada
+try { db.exec("ALTER TABLE laporan_bulanan ADD COLUMN isu_bulan_ini TEXT DEFAULT ''"); } catch {}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS laporan_tanggapan (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

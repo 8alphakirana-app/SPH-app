@@ -170,7 +170,7 @@ router.get('/dashboard', (req, res) => {
 
   let sql = `
     SELECT lb.id, lb.user_id, lb.periode, lb.alasan, lb.aktivitas_bulan_ini,
-      lb.rencana_bulan_depan, lb.prognosa_bulan_depan, lb.updated_at,
+      lb.rencana_bulan_depan, lb.prognosa_bulan_depan, lb.isu_bulan_ini, lb.updated_at,
       u.full_name, u.area_kerja, u.role AS user_role,
       COUNT(DISTINCT lp.id) AS jumlah_project,
       COALESCE(SUM(lp.nilai), 0) AS total_nilai
@@ -727,7 +727,7 @@ router.get('/laporan-bulanan-excel', (req, res) => {
 // POST /api/laporan
 router.post('/', blockViewer, (req, res) => {
   const userId = req.session.user.id;
-  const { periode, alasan, aktivitas_bulan_ini, rencana_bulan_depan, prognosa_bulan_depan, support, projects } = req.body;
+  const { periode, alasan, aktivitas_bulan_ini, rencana_bulan_depan, prognosa_bulan_depan, isu_bulan_ini, support, projects } = req.body;
 
   if (!periode || !/^\d{4}-\d{2}$/.test(periode)) {
     return res.status(400).json({ error: 'Periode tidak valid (format: YYYY-MM)' });
@@ -739,16 +739,16 @@ router.post('/', blockViewer, (req, res) => {
       db.prepare(`
         UPDATE laporan_bulanan
         SET alasan=?, aktivitas_bulan_ini=?, rencana_bulan_depan=?,
-            prognosa_bulan_depan=?, updated_at=datetime('now','localtime')
+            prognosa_bulan_depan=?, isu_bulan_ini=?, updated_at=datetime('now','localtime')
         WHERE id=?
       `).run(alasan || '', aktivitas_bulan_ini || '', rencana_bulan_depan || '',
-             parseFloat(prognosa_bulan_depan) || 0, laporan.id);
+             parseFloat(prognosa_bulan_depan) || 0, isu_bulan_ini || '', laporan.id);
     } else {
       const r = db.prepare(`
-        INSERT INTO laporan_bulanan (user_id, periode, alasan, aktivitas_bulan_ini, rencana_bulan_depan, prognosa_bulan_depan)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO laporan_bulanan (user_id, periode, alasan, aktivitas_bulan_ini, rencana_bulan_depan, prognosa_bulan_depan, isu_bulan_ini)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `).run(userId, periode, alasan || '', aktivitas_bulan_ini || '', rencana_bulan_depan || '',
-             parseFloat(prognosa_bulan_depan) || 0);
+             parseFloat(prognosa_bulan_depan) || 0, isu_bulan_ini || '');
       laporan = { id: r.lastInsertRowid };
     }
 
