@@ -4884,6 +4884,23 @@ function downloadLaporanRekapExcel() {
        document.body.removeChild(a);
 }
 
+function downloadLaporanRekapBulananExcel() {
+       const periode = document.getElementById('rekap-laporan-periode')?.value || '';
+       const area = document.getElementById('rekap-laporan-area')?.value || '';
+       const uid = document.getElementById('rekap-laporan-user')?.value || '';
+       const p = new URLSearchParams();
+       if (periode) p.set('periode', periode);
+       if (area) p.set('area_kerja', area);
+       if (uid) p.set('user_id', uid);
+       const qs = p.toString() ? '?' + p.toString() : '';
+       const a = document.createElement('a');
+       a.href = '/api/laporan/laporan-bulanan-excel' + qs;
+       a.download = 'laporan-bulanan.xlsx';
+       document.body.appendChild(a);
+       a.click();
+       document.body.removeChild(a);
+}
+
 async function loadLaporanDashboard() {
        const section = document.getElementById('laporan-dashboard-section');
        if (!section) return;

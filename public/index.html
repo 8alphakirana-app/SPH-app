@@ -1739,7 +1739,11 @@
           <div id="content-laporan-rekap" class="content-page" style="display:none">
             <div class="page-header">
               <h1 class="page-title">Rekap Laporan Bulanan</h1>
-              <button onclick="downloadLaporanRekapExcel()" class="btn btn-pdf btn-sm">⬇️ Download Excel</button>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button onclick="downloadLaporanRekapExcel()" class="btn btn-pdf btn-sm">⬇️ Download Excel</button>
+                <button onclick="downloadLaporanRekapBulananExcel()" class="btn btn-success btn-sm">📥 Download
+                  Laporan Bulanan (Excel)</button>
+              </div>
             </div>
             <div class="card">
               <div class="card-header">
