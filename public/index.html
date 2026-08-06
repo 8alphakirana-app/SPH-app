@@ -313,10 +313,10 @@
               </div>
             </div>
 
-            <!-- Ringkasan Laporan Area: aktivitas & rencana per area + support yang dibutuhkan -->
+            <!-- Isu Bulan Ini per area + support yang dibutuhkan -->
             <div id="dash-laporan-summary-section" style="display:none">
               <div class="section-divider">
-                <h2>🧾 Ringkasan Laporan Area</h2>
+                <h2>🚩 Isu Bulan Ini</h2>
               </div>
               <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
                 <button onclick="downloadLaporanBulananExcel()" class="btn btn-success btn-sm">📥 Download
@@ -325,6 +325,12 @@
               <div id="las-area-grid" class="las-area-grid"></div>
               <div class="section-divider">
                 <h2 id="las-support-title">🤝 Ringkasan Support Dibutuhkan</h2>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                <label class="filter-label" style="margin:0">Area:</label>
+                <select id="las-support-area-select" onchange="_onLasSupportAreaChange()" style="min-width:200px">
+                  <option value="">Semua Area</option>
+                </select>
               </div>
               <div id="las-support-list"></div>
             </div>

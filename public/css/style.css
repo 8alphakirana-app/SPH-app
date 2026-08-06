@@ -701,7 +701,7 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
 .laporan-narasi-card .ln-block-text { font-size: 13px; color: var(--text); line-height: 1.5; white-space: pre-wrap; }
 .laporan-narasi-card .ln-prognosa { display: inline-block; margin-top: 8px; font-size: 12px; font-weight: 600; color: #7c3aed; background: #f3f0ff; padding: 3px 10px; border-radius: 20px; }
 
-/* ── Ringkasan Laporan Area (dashboard) ──────────────────────────────────── */
+/* ── Isu Bulan Ini per area (dashboard) ──────────────────────────────────── */
 .las-area-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -713,12 +713,11 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 16px;
-  border-top: 3px solid #0e9f6e;
+  border-top: 3px solid #f05252;
 }
 .las-area-card .las-area-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .las-area-card .las-area-name { font-weight: 600; font-size: 14px; }
 .las-area-card .las-area-count { font-size: 11px; color: var(--text-light); background: var(--gray-light); padding: 2px 8px; border-radius: 20px; }
-.las-area-card .las-area-prognosa { display: inline-block; margin-bottom: 10px; font-size: 12px; font-weight: 600; color: #7c3aed; background: #f3f0ff; padding: 3px 10px; border-radius: 20px; }
 .las-area-card .las-person-block { padding: 8px 0; border-top: 1px solid var(--gray-border); }
 .las-area-card .las-person-block:first-of-type { border-top: none; }
 .las-area-card .las-person-name { font-weight: 600; font-size: 12px; margin-bottom: 4px; }

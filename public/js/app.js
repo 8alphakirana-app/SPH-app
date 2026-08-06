@@ -354,6 +354,8 @@ let _dashChartNilai = null;
 let _dashChartSales = null;
 let _dashFiltersInited = false;
 let _lastDashLapRows = [];
+let _lastLasRows = [];
+let _lasSupportArea = '';
 let dashSalesMode = 'bulanan'; // 'bulanan' | 'kumulatif'
 let _dashSalesRaw = null; // { areasRaw, monthsList, year, bulananIdx, kumulatifIdx, outstandingByArea, outstandingTotal }
 
@@ -724,46 +726,46 @@ async function saveSupportTanggapan(supportId, lapId) {
 function _renderLaporanAreaSummary(lapRows) {
        const section = document.getElementById('dash-laporan-summary-section');
        const areaGrid = document.getElementById('las-area-grid');
+       const supportSelect = document.getElementById('las-support-area-select');
        const supportList = document.getElementById('las-support-list');
        const supportTitle = document.getElementById('las-support-title');
        if (!section || !areaGrid || !supportList) return;
 
-       const rows = lapRows || [];
-       const hasNarasi = rows.some(r => r.aktivitas_bulan_ini || r.rencana_bulan_depan);
+       if (lapRows) _lastLasRows = lapRows;
+       const rows = _lastLasRows;
+
+       const hasIsu = rows.some(r => r.isu_bulan_ini);
        const hasSupport = rows.some(r => (r.support || []).length);
-       if (!hasNarasi && !hasSupport) { section.style.display = 'none'; return; }
+       if (!hasIsu && !hasSupport) { section.style.display = 'none'; return; }
        section.style.display = '';
 
-       // A. Aktivitas & rencana dikelompokkan per area
-       const byArea = {};
+       // A. Isu bulan ini dikelompokkan per area
+       const byAreaIsu = {};
        rows.forEach(r => {
+              if (!r.isu_bulan_ini) return;
               const area = r.area_kerja || 'Tanpa Area';
-              (byArea[area] = byArea[area] || []).push(r);
+              (byAreaIsu[area] = byAreaIsu[area] || []).push(r);
        });
 
-       const areaNames = Object.keys(byArea).sort();
-       areaGrid.innerHTML = areaNames.map(area => {
-              const areaRows = byArea[area];
-              const areaPrognosa = areaRows.reduce((s, r) => s + (r.prognosa_bulan_depan || 0), 0);
-              const withNarasi = areaRows.filter(r => r.aktivitas_bulan_ini || r.rencana_bulan_depan);
-              const personsHtml = withNarasi.length
-                     ? withNarasi.map(r => `<div class="las-person-block">
+       const isuAreaNames = Object.keys(byAreaIsu).sort();
+       areaGrid.innerHTML = isuAreaNames.length
+              ? isuAreaNames.map(area => {
+                     const areaRows = byAreaIsu[area];
+                     const personsHtml = areaRows.map(r => `<div class="las-person-block">
                             <div class="las-person-name">${escHtml(r.full_name || '-')}</div>
-                            ${r.aktivitas_bulan_ini ? `<div class="las-block-title">Aktivitas Bulan Ini</div><div class="las-block-text">${escHtml(r.aktivitas_bulan_ini)}</div>` : ''}
-                            ${r.rencana_bulan_depan ? `<div class="las-block-title">Rencana Bulan Depan</div><div class="las-block-text">${escHtml(r.rencana_bulan_depan)}</div>` : ''}
-                     </div>`).join('')
-                     : '<div class="las-support-empty">Belum ada aktivitas/rencana</div>';
-              return `<div class="las-area-card">
-                     <div class="las-area-header">
-                            <div class="las-area-name">${escHtml(area)}</div>
-                            <div class="las-area-count">${areaRows.length} laporan</div>
-                     </div>
-                     ${areaPrognosa ? `<span class="las-area-prognosa">Total Prognosa: Rp ${fmtNumStr(areaPrognosa)}</span>` : ''}
-                     ${personsHtml}
-              </div>`;
-       }).join('');
+                            <div class="las-block-text">${escHtml(r.isu_bulan_ini)}</div>
+                     </div>`).join('');
+                     return `<div class="las-area-card">
+                            <div class="las-area-header">
+                                   <div class="las-area-name">${escHtml(area)}</div>
+                                   <div class="las-area-count">${areaRows.length} isu</div>
+                            </div>
+                            ${personsHtml}
+                     </div>`;
+              }).join('')
+              : '<div class="las-support-empty">Tidak ada isu yang dilaporkan bulan ini</div>';
 
-       // B. Support yang dibutuhkan, lintas area
+       // B. Support yang dibutuhkan, dikelompokkan per area, bisa difilter lewat dropdown
        const supportByArea = {};
        let totalSupport = 0;
        rows.forEach(r => {
@@ -777,8 +779,23 @@ function _renderLaporanAreaSummary(lapRows) {
        if (supportTitle) supportTitle.textContent = `🤝 Ringkasan Support Dibutuhkan (${totalSupport})`;
 
        const supportAreaNames = Object.keys(supportByArea).sort();
-       supportList.innerHTML = supportAreaNames.length
-              ? supportAreaNames.map(area => {
+       if (supportSelect) {
+              if (_lasSupportArea && !supportAreaNames.includes(_lasSupportArea)) _lasSupportArea = '';
+              supportSelect.innerHTML = '<option value="">Semua Area</option>' + supportAreaNames.map(a => `<option value="${a}">${a}</option>`).join('');
+              supportSelect.value = _lasSupportArea;
+       }
+
+       _renderLasSupportList(supportByArea);
+}
+
+function _renderLasSupportList(supportByArea) {
+       const supportList = document.getElementById('las-support-list');
+       if (!supportList) return;
+       const areaNames = _lasSupportArea ? [_lasSupportArea] : Object.keys(supportByArea).sort();
+       const filtered = areaNames.filter(a => (supportByArea[a] || []).length);
+
+       supportList.innerHTML = filtered.length
+              ? filtered.map(area => {
                      const items = supportByArea[area];
                      return `<div class="las-support-area">
                             <div class="las-support-area-title">
@@ -791,7 +808,12 @@ function _renderLaporanAreaSummary(lapRows) {
                             </div>`).join('')}
                      </div>`;
               }).join('')
-              : '<div class="las-support-empty">Tidak ada support yang dibutuhkan</div>';
+              : `<div class="las-support-empty">Tidak ada support yang dibutuhkan${_lasSupportArea ? ` di area ${escHtml(_lasSupportArea)}` : ''}</div>`;
+}
+
+function _onLasSupportAreaChange() {
+       _lasSupportArea = document.getElementById('las-support-area-select').value;
+       _renderLaporanAreaSummary();
 }
 
 function _renderDashProjects(lapRows) {
