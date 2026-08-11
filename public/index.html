@@ -677,6 +677,9 @@
                 class="btn btn-primary">+ Buat Pengajuan</button>
             </div>
             <div class="card">
+              <div class="filter-bar"><input type="text" id="my-submissions-search"
+                  placeholder="🔍 Cari nomor / nama klien..." oninput="loadMySubmissions()"
+                  style="min-width:240px"></div>
               <div id="my-submissions-list"></div>
             </div>
           </div>
@@ -697,7 +700,9 @@
           <div id="content-admin-submissions" class="content-page" style="display:none">
             <div class="page-header">
               <h1 class="page-title">Semua Pengajuan</h1>
-              <div class="filter-bar"><select id="filter-status" onchange="loadAdminSubmissions()">
+              <div class="filter-bar"><input type="text" id="admin-submissions-search"
+                  placeholder="🔍 Cari nomor / nama / pembuat..." oninput="loadAdminSubmissions()"
+                  style="min-width:220px"><select id="filter-status" onchange="loadAdminSubmissions()">
                   <option value="">Semua Status</option>
                   <option value="pending">Menunggu</option>
                   <option value="approved">Disetujui</option>
@@ -1005,6 +1010,8 @@
             <div class="page-header">
               <h1 class="page-title">Kertas Kerja Saya</h1>
               <div class="filter-bar">
+                <input type="text" id="my-kk-search" placeholder="🔍 Cari nomor / nama pekerjaan / pelanggan..."
+                  oninput="loadMyKK()" style="min-width:240px">
                 <select id="my-kk-filter" onchange="loadMyKK()">
                   <option value="">Semua Status</option>
                   <option value="pending">Menunggu</option>
@@ -1046,6 +1053,8 @@
             <div class="page-header">
               <h1 class="page-title">Semua Kertas Kerja</h1>
               <div class="filter-bar">
+                <input type="text" id="admin-kk-search" placeholder="🔍 Cari nomor / nama / pelanggan / pembuat..."
+                  oninput="loadAdminKK()" style="min-width:240px">
                 <select id="admin-kk-filter" onchange="loadAdminKK()">
                   <option value="">Semua Status</option>
                   <option value="pending">Menunggu</option>
@@ -1288,6 +1297,8 @@
             <div class="page-header">
               <h1 class="page-title">SPPD Saya</h1>
               <div class="filter-bar">
+                <input type="text" id="my-sppd-search" placeholder="🔍 Cari nomor / nama / tujuan..."
+                  oninput="loadMySPPD()" style="min-width:240px">
                 <select id="my-sppd-filter" onchange="loadMySPPD()">
                   <option value="">Semua Status</option>
                   <option value="pending">Menunggu</option>
@@ -1330,6 +1341,8 @@
             <div class="page-header">
               <h1 class="page-title">Semua SPPD</h1>
               <div class="filter-bar">
+                <input type="text" id="admin-sppd-search" placeholder="🔍 Cari nomor / nama / tujuan / pembuat..."
+                  oninput="loadAdminSPPD()" style="min-width:240px">
                 <select id="admin-sppd-filter" onchange="loadAdminSPPD()">
                   <option value="">Semua Status</option>
                   <option value="pending">Menunggu</option>
@@ -1352,6 +1365,8 @@
             <div class="page-header">
               <h1 class="page-title">Persetujuan Laporan Perjalanan</h1>
               <div class="filter-bar">
+                <input type="text" id="laporan-approvals-search" placeholder="🔍 Cari nomor SPPD / nama pegawai / tujuan..."
+                  oninput="loadLaporanApprovals()" style="min-width:260px">
                 <select id="laporan-approvals-filter" onchange="loadLaporanApprovals()">
                   <option value="pending">Menunggu</option>
                   <option value="">Semua</option>
@@ -1751,6 +1766,11 @@
               </div>
               <div class="card-body">
                 <div class="form-row">
+                  <div class="form-group">
+                    <label>Cari Nama / Area</label>
+                    <input type="text" id="rekap-laporan-search" placeholder="🔍 Cari nama user / area..."
+                      oninput="loadLaporanRekap()">
+                  </div>
                   <div class="form-group">
                     <label>Bulan / Periode</label>
                     <select id="rekap-laporan-periode" onchange="loadLaporanRekap()">

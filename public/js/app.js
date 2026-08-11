@@ -1657,11 +1657,13 @@ async function downloadZip() {
 async function loadMySubmissions() {
        const container = document.getElementById('my-submissions-list');
        container.innerHTML = '<div class="loading">⏳ Memuat data...</div>';
+       const search = document.getElementById('my-submissions-search')?.value || '';
        try {
               const res = await api('/api/submissions');
-              const submissions = await res.json();
+              let submissions = await res.json();
+              submissions = filterBySearch(submissions, search, ['nomor', 'client_name', 'creator_name']);
               if (submissions.length === 0) {
-                     container.innerHTML = emptyState('Belum ada pengajuan. Klik "+ Buat Pengajuan" untuk memulai.');
+                     container.innerHTML = emptyState(search ? 'Tidak ada pengajuan yang cocok dengan pencarian' : 'Belum ada pengajuan. Klik "+ Buat Pengajuan" untuk memulai.');
               } else {
                      container.innerHTML = renderSubmissionTable(submissions, true);
               }
@@ -1692,14 +1694,16 @@ async function loadAdminSubmissions() {
        const container = document.getElementById('admin-submissions-list');
        container.innerHTML = '<div class="loading">⏳ Memuat data...</div>';
        const filterStatus = document.getElementById('filter-status')?.value || '';
+       const search = document.getElementById('admin-submissions-search')?.value || '';
        try {
               const res = await api('/api/submissions');
               let submissions = await res.json();
               if (filterStatus) {
                      submissions = submissions.filter(s => s.status === filterStatus);
               }
+              submissions = filterBySearch(submissions, search, ['nomor', 'client_name', 'creator_name']);
               if (submissions.length === 0) {
-                     container.innerHTML = emptyState('Tidak ada pengajuan' + (filterStatus ? ` dengan status "${filterStatus}"` : ''));
+                     container.innerHTML = emptyState(search ? 'Tidak ada pengajuan yang cocok dengan pencarian' : 'Tidak ada pengajuan' + (filterStatus ? ` dengan status "${filterStatus}"` : ''));
               } else {
                      container.innerHTML = renderSubmissionTable(submissions, true, true);
               }
@@ -1727,7 +1731,7 @@ function renderSubmissionTable(submissions, showActions = false, isAdmin = false
                                                                                               <button onclick="viewDetail(${s.id})" class="btn btn-secondary btn-sm">🔍 Detail</button>
                                                                                                         ${s.status === 'approved' ? `
                                                                                                                     <div class="download-group">
-                                                                                                                                  ${(currentUser.role === 'admin' || currentUser.role === 'kantor_pusat') ? `<button onclick="downloadDoc(${s.id},'docx')" class="btn btn-success btn-sm" title="Unduh Word">⬇️ Word</button>` : ''}
+                                                                                                                                  ${(['admin', 'kantor_pusat', 'gm', 'gm2'].includes(currentUser.role)) ? `<button onclick="downloadDoc(${s.id},'docx')" class="btn btn-success btn-sm" title="Unduh Word">⬇️ Word</button>` : ''}
                                                                                                                                                 <button onclick="downloadDoc(${s.id},'pdf')" class="btn btn-pdf btn-sm" title="Unduh PDF">📄 PDF</button>
                                                                                                                                                             </div>` : ''}
                                                                                                                                                                       ${(['admin', 'kantor_pusat', 'gm', 'gm2'].includes(currentUser.role)) && s.status === 'pending' ? `
@@ -2770,12 +2774,14 @@ async function loadMyKK() {
        if (!container) return;
        container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
        const filterStatus = document.getElementById('my-kk-filter')?.value || '';
+       const search = document.getElementById('my-kk-search')?.value || '';
        try {
               const res = await api('/api/kk');
               let rows = await res.json();
               // Halaman "Saya": hanya tampilkan KK yang dibuat oleh user ini
               rows = rows.filter(r => r.created_by === currentUser.id);
               if (filterStatus) rows = rows.filter(r => r.status === filterStatus);
+              rows = filterBySearch(rows, search, ['nomor_surat', 'nama_pekerjaan', 'pelanggan']);
               container.innerHTML = renderKKTable(rows);
        } catch { container.innerHTML = '<div class="alert alert-error">Gagal memuat data</div>'; }
 }
@@ -2799,11 +2805,13 @@ async function loadAdminKK() {
        container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
        const filterStatus = document.getElementById('admin-kk-filter')?.value || '';
        const filterMonth = document.getElementById('admin-kk-month')?.value || '';
+       const search = document.getElementById('admin-kk-search')?.value || '';
        try {
               const res = await api('/api/kk');
               let rows = await res.json();
               if (filterStatus) rows = rows.filter(r => r.status === filterStatus);
               if (filterMonth) rows = rows.filter(r => r.created_at && r.created_at.startsWith(filterMonth));
+              rows = filterBySearch(rows, search, ['nomor_surat', 'nama_pekerjaan', 'pelanggan', 'creator_name']);
               container.innerHTML = renderKKTable(rows, { showCreator: true, showApproveBtn: true });
        } catch { container.innerHTML = '<div class="alert alert-error">Gagal memuat data</div>'; }
 }
@@ -3179,6 +3187,13 @@ function emptyState(msg) {
        return `<div class="empty-state"><div class="empty-icon">📭</div><p>${msg}</p></div>`;
 }
 
+// Filter rows by a free-text query matched against the given fields (nomor/nama/pembuat, dsb).
+function filterBySearch(rows, query, fields) {
+       if (!query || !query.trim()) return rows;
+       const q = query.trim().toLowerCase();
+       return rows.filter(row => fields.some(f => String(row[f] ?? '').toLowerCase().includes(q)));
+}
+
 function showModal(id) {
        document.getElementById(id).style.display = 'flex';
        document.body.style.overflow = 'hidden';
@@ -3318,13 +3333,15 @@ function renderSPPDTable(rows, { showCreator = false, showApproveBtn = false } =
 // ── List loaders ──────────────────────────────────────────────────────────────
 async function loadMySPPD() {
        const filter = document.getElementById('my-sppd-filter')?.value || '';
+       const search = document.getElementById('my-sppd-search')?.value || '';
        const container = document.getElementById('my-sppd-container');
        container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
        try {
               const res = await api('/api/sppd');
               let rows = await res.json();
               rows = rows.filter(r => r.created_by === currentUser.id);
-              const filtered = filter ? rows.filter(r => r.status === filter) : rows;
+              let filtered = filter ? rows.filter(r => r.status === filter) : rows;
+              filtered = filterBySearch(filtered, search, ['nomor', 'nama_pegawai', 'tujuan']);
               const isAdminRole = currentUser.role === 'admin';
               container.innerHTML = renderSPPDTable(filtered, { showApproveBtn: isAdminRole });
        } catch { container.innerHTML = emptyState('Gagal memuat data'); }
@@ -3344,12 +3361,14 @@ async function loadSPPDApprovals() {
 
 async function loadAdminSPPD() {
        const filter = document.getElementById('admin-sppd-filter')?.value || '';
+       const search = document.getElementById('admin-sppd-search')?.value || '';
        const container = document.getElementById('admin-sppd-container');
        container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
        try {
               const res = await api('/api/sppd');
               let rows = await res.json();
               if (filter) rows = rows.filter(r => r.status === filter);
+              rows = filterBySearch(rows, search, ['nomor', 'nama_pegawai', 'tujuan', 'creator_name']);
               container.innerHTML = renderSPPDTable(rows, { showCreator: true, showApproveBtn: true });
        } catch { container.innerHTML = emptyState('Gagal memuat data'); }
 }
@@ -3357,12 +3376,14 @@ async function loadAdminSPPD() {
 // ── Laporan Approvals list ────────────────────────────────────────────────────
 async function loadLaporanApprovals() {
        const filter = document.getElementById('laporan-approvals-filter')?.value || '';
+       const search = document.getElementById('laporan-approvals-search')?.value || '';
        const container = document.getElementById('laporan-approvals-container');
        container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
        try {
               const res = await api('/api/sppd/laporan');
               let rows = await res.json();
               if (filter) rows = rows.filter(r => r.status === filter);
+              rows = filterBySearch(rows, search, ['nomor', 'nama_pegawai', 'tujuan']);
               if (!rows.length) { container.innerHTML = emptyState('Tidak ada laporan'); return; }
               const fmtRp = v => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(v || 0);
               const trs = rows.map(r => {
@@ -4938,7 +4959,9 @@ async function loadLaporanRekap() {
               if (area) params.set('area_kerja', area);
               if (uid) params.set('user_id', uid);
               const res = await api(`/api/laporan/dashboard?${params}`);
-              const rows = await res.json();
+              let rows = await res.json();
+              const search = document.getElementById('rekap-laporan-search')?.value || '';
+              rows = filterBySearch(rows, search, ['full_name', 'area_kerja']);
               _renderLaporanTable(rows, 'rekap-laporan-container');
        } catch {
               container.innerHTML = '<div class="empty-state"><p>Gagal memuat data</p></div>';

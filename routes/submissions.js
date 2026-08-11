@@ -50,6 +50,11 @@ function canViewAllSPH(user) {
     return isAdminOrKP(user) || user.role === 'viewer';
 }
 
+// Siapa yang boleh mengunduh SPH (Word/PDF): admin, kantor_pusat, viewer, approver (gm/gm2), atau pembuatnya
+function canDownloadSPH(user, row) {
+    return canViewAllSPH(user) || ['gm', 'gm2'].includes(user.role) || row.created_by === user.id;
+}
+
 // Middleware: viewer hanya boleh melihat, tidak boleh membuat data
 function blockViewer(req, res, next) {
     if (req.session.user?.role === 'viewer') {
@@ -435,7 +440,7 @@ router.get('/:id/download', requireLogin, async (req, res) => {
                 WHERE s.id = ?
                   `).get(req.params.id);
     if (!row) return res.status(404).json({ error: 'Tidak ditemukan' });
-    if (!isAdminOrKP(req.session.user) && row.created_by !== req.session.user.id) {
+    if (!canDownloadSPH(req.session.user, row)) {
           return res.status(403).json({ error: 'Akses ditolak' });
     }
     if (row.status !== 'approved') {
@@ -464,7 +469,7 @@ router.get('/:id/download/pdf', requireLogin, async (req, res) => {
                 WHERE s.id = ?
                   `).get(req.params.id);
     if (!row) return res.status(404).json({ error: 'Tidak ditemukan' });
-    if (!isAdminOrKP(req.session.user) && row.created_by !== req.session.user.id)
+    if (!canDownloadSPH(req.session.user, row))
           return res.status(403).json({ error: 'Akses ditolak' });
     if (row.status !== 'approved')
           return res.status(403).json({ error: 'Dokumen belum disetujui admin' });
