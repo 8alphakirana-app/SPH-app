@@ -169,6 +169,11 @@
               <span class="icon">📝</span> MOM Meeting
             </a>
           </li>
+          <li>
+            <a href="#" onclick="showPage('analisa-pelanggan')" class="menu-item" data-page="analisa-pelanggan">
+              <span class="icon">👥</span> Analisa Pelanggan
+            </a>
+          </li>
 
           <li class="menu-divider"></li>
 
@@ -1621,6 +1626,54 @@
                       </tr>
                     </thead>
                     <tbody id="mom-tbody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ═══════════ ANALISA PELANGGAN ═══════════ -->
+          <div id="content-analisa-pelanggan" class="content-page" style="display:none">
+            <div class="page-header">
+              <h1 class="page-title">👥 Analisa Pelanggan</h1>
+              <button id="ap-export-btn" class="btn btn-primary" onclick="exportAnalisaPelanggan()">⬇️ Download Excel</button>
+            </div>
+
+            <div class="filter-bar" style="margin-bottom:12px;flex-wrap:wrap">
+              <input type="text" id="ap-search" placeholder="🔍 Cari nama pelanggan..." oninput="filterAnalisaPelanggan()"
+                style="max-width:240px">
+              <select id="ap-filter-area" onchange="onApFilterChange('area', this.value)" style="display:none">
+                <option value="">Semua Area</option>
+              </select>
+              <select id="ap-filter-coverage" onchange="onApFilterChange('coverage', this.value)">
+                <option value="">Semua Coverage</option>
+              </select>
+              <select id="ap-filter-principal" onchange="onApFilterChange('principal', this.value)">
+                <option value="">Semua Principal</option>
+              </select>
+              <select id="ap-filter-tipe" onchange="onApFilterChange('tipe', this.value)">
+                <option value="">Semua Tipe</option>
+              </select>
+              <select id="ap-filter-jenis" onchange="onApFilterChange('jenis', this.value)">
+                <option value="">Semua Jenis Barang</option>
+              </select>
+            </div>
+
+            <div id="ap-summary" style="margin-bottom:12px;color:var(--text-light);font-size:13px"></div>
+
+            <div class="card">
+              <div class="card-body no-padding">
+                <div class="table-responsive">
+                  <table class="table" id="ap-table">
+                    <thead>
+                      <tr>
+                        <th width="40">No</th>
+                        <th>Nama Pelanggan</th>
+                        <th>Kategori</th>
+                        <th class="text-right">Total 3 Tahun</th>
+                      </tr>
+                    </thead>
+                    <tbody id="ap-tbody"></tbody>
                   </table>
                 </div>
               </div>

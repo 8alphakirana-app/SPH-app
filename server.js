@@ -46,6 +46,7 @@ app.use('/api/backup', require('./routes/backup'));
 app.use('/api/laporan', require('./routes/laporan'));
 app.use('/api/sales-target', require('./routes/sales-target'));
 app.use('/api/penjualan', require('./routes/penjualan'));
+app.use('/api/analisa-pelanggan', require('./routes/analisa-pelanggan'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/media-monitoring', require('./routes/media-monitoring'));
 app.use('/api/mom', require('./routes/mom'));

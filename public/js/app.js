@@ -272,6 +272,7 @@ function showPage(page) {
               'sph-approvals': 'Persetujuan SPH',
               'media-monitoring': 'Media Monitoring Investasi',
               'mom': 'MOM Meeting',
+              'analisa-pelanggan': 'Analisa Pelanggan',
               'new-uang-muka': 'Buat Pengajuan Uang Muka',
               'my-uang-muka': 'Uang Muka Saya',
               'uang-muka-approvals': 'Persetujuan Uang Muka',
@@ -304,6 +305,7 @@ function showPage(page) {
        else if (page === 'laporan-rekap') loadLaporanRekap();
        else if (page === 'media-monitoring') loadMediaMonitoring();
        else if (page === 'mom') loadMOMList();
+       else if (page === 'analisa-pelanggan') initAnalisaPelanggan();
        else if (page === 'new-uang-muka') initUMForm();
        else if (page === 'my-uang-muka') loadMyUM();
        else if (page === 'uang-muka-approvals') loadUMApprovals();
@@ -6770,4 +6772,197 @@ async function saveSalespersonMapping(i) {
        } catch {
               showToast('Koneksi ke server gagal', 'error');
        }
+}
+
+// ===================== ANALISA PELANGGAN =====================
+const AP_FACETS = ['area', 'coverage', 'principal', 'tipe', 'jenis'];
+const AP_SELECT_ID = { area: 'ap-filter-area', coverage: 'ap-filter-coverage', principal: 'ap-filter-principal', tipe: 'ap-filter-tipe', jenis: 'ap-filter-jenis' };
+const AP_DEFAULT_LABEL = { area: 'Semua Area', coverage: 'Semua Coverage', principal: 'Semua Principal', tipe: 'Semua Tipe', jenis: 'Semua Jenis Barang' };
+
+let apSel = { area: '', coverage: '', principal: '', tipe: '', jenis: '' }; // seleksi filter aktif (faceted)
+let _apIsPusat = false;   // ditentukan dari respons /filters pertama (areas terisi <=> pusat)
+let _apCustomers = [];    // hasil dari server (sudah kena apSel), sebelum pencarian
+let _apRendered = [];     // customer yang sedang tampil di tbody saat ini (setelah pencarian client-side)
+let _apDetailCache = {};  // cacheKey (filter qs + cust) -> products[]
+
+async function initAnalisaPelanggan() {
+       apSel = { area: '', coverage: '', principal: '', tipe: '', jenis: '' };
+       _apDetailCache = {};
+       await refreshApFilters();
+       loadAnalisaPelanggan();
+}
+
+function _apSelToQuery() {
+       const p = new URLSearchParams();
+       AP_FACETS.forEach(f => { if (apSel[f]) p.set(f, apSel[f]); });
+       return p;
+}
+
+// Faceted: minta ulang opsi tiap dropdown berdasarkan seleksi apSel saat ini. Server menghitung
+// tiap facet dengan mengecualikan filter facet itu sendiri, jadi opsi facet lain menyempit mengikuti
+// pilihan, tapi facet yang sedang diubah tetap menampilkan semua nilainya sendiri yang relevan.
+async function refreshApFilters() {
+       try {
+              const qs = _apSelToQuery().toString();
+              const res = await api('/api/analisa-pelanggan/filters' + (qs ? '?' + qs : ''));
+              if (!res.ok) return;
+              const data = await res.json();
+
+              // Status pusat hanya perlu ditentukan sekali, saat belum ada filter aktif sama sekali
+              // (di titik itu areas berisi penuh <=> pusat; non-pusat selalu dapat areas kosong).
+              if (!apSel.area && !apSel.coverage && !apSel.principal && !apSel.tipe && !apSel.jenis) {
+                     _apIsPusat = (data.areas || []).length > 0;
+              }
+
+              const areaSel = document.getElementById('ap-filter-area');
+              if (areaSel) areaSel.style.display = _apIsPusat ? '' : 'none';
+
+              AP_FACETS.forEach(f => _apFillSelect(f, f === 'area' ? (data.areas || []) : (data[f] || [])));
+       } catch { }
+}
+
+// Isi ulang 1 dropdown facet dari daftar opsi yang masih tersedia. Jika nilai yang sedang
+// terpilih untuk facet ini sudah tidak valid lagi (tidak ada di opsi baru), reset ke "Semua".
+function _apFillSelect(facet, options) {
+       const sel = document.getElementById(AP_SELECT_ID[facet]);
+       if (!sel) return;
+       if (apSel[facet] && !options.includes(apSel[facet])) apSel[facet] = '';
+
+       sel.innerHTML = `<option value="">${escHtml(AP_DEFAULT_LABEL[facet])}</option>` +
+              options.map(v => `<option value="${escHtml(v)}"${v === apSel[facet] ? ' selected' : ''}>${escHtml(v)}</option>`).join('');
+       sel.value = apSel[facet] || '';
+}
+
+async function onApFilterChange(facet, value) {
+       apSel[facet] = value || '';
+       await refreshApFilters();
+       loadAnalisaPelanggan();
+}
+
+function exportAnalisaPelanggan() {
+       const qs = _apSelToQuery().toString();
+       window.location = '/api/analisa-pelanggan/export' + (qs ? '?' + qs : '');
+}
+
+async function loadAnalisaPelanggan() {
+       const tbody = document.getElementById('ap-tbody');
+       const summary = document.getElementById('ap-summary');
+       if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="loading">⏳ Memuat data...</td></tr>';
+       if (summary) summary.textContent = '';
+       try {
+              const qs = _apSelToQuery().toString();
+              const res = await api('/api/analisa-pelanggan' + (qs ? '?' + qs : ''));
+              if (!res.ok) {
+                     const data = await res.json().catch(() => ({}));
+                     if (tbody) tbody.innerHTML = `<tr><td colspan="4">${escHtml(data.error || 'Gagal memuat data')}</td></tr>`;
+                     return;
+              }
+              const data = await res.json();
+              _apCustomers = data.customers || [];
+              if (summary) summary.textContent = `${data.count || 0} pelanggan — Total penjualan 3 tahun: Rp ${fmtNumStr(Math.round(data.grandTotal || 0))}`;
+              const searchEl = document.getElementById('ap-search');
+              if (searchEl) searchEl.value = '';
+              _apRenderTable(_apCustomers);
+       } catch {
+              if (tbody) tbody.innerHTML = '<tr><td colspan="4">Gagal memuat data</td></tr>';
+       }
+}
+
+function filterAnalisaPelanggan() {
+       const q = (document.getElementById('ap-search')?.value || '').toLowerCase().trim();
+       const filtered = !q ? _apCustomers : _apCustomers.filter(c => (c.custName || '').toLowerCase().includes(q));
+       _apRenderTable(filtered);
+}
+
+function _apCustKey(c) {
+       return String(c.custId || c.custName || '');
+}
+
+function _apRenderTable(customers) {
+       _apRendered = customers;
+       const tbody = document.getElementById('ap-tbody');
+       if (!tbody) return;
+       if (!customers.length) { tbody.innerHTML = `<tr><td colspan="4">${emptyState('Tidak ada data pelanggan')}</td></tr>`; return; }
+       tbody.innerHTML = customers.map((c, idx) => `
+    <tr class="ap-row" style="cursor:pointer" onclick="toggleApRow(${idx})">
+      <td>${idx + 1}</td>
+      <td><span id="ap-chevron-${idx}">▸</span> ${escHtml(c.custName || '-')}</td>
+      <td>${escHtml(c.kategori || '-')}</td>
+      <td class="text-right">${fmtNumStr(Math.round(c.total || 0))}</td>
+    </tr>
+    <tr id="ap-detail-${idx}" style="display:none">
+      <td colspan="4" style="background:#f8fafc;padding:0"></td>
+    </tr>`).join('');
+}
+
+async function toggleApRow(idx) {
+       const detailRow = document.getElementById(`ap-detail-${idx}`);
+       const chevron = document.getElementById(`ap-chevron-${idx}`);
+       if (!detailRow) return;
+
+       const isOpen = detailRow.style.display !== 'none';
+       if (isOpen) {
+              detailRow.style.display = 'none';
+              if (chevron) chevron.textContent = '▸';
+              return;
+       }
+       detailRow.style.display = '';
+       if (chevron) chevron.textContent = '▾';
+
+       const c = _apRendered[idx];
+       if (!c) return;
+
+       const cell = detailRow.querySelector('td');
+       const qs = _apSelToQuery();
+       qs.set('cust', _apCustKey(c));
+       const cacheKey = qs.toString();
+
+       if (_apDetailCache[cacheKey]) {
+              cell.innerHTML = _apRenderProductTable(_apDetailCache[cacheKey]);
+              return;
+       }
+
+       cell.innerHTML = '<div class="loading">⏳ Memuat rincian produk...</div>';
+       detailRow.dataset.loadingKey = cacheKey;
+       try {
+              const res = await api('/api/analisa-pelanggan/detail?' + cacheKey);
+              if (!res.ok) {
+                     const data = await res.json().catch(() => ({}));
+                     if (detailRow.dataset.loadingKey === cacheKey) cell.innerHTML = `<div style="padding:16px">${escHtml(data.error || 'Gagal memuat rincian produk')}</div>`;
+                     return;
+              }
+              const data = await res.json();
+              _apDetailCache[cacheKey] = data.products || [];
+              if (detailRow.dataset.loadingKey === cacheKey && detailRow.style.display !== 'none') {
+                     cell.innerHTML = _apRenderProductTable(_apDetailCache[cacheKey]);
+              }
+       } catch {
+              if (detailRow.dataset.loadingKey === cacheKey) cell.innerHTML = '<div style="padding:16px">Gagal memuat rincian produk</div>';
+       }
+}
+
+function _apRenderProductTable(products) {
+       if (!products.length) return `<div style="padding:16px">${emptyState('Tidak ada rincian produk')}</div>`;
+       return `
+    <table class="table" style="margin:0">
+      <thead>
+        <tr>
+          <th>Nama Produk</th>
+          <th>Principal</th>
+          <th>Jenis Barang</th>
+          <th class="text-right">Qty</th>
+          <th class="text-right">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${products.map(p => `
+        <tr>
+          <td>${escHtml(p.prodName || '-')}</td>
+          <td>${escHtml(p.principal || '-')}</td>
+          <td>${escHtml(p.jenis || '-')}</td>
+          <td class="text-right">${fmtNumStr(Math.round(p.qty || 0))} ${escHtml(p.uom || '')}</td>
+          <td class="text-right">${fmtNumStr(Math.round(p.total || 0))}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
 }
