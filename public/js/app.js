@@ -498,9 +498,9 @@ async function loadDashboard() {
                      populateDashMonthFilter(sphFull.available_months, month);
               }
 
-              // ZIP button
+              // ZIP PDF dinonaktifkan — cetak via browser
               const zipBtn = document.getElementById('btn-download-zip');
-              if (zipBtn) zipBtn.style.display = (month && (sph.disetujui > 0)) ? '' : 'none';
+              if (zipBtn) zipBtn.style.display = 'none';
 
               // Media Monitoring widget
               const canViewMMDash = ['admin', 'kantor_pusat', 'manager_keuangan'].includes(currentUser.role)
@@ -1342,8 +1342,9 @@ async function loadDashboardAdmin() {
        document.getElementById('stat-products').textContent = summary.jumlah_produk;
        document.getElementById('stat-clients').textContent = summary.jumlah_pelanggan;
 
+       // ZIP PDF dinonaktifkan — cetak via browser
        const zipBtn = document.getElementById('btn-download-zip');
-       if (zipBtn) zipBtn.style.display = (month && summary.disetujui > 0) ? '' : 'none';
+       if (zipBtn) zipBtn.style.display = 'none';
 
        const card = document.getElementById('card-per-user');
        const container = document.getElementById('per-user-stats');
@@ -1416,6 +1417,7 @@ async function loadDashboardStaff() {
 
        const card = document.getElementById('card-per-user');
        if (card) card.style.display = 'none';
+       // ZIP PDF dinonaktifkan — cetak via browser
        const zipBtn = document.getElementById('btn-download-zip');
        if (zipBtn) zipBtn.style.display = 'none';
 
@@ -1734,7 +1736,7 @@ function renderSubmissionTable(submissions, showActions = false, isAdmin = false
                                                                                                         ${s.status === 'approved' ? `
                                                                                                                     <div class="download-group">
                                                                                                                                   ${(['admin', 'kantor_pusat', 'gm', 'gm2'].includes(currentUser.role)) ? `<button onclick="downloadDoc(${s.id},'docx')" class="btn btn-success btn-sm" title="Unduh Word">⬇️ Word</button>` : ''}
-                                                                                                                                                <button onclick="downloadDoc(${s.id},'pdf')" class="btn btn-pdf btn-sm" title="Unduh PDF">📄 PDF</button>
+                                                                                                                                                <button onclick="downloadDoc(${s.id},'pdf')" class="btn btn-pdf btn-sm" title="Cetak PDF">📄 PDF</button>
                                                                                                                                                             </div>` : ''}
                                                                                                                                                                       ${(['admin', 'kantor_pusat', 'gm', 'gm2'].includes(currentUser.role)) && s.status === 'pending' ? `
                                                                                                                                                                                   <button onclick="approveSubmission(${s.id})" class="btn btn-success btn-sm">✅ Setuju</button>
@@ -1867,7 +1869,7 @@ async function viewDetail(id) {
                      if (_canApprove) {
                             footerHTML += `<button onclick="downloadDoc(${s.id},'docx')" class="btn btn-success">⬇️ Unduh Word</button>`;
                      }
-                     footerHTML += `<button onclick="downloadDoc(${s.id},'pdf')" class="btn btn-pdf">📄 Unduh PDF</button>`;
+                     footerHTML += `<button onclick="downloadDoc(${s.id},'pdf')" class="btn btn-pdf">🖨️ Cetak / Simpan PDF</button>`;
               }
               if (_canApprove && s.status === 'pending') {
                      footerHTML += `<button onclick="approveSubmission(${s.id})" class="btn btn-success">✅ Setujui</button>`;
@@ -2051,6 +2053,10 @@ async function confirmReject() {
 
 // ===================== DOWNLOAD =====================
 async function downloadDoc(id, format = 'docx') {
+       if (format === 'pdf') {
+              window.open(`/api/submissions/${id}/print`, '_blank');
+              return;
+       }
        const label = format === 'pdf' ? 'PDF' : 'Word';
        showToast(`⏳ Membuat ${label}...`, '');
        try {
@@ -2749,7 +2755,7 @@ function renderKKTable(rows, { showCreator = false, showApproveBtn = false } = {
                                <button onclick="openKKAction(${r.id},'reject')"  class="btn btn-danger btn-sm">❌ Tolak</button>` : ''}
                            ${r.status === 'approved' ? `
                                <button onclick="downloadKKExcel(${r.id})" class="btn btn-success btn-sm">📊 Excel</button>
-                               <button onclick="downloadKKPDF(${r.id})" class="btn btn-pdf btn-sm">📄 PDF</button>` : ''}
+                               <button onclick="downloadKKPDF(${r.id})" class="btn btn-pdf btn-sm" title="Cetak PDF">📄 PDF</button>` : ''}
                            ${r.status === 'pending' && (currentUser.role === 'admin' || r.created_by === currentUser.id) ? `
                                <button onclick="openEditKK(${r.id})" class="btn btn-secondary btn-sm">✏️ Edit</button>` : ''}
                            ${['pending', 'approved', 'rejected'].includes(r.status) && currentUser.role === 'admin' ? `
@@ -2936,7 +2942,7 @@ async function viewKKDetail(id) {
               }
               if (kk.status === 'approved') {
                      footer += `<button onclick="downloadKKExcel(${id})" class="btn btn-success">📊 Unduh Excel</button>`;
-                     footer += `<button onclick="downloadKKPDF(${id})" class="btn btn-pdf">📄 Unduh PDF</button>`;
+                     footer += `<button onclick="downloadKKPDF(${id})" class="btn btn-pdf">🖨️ Cetak / Simpan PDF</button>`;
               }
               if (kk.status === 'pending' && (currentUser.role === 'admin' || kk.created_by === currentUser.id)) {
                      footer += `<button onclick="closeModal('modal-kk-detail');setTimeout(()=>openEditKK(${id}),200)" class="btn btn-secondary">✏️ Edit</button>`;
@@ -3013,15 +3019,7 @@ async function downloadKKExcel(id) {
 }
 
 async function downloadKKPDF(id) {
-       showToast('⏳ Menyiapkan PDF...', '');
-       try {
-              const res = await fetch(`/api/kk/${id}/export-pdf`, { credentials: 'same-origin' });
-              if (!res.ok) { let d; try { d = await res.json(); } catch { } showToast(d?.error || 'Gagal', 'error'); return; }
-              const blob = await res.blob();
-              const filename = res.headers.get('content-disposition')?.match(/filename="([^"]+)"/)?.[1] || `KK_${id}.pdf`;
-              triggerDownload(URL.createObjectURL(blob), filename);
-              showToast('✅ PDF berhasil diunduh!', 'success');
-       } catch { showToast('Gagal mengunduh PDF', 'error'); }
+       window.open(`/api/kk/${id}/print`, '_blank');
 }
 
 async function deleteKK(id) {
@@ -3306,7 +3304,7 @@ function renderSPPDTable(rows, { showCreator = false, showApproveBtn = false } =
                      ? `<button onclick="openSPPDAction(${r.id},'approve')" class="btn btn-sm btn-success">✅ Approve</button> `
                      : '';
               const pdfBtn = ['approved', 'completed'].includes(r.status)
-                     ? `<a href="/api/sppd/${r.id}/download/pdf" target="_blank" class="btn btn-sm btn-pdf" title="Unduh PDF">🖨️</a> `
+                     ? `<a href="/api/sppd/${r.id}/print" target="_blank" class="btn btn-sm btn-pdf" title="Cetak PDF">🖨️</a> `
                      : '';
               const canEditSppd = r.status === 'pending' && (currentUser.role === 'admin' || r.created_by === currentUser.id) &&
                      (r.sppd_approval_level === 0 || (r.am_skipped && r.sppd_approval_level === 1 && !r.gm1_approved && !r.gm2_approved));
@@ -3726,7 +3724,7 @@ async function viewSPPDDetail(id) {
                      footer.push(`<button onclick="closeModal('modal-sppd-detail');setTimeout(()=>openEditSPPD(${id}),200)" class="btn btn-secondary">✏️ Edit</button>`);
               }
               if (['approved', 'completed'].includes(sppd.status)) {
-                     footer.push(`<a href="/api/sppd/${id}/download/pdf" target="_blank" class="btn btn-pdf">🖨️ Cetak PDF</a>`);
+                     footer.push(`<a href="/api/sppd/${id}/print" target="_blank" class="btn btn-pdf">🖨️ Cetak PDF</a>`);
               }
               if (canSubmitLaporan) footer.push(`<button onclick="openLaporanForm(${id})" class="btn btn-primary">📋 Buat Laporan</button>`);
               if (canEditLaporan) footer.push(`<button onclick="openLaporanForm(${id}, currentDetailLaporan)" class="btn btn-secondary">✏️ Edit Laporan</button>`);
@@ -3792,7 +3790,7 @@ function renderSPPDDetail(sppd, laporan, pencairan, pengembalian) {
               <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:4px">
                 <div><strong>Tanggal Laporan:</strong> ${laporan.tanggal_laporan}</div>
                 <div><strong>Status:</strong> <span class="badge badge-${laporan.status === 'approved' ? 'approved' : laporan.status === 'rejected' ? 'rejected' : 'pending'}">${laporan.status}</span></div>
-                ${laporan.status === 'approved' ? `<a href="/api/sppd/${sppd.id}/laporan/download/pdf" target="_blank" class="btn btn-sm btn-pdf">🖨️ Cetak PDF Laporan</a>` : ''}
+                ${laporan.status === 'approved' ? `<a href="/api/sppd/${sppd.id}/laporan/print" target="_blank" class="btn btn-sm btn-pdf">🖨️ Cetak PDF Laporan</a>` : ''}
               </div>
               <div style="margin-top:8px"><strong>Isi:</strong><br><div style="white-space:pre-wrap;background:var(--bg);padding:8px;border-radius:6px;margin-top:4px">${escHtml(laporan.isi_laporan)}</div></div>
               <div style="margin-top:12px"><strong>Kunjungan:</strong><div class="table-responsive"><table class="table"><thead><tr><th>Tanggal</th><th>Instansi</th><th>Kontak</th><th>Nama Pelanggan</th><th>Laporan Kunjungan</th></tr></thead><tbody>${kunjRows}</tbody></table></div></div>
