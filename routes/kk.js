@@ -4,6 +4,7 @@ const db      = require('../database');
 const fs      = require('fs');
 const path    = require('path');
 const { notifyKKNextLevel, notifyKKResult } = require('../notif');
+const { buildPrintPage, sendPrintError } = require('../printWrapper');
 
 const LEVEL_ROLES  = { 1: 'area_manager', 2: 'manager_keuangan', 3: 'gm', 4: 'gm2', 5: 'direktur_ops', 6: 'direktur_utama' };
 const ROLE_LEVELS  = { area_manager: 1, manager_keuangan: 2, gm: 3, gm2: 4, direktur_ops: 5, direktur_utama: 6 };
@@ -626,6 +627,49 @@ router.get('/:id/export-pdf', requireLogin, async (req, res) => {
   } catch (err) {
     console.error('PDF error:', err);
     res.status(500).json({ error: 'Gagal generate PDF: ' + err.message });
+  }
+});
+
+// ── GET /api/kk/:id/print — halaman cetak browser ─────────────────────────────
+router.get('/:id/print', requireLogin, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const row = db.prepare(`
+    SELECT s.*, kk.*, u.full_name as creator_name
+    FROM submissions s
+    JOIN kertas_kerja kk ON kk.submission_id = s.id
+    LEFT JOIN users u ON s.created_by = u.id
+    WHERE s.id = ? AND s.submission_type = 'kk'
+  `).get(req.params.id);
+  if (!row) return sendPrintError(res, 404, 'KK tidak ditemukan');
+  if (row.status !== 'approved') return sendPrintError(res, 403, 'PDF hanya tersedia untuk KK yang sudah disetujui');
+
+  const user = req.session.user;
+  if (user.role === 'staff' && row.created_by !== user.id) return sendPrintError(res, 403, 'Akses ditolak');
+
+  const approvals = db.prepare(`
+    SELECT a.*, u.full_name as approver_name
+    FROM kk_approvals a LEFT JOIN users u ON a.approver_user_id = u.id
+    WHERE a.submission_id = ? ORDER BY a.level ASC
+  `).all(req.params.id);
+
+  const settings = {};
+  db.prepare('SELECT key, value FROM settings').all().forEach(s => { settings[s.key] = s.value; });
+
+  try {
+    const html = generateKKHTML(row, calcKK(row), approvals, settings);
+    const safeName = (row.nama_pekerjaan || 'KK').replace(/[^a-zA-Z0-9]/g, '_');
+    const page = buildPrintPage({
+      docHtml: html,
+      title: `KK_${safeName}`,
+      orientation: 'landscape',
+      topSpace: '10mm',
+      bottomSpace: '10mm',
+      sidePad: '8mm'
+    });
+    res.type('html').send(page);
+  } catch (err) {
+    console.error('Print page error:', err);
+    sendPrintError(res, 500, 'Gagal membuat halaman cetak: ' + err.message);
   }
 });
 

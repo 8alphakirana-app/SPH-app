@@ -3,7 +3,8 @@ const router = express.Router();
 const db = require('../database');
 const { notifySPHCreated, notifySPHResult } = require('../notif');
 const { generateDoc } = require('../docGenerator');
-const { generateHTML, generateHeaderHTML, generateFooterHTML } = require('../htmlGenerator');
+const { generateHTML, generateHeaderHTML, generateFooterHTML, generatePrintHeader, generatePrintFooter } = require('../htmlGenerator');
+const { buildPrintPage, sendPrintError } = require('../printWrapper');
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
@@ -515,6 +516,43 @@ router.get('/:id/download/pdf', requireLogin, async (req, res) => {
     } catch (err) {
           console.error('Error generating PDF:', err);
           res.status(500).json({ error: 'Gagal membuat PDF: ' + err.message });
+    }
+});
+
+// GET /api/submissions/:id/print - halaman cetak browser (Cetak / Simpan PDF)
+router.get('/:id/print', requireLogin, async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    const row = db.prepare(`
+        SELECT s.*, u.full_name as creator_name
+            FROM submissions s LEFT JOIN users u ON s.created_by = u.id
+                WHERE s.id = ?
+                  `).get(req.params.id);
+    if (!row) return sendPrintError(res, 404, 'Tidak ditemukan');
+    if (!canDownloadSPH(req.session.user, row))
+          return sendPrintError(res, 403, 'Akses ditolak');
+    if (row.status !== 'approved')
+          return sendPrintError(res, 403, 'Dokumen belum disetujui admin');
+    try {
+          const settings = {};
+          db.prepare('SELECT key, value FROM settings').all().forEach(s => { settings[s.key] = s.value; });
+          const submission = { ...row, items: JSON.parse(row.items) };
+          const html = await generateHTML(submission, settings);
+          const hasFooter = !!(settings.company_headoffice || settings.company_warehouse);
+          const title = `SPH_${row.nomor.replace(/\//g,'-')}_${row.client_name.replace(/[^a-zA-Z0-9]/g,'_')}`;
+          const page = buildPrintPage({
+                  docHtml: html,
+                  title,
+                  orientation: 'portrait',
+                  headerHtml: generatePrintHeader(settings),
+                  footerHtml: generatePrintFooter(settings),
+                  topSpace: '38mm',
+                  bottomSpace: hasFooter ? '28mm' : '15mm',
+                  sidePad: '20mm'
+          });
+          res.type('html').send(page);
+    } catch (err) {
+          console.error('Error generating print page:', err);
+          sendPrintError(res, 500, 'Gagal membuat halaman cetak: ' + err.message);
     }
 });
 

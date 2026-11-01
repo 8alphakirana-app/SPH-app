@@ -6,6 +6,7 @@ const sharp = require('sharp');
 const path = require('path');
 const fs = require('fs');
 const { notifySPPDNextLevel, notifySPPDResult } = require('../notif');
+const { buildPrintPage, sendPrintError } = require('../printWrapper');
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 function requireLogin(req, res, next) {
@@ -605,6 +606,55 @@ router.get('/:id/download/pdf', async (req, res) => {
   }
 });
 
+// ── Halaman cetak SPPD (browser) ──────────────────────────────────────────────
+router.get('/:id/print', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const user = req.session.user;
+  const sppd = db.prepare(`
+    SELECT s.*, u.full_name AS creator_name,
+       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 2 AND sa.status = 'approved') as gm1_approved,
+       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 3 AND sa.status = 'approved') as gm2_approved,
+       (SELECT CASE WHEN s.sppd_approval_level >= 1 AND NOT EXISTS (SELECT 1 FROM sppd_approvals sa2 WHERE sa2.sppd_id = s.id AND sa2.level = 1) THEN 1 ELSE 0 END) as am_skipped
+    FROM sppd s JOIN users u ON s.created_by = u.id WHERE s.id = ?
+  `).get(req.params.id);
+  if (!sppd) return sendPrintError(res, 404, 'SPPD tidak ditemukan');
+  const creator = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sppd.created_by);
+  const isSameArea = user.role === 'area_manager' && (creator?.area_kerja || '').trim().toLowerCase() === (user.area_kerja || '').trim().toLowerCase();
+  if (!canSeeAll(user.role) && sppd.created_by !== user.id && !isSameArea) return sendPrintError(res, 403, 'Forbidden');
+  if (!['approved', 'completed'].includes(sppd.status))
+    return sendPrintError(res, 400, 'SPPD belum disetujui');
+
+  try {
+    const settings = {};
+    db.prepare('SELECT key, value FROM settings').all().forEach(s => { settings[s.key] = s.value; });
+    const itinerary = db.prepare('SELECT * FROM sppd_itinerary WHERE sppd_id = ? ORDER BY id').all(sppd.id);
+    const approvals = db.prepare(`
+      SELECT sa.*, u.full_name, u.role, u.id AS approver_user_id
+      FROM sppd_approvals sa JOIN users u ON sa.approver_user_id = u.id
+      WHERE sa.sppd_id = ? ORDER BY sa.level
+    `).all(sppd.id);
+
+    const html = generateSPPDHtml(sppd, itinerary, approvals, settings);
+    const { generatePrintHeader, generatePrintFooter } = require('../htmlGenerator');
+    const hasFooter = !!(settings.company_headoffice || settings.company_warehouse);
+
+    const page = buildPrintPage({
+      docHtml: html,
+      title: `SPPD_${sppd.nomor.replace(/[^a-zA-Z0-9]/g, '_')}`,
+      orientation: 'portrait',
+      headerHtml: generatePrintHeader(settings),
+      footerHtml: generatePrintFooter(settings),
+      topSpace: '38mm',
+      bottomSpace: hasFooter ? '28mm' : '15mm',
+      sidePad: '20mm',
+    });
+    res.type('html').send(page);
+  } catch (err) {
+    console.error('Error generating SPPD print page:', err);
+    sendPrintError(res, 500, 'Gagal membuat halaman cetak: ' + err.message);
+  }
+});
+
 // ── Laporan PDF HTML generator ────────────────────────────────────────────────
 function generateLaporanHtml(sppd, laporan, kunjungan, biaya, approvals, settings) {
   const companyName = settings.company_name || 'PT. Lapan Alpha Kirana';
@@ -816,6 +866,59 @@ router.get('/:id/laporan/download/pdf', async (req, res) => {
   } catch (err) {
     console.error('Error generating Laporan PDF:', err);
     res.status(500).json({ error: 'Gagal membuat PDF: ' + err.message });
+  }
+});
+
+// ── Halaman cetak Laporan SPPD (browser) ──────────────────────────────────────
+router.get('/:id/laporan/print', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const user = req.session.user;
+  const sppd = db.prepare(`
+    SELECT s.*, u.full_name AS creator_name,
+       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 2 AND sa.status = 'approved') as gm1_approved,
+       (SELECT COUNT(*) FROM sppd_approvals sa WHERE sa.sppd_id = s.id AND sa.level = 3 AND sa.status = 'approved') as gm2_approved,
+       (SELECT CASE WHEN s.sppd_approval_level >= 1 AND NOT EXISTS (SELECT 1 FROM sppd_approvals sa2 WHERE sa2.sppd_id = s.id AND sa2.level = 1) THEN 1 ELSE 0 END) as am_skipped
+    FROM sppd s JOIN users u ON s.created_by = u.id WHERE s.id = ?
+  `).get(req.params.id);
+  if (!sppd) return sendPrintError(res, 404, 'SPPD tidak ditemukan');
+  const creator = db.prepare('SELECT area_kerja FROM users WHERE id=?').get(sppd.created_by);
+  const isSameArea = user.role === 'area_manager' && (creator?.area_kerja || '').trim().toLowerCase() === (user.area_kerja || '').trim().toLowerCase();
+  if (!canSeeAll(user.role) && sppd.created_by !== user.id && !isSameArea) return sendPrintError(res, 403, 'Forbidden');
+
+  const laporan = db.prepare('SELECT * FROM sppd_laporan WHERE sppd_id = ?').get(req.params.id);
+  if (!laporan) return sendPrintError(res, 404, 'Laporan tidak ditemukan');
+  if (laporan.status !== 'approved')
+    return sendPrintError(res, 400, 'Laporan belum disetujui');
+
+  try {
+    const settings = {};
+    db.prepare('SELECT key, value FROM settings').all().forEach(s => { settings[s.key] = s.value; });
+    const kunjungan = db.prepare('SELECT * FROM sppd_laporan_kunjungan WHERE laporan_id = ? ORDER BY id').all(laporan.id);
+    const biaya     = db.prepare('SELECT * FROM sppd_laporan_biaya WHERE laporan_id = ? ORDER BY id').all(laporan.id);
+    const approvals = db.prepare(`
+      SELECT la.*, u.full_name, u.id AS approver_user_id
+      FROM sppd_laporan_approvals la JOIN users u ON la.approver_user_id = u.id
+      WHERE la.laporan_id = ? ORDER BY la.level
+    `).all(laporan.id);
+
+    const html = generateLaporanHtml(sppd, laporan, kunjungan, biaya, approvals, settings);
+    const { generatePrintHeader, generatePrintFooter } = require('../htmlGenerator');
+    const hasFooter = !!(settings.company_headoffice || settings.company_warehouse);
+
+    const page = buildPrintPage({
+      docHtml: html,
+      title: `Laporan_${sppd.nomor.replace(/[^a-zA-Z0-9]/g, '_')}`,
+      orientation: 'portrait',
+      headerHtml: generatePrintHeader(settings),
+      footerHtml: generatePrintFooter(settings),
+      topSpace: '38mm',
+      bottomSpace: hasFooter ? '28mm' : '15mm',
+      sidePad: '20mm',
+    });
+    res.type('html').send(page);
+  } catch (err) {
+    console.error('Error generating Laporan print page:', err);
+    sendPrintError(res, 500, 'Gagal membuat halaman cetak: ' + err.message);
   }
 });
 
