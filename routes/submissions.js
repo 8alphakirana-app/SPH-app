@@ -528,6 +528,8 @@ router.get('/:id/print', requireLogin, async (req, res) => {
                 WHERE s.id = ?
                   `).get(req.params.id);
     if (!row) return sendPrintError(res, 404, 'Tidak ditemukan');
+    // Baris KK ikut tampil di daftar SPH untuk admin/KP/viewer → arahkan ke halaman cetak KK
+    if (row.submission_type === 'kk') return res.redirect(302, `/api/kk/${row.id}/print`);
     if (!canDownloadSPH(req.session.user, row))
           return sendPrintError(res, 403, 'Akses ditolak');
     if (row.status !== 'approved')
@@ -538,7 +540,9 @@ router.get('/:id/print', requireLogin, async (req, res) => {
           const submission = { ...row, items: JSON.parse(row.items) };
           const html = await generateHTML(submission, settings);
           const hasFooter = !!(settings.company_headoffice || settings.company_warehouse);
-          const title = `SPH_${row.nomor.replace(/\//g,'-')}_${row.client_name.replace(/[^a-zA-Z0-9]/g,'_')}`;
+          const safeNomor  = row.nomor ? row.nomor.replace(/\//g, '-') : `ID${row.id}`;
+          const safeClient = (row.client_name || 'Klien').replace(/[^a-zA-Z0-9]/g, '_');
+          const title = `SPH_${safeNomor}_${safeClient}`;
           const page = buildPrintPage({
                   docHtml: html,
                   title,
