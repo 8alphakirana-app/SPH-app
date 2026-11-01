@@ -256,4 +256,44 @@ function generateFooterHTML(settings) {
 </body></html>`;
 }
 
-module.exports = { generateHTML, generateHeaderHTML, generateFooterHTML };
+// ── Halaman cetak browser (window.print) ──
+// CSS ter-scope untuk kop & footer cetak (hanya selector .ph-* / .pf-*)
+const PRINT_HF_CSS = `<style>
+    .ph-wrap, .ph-wrap *, .pf-wrap, .pf-wrap * { box-sizing: border-box; margin: 0; padding: 0; }
+    .ph-wrap { font-family: Arial, sans-serif; width: 100%; padding: 0 20mm; background: #fff; }
+    .ph-logo-row { text-align: right; padding-top: 8mm; }
+    .ph-logo-row img { max-height: 20mm; max-width: 35mm; object-fit: contain; }
+    .ph-company { font-weight: bold; color: #1F4E79; }
+    .ph-divider { margin-top: 2mm; border: none; border-top: 3px solid #1F4E79; border-bottom: 1px solid #1F4E79; height: 3px; }
+    .pf-wrap { font-family: Arial, sans-serif; font-size: 7.5pt; color: #555; width: 100%; background: #fff; padding: 0 20mm 6mm; }
+    .pf-inner { border-top: 1.5px solid #1F4E79; padding-top: 2mm; text-align: center; line-height: 1.5; }
+    .pf-name { font-weight: bold; color: #1F4E79; font-size: 8pt; }
+</style>`;
+
+// generatePrintHeader — fragmen kop surat untuk halaman cetak browser
+function generatePrintHeader(settings) {
+    const companyName = settings.company_name || 'PT. Lapan Alpha Kirana';
+    let logoDataUrl = toBase64(path.join(__dirname, 'public', 'img', 'logo.png'));
+    if (!logoDataUrl) logoDataUrl = toBase64(path.join(__dirname, 'public', 'img', 'logo.jpg'));
+    return `<div class="ph-wrap">
+        <div class="ph-logo-row">
+            ${logoDataUrl ? `<img src="${logoDataUrl}" alt="Logo">` : `<span class="ph-company">${esc(companyName)}</span>`}
+        </div>
+        <div class="ph-divider"></div>
+    </div>`;
+}
+
+// generatePrintFooter — fragmen footer untuk halaman cetak browser ('' jika alamat kosong)
+function generatePrintFooter(settings) {
+    const companyName       = settings.company_name       || 'PT. Lapan Alpha Kirana';
+    const companyHeadoffice = settings.company_headoffice || '';
+    const companyWarehouse  = settings.company_warehouse  || '';
+    if (!companyHeadoffice && !companyWarehouse) return '';
+    return `<div class="pf-wrap"><div class="pf-inner">
+        <span class="pf-name">${esc(companyName.toUpperCase())}</span>
+        ${companyHeadoffice ? `<br>Head Office : ${esc(companyHeadoffice)}` : ''}
+        ${companyWarehouse  ? `<br>Warehouse : ${esc(companyWarehouse)}`   : ''}
+    </div></div>`;
+}
+
+module.exports = { generateHTML, generateHeaderHTML, generateFooterHTML, generatePrintHeader, generatePrintFooter, PRINT_HF_CSS };
