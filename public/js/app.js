@@ -256,6 +256,7 @@ function showPage(page) {
               'my-kk': 'Kertas Kerja Saya',
               'kk-approvals': 'Persetujuan Kertas Kerja',
               'admin-kk': 'Semua Kertas Kerja',
+              'kode-barang': 'Kode Barang & e-Catalog',
               'new-sppd': 'Buat SPPD Baru',
               'my-sppd': 'SPPD Saya',
               'sppd-approvals': 'Persetujuan SPPD',
@@ -290,6 +291,7 @@ function showPage(page) {
        else if (page === 'my-kk') loadMyKK();
        else if (page === 'kk-approvals') loadKKApprovals();
        else if (page === 'admin-kk') loadAdminKK();
+       else if (page === 'kode-barang') loadKodeBarang();
        else if (page === 'new-sppd') initSPPDForm();
        else if (page === 'my-sppd') loadMySPPD();
        else if (page === 'sppd-approvals') loadSPPDApprovals();
@@ -5523,6 +5525,7 @@ function _timeSince(dateStr) {
 }
 
 async function loadNotifications() {
+       refreshKodeBarangBadge();
        try {
               const res = await api('/api/notifications');
               if (!res.ok) return;
@@ -5561,6 +5564,178 @@ async function loadNotifications() {
        } catch (e) {
               console.warn('[notif] load error:', e);
        }
+}
+
+// ===================== KODE BARANG & E-CATALOG (ADMIN) =====================
+let kodeBarangStatus = 'menunggu';
+let kodeBarangRows = [];
+let kodeBarangTarget = null;
+let _kbSearchTimer = null;
+
+async function refreshKodeBarangBadge() {
+       if (currentUser?.role !== 'admin') return;
+       const el = document.getElementById('badge-kode-barang');
+       if (!el) return;
+       try {
+              const res = await api('/api/kode-barang/count');
+              if (!res.ok) return;
+              const { menunggu } = await res.json();
+              el.textContent = menunggu > 0 ? (menunggu > 99 ? '99+' : menunggu) : '';
+       } catch { }
+}
+
+function kodeBarangQueryString() {
+       const params = new URLSearchParams({ status: kodeBarangStatus });
+       const jenis = document.getElementById('kb-jenis')?.value || '';
+       const q = (document.getElementById('kb-search')?.value || '').trim();
+       if (jenis) params.set('jenis', jenis);
+       if (q) params.set('q', q);
+       return params.toString();
+}
+
+function setKodeBarangTab(status) {
+       kodeBarangStatus = status;
+       document.querySelectorAll('#kb-tabs .kb-tab').forEach(b => b.classList.toggle('active', b.dataset.status === status));
+       loadKodeBarang();
+}
+
+function onKodeBarangSearch() {
+       clearTimeout(_kbSearchTimer);
+       _kbSearchTimer = setTimeout(loadKodeBarang, 300);
+}
+
+async function loadKodeBarang() {
+       const container = document.getElementById('kode-barang-container');
+       if (!container) return;
+       container.innerHTML = '<div class="loading">⏳ Memuat...</div>';
+       try {
+              const res = await api('/api/kode-barang?' + kodeBarangQueryString());
+              const data = await res.json();
+              if (!res.ok) { container.innerHTML = `<div class="alert alert-error">${escHtml(data.error || 'Gagal memuat data')}</div>`; return; }
+              kodeBarangRows = data;
+              container.innerHTML = renderKodeBarangTable(data);
+       } catch { container.innerHTML = '<div class="alert alert-error">Gagal memuat data</div>'; }
+       refreshKodeBarangBadge();
+}
+
+function kodeBarangKKStatusColor(r) {
+       return r.kk_status === 'rejected' ? 'var(--red)' : r.kk_status === 'approved' ? 'var(--green)' : 'var(--text-light)';
+}
+
+function kodeBarangSupplierText(r) {
+       if (!r.supplier_nama) return '-';
+       return escHtml(r.supplier_nama) + (r.supplier_status ? ` <small>(${escHtml(KK_SUPPLIER_STATUS_LABELS[r.supplier_status] || r.supplier_status)})</small>` : '');
+}
+
+function renderKodeBarangTable(rows) {
+       if (!rows.length) return emptyState('Tidak ada antrian kode barang / e-Catalog');
+       return `<div class="table-responsive"><table class="table kb-table">
+         <thead><tr>
+           <th>Tgl Masuk</th><th>No. KK</th><th>Nama Barang</th><th>Jenis</th><th>Satuan</th><th>Tipe</th><th>Supplier</th>
+           <th style="text-align:right">Harga Jual DPP/unit</th><th style="text-align:right">Harga Beli DPP/unit</th>
+           <th>Status KK</th><th>Status Antrian</th><th>Kode Barang</th><th>Aksi</th>
+         </tr></thead>
+         <tbody>${rows.map(r => `<tr>
+           <td style="white-space:nowrap">${formatDate(r.created_at)}</td>
+           <td><strong>${escHtml(r.nomor_surat || '-')}</strong><br><small style="color:var(--text-light)">${escHtml(r.nama_pekerjaan || '')}</small></td>
+           <td>${escHtml(r.nama_barang || '-')}</td>
+           <td>${kodeBarangJenisBadges(r) || '-'}</td>
+           <td>${escHtml(r.satuan || '-')}</td>
+           <td>${r.perlu_kode_baru ? escHtml(KK_TIPE_BARANG_LABELS[r.tipe_barang] || r.tipe_barang || '-') : '-'}</td>
+           <td>${kodeBarangSupplierText(r)}</td>
+           <td style="text-align:right;white-space:nowrap">Rp ${formatRupiah(r.harga_jual_dpp || 0)}</td>
+           <td style="text-align:right;white-space:nowrap">Rp ${formatRupiah(r.harga_beli_dpp || 0)}${r.ada_faktur ? '' : '<br><span class="badge kb-badge-nonfaktur">Non-faktur</span>'}</td>
+           <td style="color:${kodeBarangKKStatusColor(r)}">${escHtml(r.status_kk_label || '-')}</td>
+           <td>${kodeBarangStatusBadge(r.status)}${r.kk_ditolak ? '<br><span class="kb-ditolak">KK ditolak — cek kode</span>' : ''}</td>
+           <td>${r.kode_barang ? `<strong>${escHtml(r.kode_barang)}</strong>` : '-'}</td>
+           <td style="white-space:nowrap">${r.status === 'menunggu'
+              ? `<button onclick="openKodeBarangProses(${r.id})" class="btn btn-primary btn-sm">Proses</button>`
+              : `<button onclick="viewKKDetail(${r.submission_id})" class="btn btn-outline btn-sm">Lihat KK</button>`}</td>
+         </tr>`).join('')}</tbody>
+       </table></div>`;
+}
+
+// Link brosur: hanya http(s) yang dijadikan tautan
+function kodeBarangSafeLink(url) {
+       const u = String(url || '').trim();
+       if (!u) return '-';
+       if (!/^https?:\/\//i.test(u)) return escHtml(u);
+       return `<a href="${escHtml(u)}" target="_blank" rel="noopener">${escHtml(u)}</a>`;
+}
+
+function openKodeBarangProses(id) {
+       const r = kodeBarangRows.find(x => x.id === id);
+       if (!r) return;
+       kodeBarangTarget = r;
+       const item = (label, val) => `<div class="detail-item"><label>${label}</label><div class="value">${val}</div></div>`;
+       document.getElementById('kb-modal-info').innerHTML = `
+              <div class="detail-grid" style="grid-template-columns:repeat(2,1fr)">
+                     ${item('Nama Barang', `<strong>${escHtml(r.nama_barang || '-')}</strong>`)}
+                     ${item('Jenis', kodeBarangJenisBadges(r) || '-')}
+                     ${item('No. KK', `${escHtml(r.nomor_surat || '-')} · <a href="#" onclick="closeModal('modal-kode-barang');viewKKDetail(${r.submission_id});return false">Lihat KK</a>`)}
+                     ${item('Nama Pekerjaan', escHtml(r.nama_pekerjaan || '-'))}
+                     ${item('Pelanggan', escHtml(r.pelanggan || '-'))}
+                     ${item('Diajukan Oleh', escHtml(r.creator_name || '-'))}
+                     ${item('Status KK', `<span style="color:${kodeBarangKKStatusColor(r)}">${escHtml(r.status_kk_label || '-')}</span>`)}
+                     ${item('Satuan', escHtml(r.satuan || '-'))}
+                     ${r.perlu_kode_baru ? item('Tipe Barang', escHtml(KK_TIPE_BARANG_LABELS[r.tipe_barang] || r.tipe_barang || '-')) : ''}
+                     ${item('Supplier', kodeBarangSupplierText(r))}
+                     ${item('Harga Jual DPP/unit', 'Rp ' + formatRupiah(r.harga_jual_dpp || 0))}
+                     ${item('Harga Beli DPP/unit', 'Rp ' + formatRupiah(r.harga_beli_dpp || 0) + (r.ada_faktur ? '' : ' <span class="badge kb-badge-nonfaktur">Non-faktur</span>'))}
+                     ${item('Link / Brosur', kodeBarangSafeLink(r.link_produk))}
+                     ${item('Kode Barang Lama', escHtml(r.kode_barang_lama || '-'))}
+              </div>`;
+       const kodeInput = document.getElementById('kb-kode-input');
+       kodeInput.value = '';
+       kodeInput.placeholder = r.perlu_kode_baru ? 'Kode barang di sistem (wajib)' : 'Kode barang (opsional)';
+       document.getElementById('kb-kode-required').style.display = r.perlu_kode_baru ? '' : 'none';
+       document.getElementById('kb-catatan-input').value = '';
+       document.getElementById('kb-modal-error').style.display = 'none';
+       showModal('modal-kode-barang');
+}
+
+function showKodeBarangError(msg) {
+       const el = document.getElementById('kb-modal-error');
+       el.textContent = msg;
+       el.style.display = 'block';
+}
+
+async function submitKodeBarangAction(action, body, okMsg) {
+       try {
+              const res = await api(`/api/kode-barang/${kodeBarangTarget.id}/${action}`, 'PUT', body);
+              const data = await res.json();
+              if (!res.ok) { showKodeBarangError(data.error || 'Gagal menyimpan'); return; }
+              showToast(okMsg, 'success');
+              closeModal('modal-kode-barang');
+              loadKodeBarang();
+       } catch { showKodeBarangError('Koneksi gagal'); }
+}
+
+function submitKodeBarangSelesai() {
+       if (!kodeBarangTarget) return;
+       const kode_barang = document.getElementById('kb-kode-input').value.trim();
+       const catatan_admin = document.getElementById('kb-catatan-input').value.trim();
+       if (kodeBarangTarget.perlu_kode_baru && !kode_barang) { showKodeBarangError('Kode barang wajib diisi untuk produk kode baru'); return; }
+       submitKodeBarangAction('selesai', { kode_barang, catatan_admin }, '✅ Antrian ditandai selesai');
+}
+
+function submitKodeBarangBatal() {
+       if (!kodeBarangTarget) return;
+       const catatan_admin = document.getElementById('kb-catatan-input').value.trim();
+       if (!catatan_admin) { showKodeBarangError('Catatan wajib diisi untuk membatalkan'); return; }
+       submitKodeBarangAction('batal', { catatan_admin }, 'Antrian dibatalkan');
+}
+
+async function exportKodeBarangExcel() {
+       showToast('⏳ Menyiapkan Excel...', '');
+       try {
+              const res = await fetch('/api/kode-barang/export-excel?' + kodeBarangQueryString(), { credentials: 'same-origin' });
+              if (!res.ok) { let d; try { d = await res.json(); } catch { } showToast(d?.error || 'Gagal', 'error'); return; }
+              const blob = await res.blob();
+              const filename = res.headers.get('content-disposition')?.match(/filename="([^"]+)"/)?.[1] || 'kode-barang.xlsx';
+              triggerDownload(URL.createObjectURL(blob), filename);
+              showToast('✅ Excel berhasil diunduh!', 'success');
+       } catch { showToast('Gagal mengunduh Excel', 'error'); }
 }
 
 async function onNotifClick(id, refType, refId) {

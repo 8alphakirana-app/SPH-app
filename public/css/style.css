@@ -1316,3 +1316,17 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
 .kb-ditolak { color: var(--red); font-weight: 700; font-size: 11px; }
 .kk-prod-meta { padding: 2px 0 4px 10px; font-size: 11px; color: var(--text-light); display: flex; flex-direction: column; gap: 3px; }
 .kk-prod-meta .badge { font-size: 10px; }
+
+/* ── Kode Barang & e-Catalog (admin) ── */
+.menu-item #badge-kode-barang { margin-left: auto; background: var(--red); color: #fff; padding: 1px 7px; font-size: 10px; }
+.menu-item #badge-kode-barang:empty { display: none; }
+.kb-tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.kb-tab { padding: 6px 14px; border: 1px solid var(--gray-border); background: #fff; border-radius: 20px; font-size: 13px; cursor: pointer; color: var(--text); }
+.kb-tab.active { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 600; }
+.kb-table td { font-size: 12.5px; vertical-align: top; }
+#content-kode-barang .page-header { flex-wrap: wrap; gap: 12px; }
+#content-kode-barang .filter-bar { flex-wrap: wrap; }
+.kb-table .badge { white-space: nowrap; }
+/* Grid minmax(0,1fr): tabel lebar scroll di dalam card, tidak melebarkan halaman */
+#content-kode-barang { display: grid; grid-template-columns: minmax(0, 1fr); }
+.kk-product-table .kk-prod-qty, .kk-product-table input[data-field="qty"] { min-width: 52px; }
