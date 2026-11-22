@@ -30,6 +30,75 @@ function blockViewer(req, res, next) {
   next();
 }
 
+// ── Produk KK: sanitasi, validasi, PPN beli per produk ───────────────────────
+const TIPE_BARANG_VALID     = ['serial', 'lot_ed', 'none'];
+const SUPPLIER_STATUS_VALID = ['pks', 'lokal'];
+
+function toBool(v) {
+  return v === true || v === 1 || v === '1' || v === 'true' || v === 'on';
+}
+
+// PPN beli per produk; data lama tanpa ppn_beli → dpp_beli * 11%
+function getPpnBeli(p) {
+  if (!p) return 0;
+  if (p.ppn_beli === undefined || p.ppn_beli === null) return (parseFloat(p.dpp_beli) || 0) * 0.11;
+  return parseFloat(p.ppn_beli) || 0;
+}
+
+function sanitizeProducts(products) {
+  return (Array.isArray(products) ? products : []).map(p => {
+    p = p || {};
+    const qty         = parseFloat(p.qty) || 0;
+    const hargaSatuan = parseFloat(p.harga_satuan) || 0;
+    const dppBeli     = parseFloat(p.dpp_beli) || 0;
+    const adaFaktur   = (p.ada_faktur === undefined || p.ada_faktur === null) ? true : toBool(p.ada_faktur);
+    return {
+      nama:             p.nama || '',
+      qty,
+      harga_satuan:     hargaSatuan,
+      nilai_kontrak:    qty * hargaSatuan || parseFloat(p.nilai_kontrak) || 0,
+      dpp_beli:         dppBeli,
+      b_distribusi:     parseFloat(p.b_distribusi) || 0,
+      ongkir:           parseFloat(p.ongkir) || 0,
+      perlu_kode_baru:  toBool(p.perlu_kode_baru),
+      tayang_ecatalog:  toBool(p.tayang_ecatalog),
+      satuan:           String(p.satuan ?? '').trim(),
+      tipe_barang:      String(p.tipe_barang ?? '').trim(),
+      supplier_nama:    String(p.supplier_nama ?? '').trim(),
+      supplier_status:  String(p.supplier_status ?? '').trim(),
+      ada_faktur:       adaFaktur,
+      link_produk:      String(p.link_produk ?? '').trim(),
+      kode_barang_lama: String(p.kode_barang_lama ?? '').trim(),
+      ppn_beli:         adaFaktur ? dppBeli * 0.11 : 0,
+    };
+  });
+}
+
+// Mengembalikan array pesan error per baris (kosong = valid)
+function validateProducts(arr) {
+  const errors = [];
+  (arr || []).forEach((p, i) => {
+    const n = `Produk #${i + 1}`;
+    const tipeInvalid   = p.tipe_barang !== '' && !TIPE_BARANG_VALID.includes(p.tipe_barang);
+    const statusInvalid = p.supplier_status !== '' && !SUPPLIER_STATUS_VALID.includes(p.supplier_status);
+    if (tipeInvalid)   errors.push(`${n}: Tipe barang tidak valid (pilih serial/lot_ed/none)`);
+    if (statusInvalid) errors.push(`${n}: Status supplier tidak valid (pilih pks/lokal)`);
+
+    if (p.perlu_kode_baru) {
+      if (!p.satuan)                         errors.push(`${n}: Satuan wajib diisi untuk kode barang baru`);
+      if (!p.tipe_barang)                    errors.push(`${n}: Tipe barang wajib dipilih untuk kode barang baru`);
+      if (!p.supplier_nama)                  errors.push(`${n}: Nama supplier wajib diisi untuk kode barang baru`);
+      if (!p.supplier_status)                errors.push(`${n}: Status supplier (PKS/Lokal) wajib dipilih untuk kode barang baru`);
+      if (!(p.qty > 0))                      errors.push(`${n}: Qty harus lebih dari 0 untuk kode barang baru`);
+      if (!(p.harga_satuan > 0))             errors.push(`${n}: Harga satuan harus lebih dari 0 untuk kode barang baru`);
+      if (!(p.dpp_beli > 0))                 errors.push(`${n}: DPP beli harus lebih dari 0 untuk kode barang baru`);
+    } else if (p.tayang_ecatalog) {
+      if (!p.satuan)                         errors.push(`${n}: Satuan wajib diisi untuk tayang e-Catalog`);
+    }
+  });
+  return errors;
+}
+
 function calcKK(kk) {
   let products = [];
   try { products = JSON.parse(kk.products || '[]'); } catch {}
@@ -42,12 +111,14 @@ function calcKK(kk) {
       : (parseFloat(p.qty) || 0) * (parseFloat(p.harga_satuan) || 0)
   }));
 
-  let nkt, dppBeli, bDistribusi, ongkir;
+  let nkt, dppBeli, bDistribusi, ongkir, ppnBeli, nilaiPembyr;
   if (products.length > 0) {
     nkt          = products.reduce((s, p) => s + (p.nilai_kontrak || 0), 0);
     dppBeli      = products.reduce((s, p) => s + (p.dpp_beli || 0), 0);
     bDistribusi  = products.reduce((s, p) => s + (p.b_distribusi || 0), 0);
     ongkir       = products.reduce((s, p) => s + (p.ongkir || 0), 0);
+    ppnBeli      = products.reduce((s, p) => s + getPpnBeli(p), 0);
+    nilaiPembyr  = dppBeli + ppnBeli;
   } else {
     nkt          = parseFloat(kk.nilai_kontrak_total) || 0;
     dppBeli      = parseFloat(kk.dpp_beli) || (parseFloat(kk.nilai_pembyr) || 0) / 1.11;
@@ -55,6 +126,9 @@ function calcKK(kk) {
     ongkir       = parseFloat(kk.ongkir) || 0;
     const bdo    = (bDistribusi + ongkir) || parseFloat(kk.b_distribusi_ongkir) || 0;
     if (!bDistribusi && !ongkir && bdo) bDistribusi = bdo;
+    // KK tanpa array produk → rumus lama
+    ppnBeli      = dppBeli * 0.11;
+    nilaiPembyr  = dppBeli * 1.11;
   }
 
   const bdo            = bDistribusi + ongkir;
@@ -62,9 +136,6 @@ function calcKK(kk) {
   const ppnKontrak     = dppKontrak * 0.11;
   const pphKontrak     = dppKontrak * 0.015;
   const penerimaanUang = nkt - (ppnKontrak + pphKontrak);
-
-  const ppnBeli        = dppBeli * 0.11;
-  const nilaiPembyr    = dppBeli * 1.11;
 
   const surplusDefisit = penerimaanUang - (dppBeli + ppnBeli + bdo);
   const laba           = dppKontrak - dppBeli - bdo;
@@ -96,16 +167,10 @@ router.post('/', requireLogin, blockViewer, (req, res) => {
     return res.status(400).json({ error: 'Nama pekerjaan dan pelanggan wajib diisi' });
   }
 
-  const productsArr    = (Array.isArray(products) ? products : []).map(p => ({
-    nama:          p.nama || '',
-    qty:           parseFloat(p.qty) || 0,
-    harga_satuan:  parseFloat(p.harga_satuan) || 0,
-    nilai_kontrak: (parseFloat(p.qty) || 0) * (parseFloat(p.harga_satuan) || 0)
-                   || parseFloat(p.nilai_kontrak) || 0,
-    dpp_beli:      parseFloat(p.dpp_beli) || 0,
-    b_distribusi:  parseFloat(p.b_distribusi) || 0,
-    ongkir:        parseFloat(p.ongkir) || 0,
-  }));
+  const productsArr    = sanitizeProducts(products);
+  const productErrors  = validateProducts(productsArr);
+  if (productErrors.length) return res.status(400).json({ error: productErrors.join('; ') });
+  productsArr.forEach(p => { if (!p.tipe_barang) p.tipe_barang = 'none'; });
   const productsJson   = JSON.stringify(productsArr);
   const totNkt         = productsArr.length > 0
     ? productsArr.reduce((s, p) => s + (parseFloat(p.nilai_kontrak) || 0), 0)
@@ -113,7 +178,9 @@ router.post('/', requireLogin, blockViewer, (req, res) => {
   const dppBeliVal     = productsArr.length > 0
     ? productsArr.reduce((s, p) => s + (parseFloat(p.dpp_beli) || 0), 0)
     : parseFloat(dpp_beli) || 0;
-  const nilaiPembyrVal = dppBeliVal * 1.11;
+  const nilaiPembyrVal = productsArr.length > 0
+    ? productsArr.reduce((s, p) => s + p.dpp_beli + p.ppn_beli, 0)
+    : dppBeliVal * 1.11;
   const bDistribusiVal = productsArr.length > 0
     ? productsArr.reduce((s, p) => s + (parseFloat(p.b_distribusi) || 0), 0)
     : parseFloat(b_distribusi) || 0;
@@ -298,25 +365,20 @@ router.put('/:id', requireLogin, (req, res) => {
   if (!nama_pekerjaan || !pelanggan) return res.status(400).json({ error: 'Nama pekerjaan dan pelanggan wajib diisi' });
 
   const existingKK     = db.prepare('SELECT nomor_surat FROM kertas_kerja WHERE submission_id=?').get(req.params.id);
-  const productsArr    = (Array.isArray(products) ? products : []).map(p => ({
-    nama:          p.nama || '',
-    qty:           parseFloat(p.qty) || 0,
-    harga_satuan:  parseFloat(p.harga_satuan) || 0,
-    nilai_kontrak: (parseFloat(p.qty) || 0) * (parseFloat(p.harga_satuan) || 0)
-                   || parseFloat(p.nilai_kontrak) || 0,
-    dpp_beli:      parseFloat(p.dpp_beli) || 0,
-    b_distribusi:  parseFloat(p.b_distribusi) || 0,
-    ongkir:        parseFloat(p.ongkir) || 0,
-  }));
+  const productsArr    = sanitizeProducts(products);
+  const productErrors  = validateProducts(productsArr);
+  if (productErrors.length) return res.status(400).json({ error: productErrors.join('; ') });
+  productsArr.forEach(p => { if (!p.tipe_barang) p.tipe_barang = 'none'; });
   const productsJson   = JSON.stringify(productsArr);
-  const dppBeliVal     = parseFloat(dpp_beli) || 0;
-  const nilaiPembyrVal = dppBeliVal * 1.11;
-  const bDistribusiVal = parseFloat(b_distribusi) || 0;
-  const ongkirVal      = parseFloat(ongkir) || 0;
+  const hasProducts    = productsArr.length > 0;
+  const sumP           = key => productsArr.reduce((s, p) => s + (p[key] || 0), 0);
+  // Ada produk → hitung ulang total dari produk; tanpa produk → perilaku lama (nilai kiriman client)
+  const dppBeliVal     = hasProducts ? sumP('dpp_beli') : parseFloat(dpp_beli) || 0;
+  const nilaiPembyrVal = hasProducts ? dppBeliVal + sumP('ppn_beli') : dppBeliVal * 1.11;
+  const bDistribusiVal = hasProducts ? sumP('b_distribusi') : parseFloat(b_distribusi) || 0;
+  const ongkirVal      = hasProducts ? sumP('ongkir') : parseFloat(ongkir) || 0;
   const bdoVal         = bDistribusiVal + ongkirVal;
-  const totNkt         = productsArr.length > 0
-    ? productsArr.reduce((s, p) => s + (parseFloat(p.nilai_kontrak) || 0), 0)
-    : parseFloat(nilai_kontrak_total) || 0;
+  const totNkt         = hasProducts ? sumP('nilai_kontrak') : parseFloat(nilai_kontrak_total) || 0;
 
   db.prepare('UPDATE submissions SET client_name=?, notes=? WHERE id=?').run(pelanggan, notes || '', req.params.id);
   db.prepare(`
@@ -718,8 +780,8 @@ function generateKKHTML(row, calc, approvals, settings) {
       const pPphK = pDppK * 0.015;
       const pPen  = (p.nilai_kontrak || 0) - pPpnK - pPphK;
       const pDppB = p.dpp_beli || 0;
-      const pPpnB = pDppB * 0.11;
-      const pNPay = pDppB * 1.11;
+      const pPpnB = getPpnBeli(p);
+      const pNPay = pDppB + pPpnB;
       const pBdo  = (p.b_distribusi || 0) + (p.ongkir || 0);
       const pSurp = pPen - (pDppB + pPpnB + pBdo);
       const pLaba = pDppK - pDppB - pBdo;
@@ -1059,8 +1121,8 @@ async function generateExcel(row, calc, approvals, settings) {
       const pPpnK = pDppK * 0.11;
       const pPphK = pDppK * 0.015;
       const pPen  = pNkt - (pPpnK + pPphK);
-      const pPpnB = pDppB * 0.11;
-      const pNPay = pDppB * 1.11;
+      const pPpnB = getPpnBeli(p);
+      const pNPay = pDppB + pPpnB;
       const pSurp = pPen - (pDppB + pPpnB + pBdo);
       const pLaba = pDppK - pDppB - pBdo;
       const pNM   = pDppK > 0 ? (pLaba / pDppK) * 100 : 0;
