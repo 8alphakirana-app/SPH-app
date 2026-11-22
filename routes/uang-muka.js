@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../database');
 const { notifyUMNextLevel, notifyUMResult } = require('../notif');
+const { isFeatureEnabled, getErpNotice } = require('../featureFlags');
 
 const ROLE_LEVELS  = { area_manager: 1, manager_keuangan: 2, gm: 3, gm2: 4, direktur_ops: 5, direktur_utama: 6 };
 const LEVEL_LABELS = { 1: 'Area Manager', 2: 'Manager Keuangan', 3: 'GM 1', 4: 'GM 2', 5: 'Direktur Operasional', 6: 'Direktur Utama' };
@@ -37,6 +38,8 @@ function generateNomorUM() {
 
 // ── POST /api/uang-muka ─────────────────────────────────────────────────────
 router.post('/', requireLogin, blockViewer, (req, res) => {
+  // Pembuatan Uang Muka baru dipindah ke ERP (saklar di settings)
+  if (!isFeatureEnabled('um_create_enabled')) return res.status(403).json({ error: getErpNotice('erp_notice_um') });
   const { keperluan, nominal, tanggal_dibutuhkan, catatan } = req.body;
   if (!keperluan) return res.status(400).json({ error: 'Keperluan wajib diisi' });
   const nominalVal = Number(nominal) || 0;

@@ -5,6 +5,7 @@ const { notifySPHCreated, notifySPHResult } = require('../notif');
 const { generateDoc } = require('../docGenerator');
 const { generateHTML, generateHeaderHTML, generateFooterHTML, generatePrintHeader, generatePrintFooter } = require('../htmlGenerator');
 const { buildPrintPage, sendPrintError } = require('../printWrapper');
+const { isFeatureEnabled, getErpNotice } = require('../featureFlags');
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
@@ -358,6 +359,16 @@ router.get('/bulk-pdf-zip-all', requireLogin, async (req, res) => {
 });
 
 // GET /api/submissions/:id - detail
+// GET /api/submissions/meta/features — status saklar fitur untuk semua user login
+router.get('/meta/features', requireLogin, (req, res) => {
+    res.json({
+          sppd_create_enabled: isFeatureEnabled('sppd_create_enabled'),
+          um_create_enabled: isFeatureEnabled('um_create_enabled'),
+          erp_notice_sppd: getErpNotice('erp_notice_sppd'),
+          erp_notice_um: getErpNotice('erp_notice_um'),
+    });
+});
+
 router.get('/:id', requireLogin, (req, res) => {
     const row = db.prepare(`
         SELECT s.*, u.full_name as creator_name, a.full_name as approver_name
@@ -618,10 +629,15 @@ router.get('/meta/settings', requireAdminOrKP, (req, res) => {
 
 // PUT /api/submissions/meta/settings
 router.put('/meta/settings', requireAdminOrKP, (req, res) => {
-    const allowed = ['company_name','company_tagline','company_address','company_phone','company_email','company_headoffice','company_warehouse','signer_name','signer_title','nomor_prefix','kk_kota'];
+    const allowed = ['company_name','company_tagline','company_address','company_phone','company_email','company_headoffice','company_warehouse','signer_name','signer_title','nomor_prefix','kk_kota',
+          'sppd_nomor_prefix','sppd_kota_asal','sppd_create_enabled','um_create_enabled','erp_notice_sppd','erp_notice_um'];
+    const toggles = ['sppd_create_enabled','um_create_enabled'];
     const stmt = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
     for (const key of allowed) {
-          if (req.body[key] !== undefined) stmt.run(key, req.body[key]);
+          if (req.body[key] === undefined) continue;
+          let val = req.body[key];
+          if (toggles.includes(key)) val = [true, 1, '1', 'true', 'on'].includes(val) ? '1' : '0';
+          stmt.run(key, val);
     }
     res.json({ success: true });
 });

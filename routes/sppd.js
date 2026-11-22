@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const { notifySPPDNextLevel, notifySPPDResult } = require('../notif');
 const { buildPrintPage, sendPrintError } = require('../printWrapper');
+const { isFeatureEnabled, getErpNotice } = require('../featureFlags');
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 function requireLogin(req, res, next) {
@@ -262,6 +263,8 @@ router.get('/', (req, res) => {
 
 // ── Create SPPD ───────────────────────────────────────────────────────────────
 router.post('/', blockViewer, (req, res) => {
+  // Pembuatan SPPD baru dipindah ke ERP (saklar di settings)
+  if (!isFeatureEnabled('sppd_create_enabled')) return res.status(403).json({ error: getErpNotice('erp_notice_sppd') });
   const { id: userId } = req.session.user;
   const creatorUser = db.prepare('SELECT full_name, role, jabatan_detail, area_kerja FROM users WHERE id = ?').get(userId);
   const nama_pegawai = creatorUser.full_name;

@@ -464,6 +464,20 @@ if (pencairanDef && !pencairanDef.sql.includes('jumlah_usulan')) {
   db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)').run(key, val);
 });
 
+// ── Saklar pembuatan SPPD & Uang Muka (pindah ke ERP) — default MATI ─────────
+// INSERT OR IGNORE: tidak menimpa nilai yang sudah diatur admin
+{
+  const { ERP_NOTICE_DEFAULTS } = require('./featureFlags');
+  [
+    ['sppd_create_enabled', '0'],
+    ['um_create_enabled', '0'],
+    ['erp_notice_sppd', ERP_NOTICE_DEFAULTS.erp_notice_sppd],
+    ['erp_notice_um', ERP_NOTICE_DEFAULTS.erp_notice_um],
+  ].forEach(([key, val]) => {
+    db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)').run(key, val);
+  });
+}
+
 // ── Default user marketing1 ───────────────────────────────────────────────────
 if (!db.prepare('SELECT id FROM users WHERE username = ?').get('marketing1')) {
   db.prepare('INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)').run('marketing1', 'kirana', 'Marketing 1', 'marketing');
