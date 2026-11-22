@@ -2717,14 +2717,20 @@ function initKKForm() {
        document.getElementById('kk-form-error').style.display = 'none';
 }
 
-function calcKKValues(nkt, dppBeli, bDistribusi, ongkir) {
+// PPN beli per produk: non-faktur → 0
+function kkProdPpnBeli(p) {
+       return p.ada_faktur === false ? 0 : (p.dpp_beli || 0) * 0.11;
+}
+
+// ppnBeliTotal opsional (Σ PPN beli per produk); jika tidak diisi → rumus lama dppBeli × 11%
+function calcKKValues(nkt, dppBeli, bDistribusi, ongkir, ppnBeliTotal) {
        const bdo = bDistribusi + ongkir;
        const dppKontrak = nkt / 1.11;
        const ppnKontrak = dppKontrak * 0.11;
        const pphKontrak = dppKontrak * 0.015;
        const penerimaanUang = nkt - (ppnKontrak + pphKontrak);
-       const ppnBeli = dppBeli * 0.11;
-       const nilaiPembyr = dppBeli * 1.11;
+       const ppnBeli = ppnBeliTotal === undefined ? dppBeli * 0.11 : ppnBeliTotal;
+       const nilaiPembyr = ppnBeliTotal === undefined ? dppBeli * 1.11 : dppBeli + ppnBeli;
        const surplusDefisit = penerimaanUang - (dppBeli + ppnBeli + bdo);
        const laba = dppKontrak - dppBeli - bdo;
        const bMargin = penerimaanUang > 0 ? (bDistribusi / penerimaanUang) * 100 : 0;
@@ -2751,7 +2757,8 @@ function updateKKCalc() {
        const totDpp = products.reduce((s, p) => s + p.dpp_beli, 0);
        const totDist = products.reduce((s, p) => s + p.b_distribusi, 0);
        const totOngkir = products.reduce((s, p) => s + p.ongkir, 0);
-       const c = calcKKValues(totNkt, totDpp, totDist, totOngkir);
+       const totPpnBeli = products.reduce((s, p) => s + kkProdPpnBeli(p), 0);
+       const c = calcKKValues(totNkt, totDpp, totDist, totOngkir, totPpnBeli);
        const fmt = n => 'Rp ' + formatRupiah(Math.round(n));
        const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
        set('cv-nilai-kontrak-total', fmt(totNkt));
@@ -2968,12 +2975,45 @@ async function loadAdminKK() {
        } catch { container.innerHTML = '<div class="alert alert-error">Gagal memuat data</div>'; }
 }
 
+// Badge status antrian kode barang (dipakai detail KK & halaman admin)
+function kodeBarangStatusBadge(status) {
+       const m = { menunggu: ['badge-pending', 'Menunggu'], selesai: ['badge-approved', 'Selesai'], batal: ['badge-rejected', 'Batal'] }[status];
+       return m ? `<span class="badge ${m[0]}">${m[1]}</span>` : `<span class="badge">${escHtml(status || '-')}</span>`;
+}
+
+function kodeBarangJenisBadges(r) {
+       return (r.perlu_kode_baru ? '<span class="badge kb-badge-kode">Kode baru</span> ' : '')
+              + (r.tayang_ecatalog ? '<span class="badge kb-badge-ecat">e-Cat</span> ' : '');
+}
+
+// Info tambahan per produk di detail KK: flag, satuan/tipe/supplier, non-faktur, status antrian
+function renderKKProdMeta(p, q) {
+       const badges = kodeBarangJenisBadges(p) + (p.ada_faktur === false ? '<span class="badge kb-badge-nonfaktur">Non-faktur</span>' : '');
+       const info = [];
+       if (p.satuan) info.push(`Satuan: ${escHtml(p.satuan)}`);
+       if (p.perlu_kode_baru && p.tipe_barang) info.push(`Tipe: ${escHtml(KK_TIPE_BARANG_LABELS[p.tipe_barang] || p.tipe_barang)}`);
+       if (p.supplier_nama) info.push(`Supplier: ${escHtml(p.supplier_nama)}${p.supplier_status ? ' (' + escHtml(KK_SUPPLIER_STATUS_LABELS[p.supplier_status] || p.supplier_status) + ')' : ''}`);
+       let queue = '';
+       if (q) {
+              queue = `Antrian: ${kodeBarangStatusBadge(q.status)}`
+                     + (q.kode_barang ? ` · Kode: <strong>${escHtml(q.kode_barang)}</strong>` : '')
+                     + (q.kk_ditolak ? ' <span class="kb-ditolak">KK ditolak — cek kode</span>' : '');
+       }
+       if (!badges && !info.length && !queue) return '';
+       return `<div class="kk-prod-meta">
+              ${badges ? `<div>${badges}</div>` : ''}
+              ${info.length ? `<div>${info.join(' · ')}</div>` : ''}
+              ${queue ? `<div>${queue}</div>` : ''}
+       </div>`;
+}
+
 async function viewKKDetail(id) {
        try {
               const res = await api(`/api/kk/${id}`);
               const kk = await res.json();
               if (!res.ok) { showToast(kk.error || 'Gagal memuat', 'error'); return; }
               let kkProds = []; try { kkProds = JSON.parse(kk.products || '[]'); } catch { }
+              const kbQueue = Array.isArray(kk.kode_barang) ? kk.kode_barang : [];
               const c = kk.calc || calcKKValues(kk.nilai_kontrak_total || 0, kk.dpp_beli || (kk.nilai_pembyr || 0) / 1.11, kk.b_distribusi || 0, kk.ongkir || 0);
               const fmt = n => 'Rp ' + formatRupiah(Math.round(n));
               const approvals = kk.approvals || [];
@@ -3034,7 +3074,8 @@ async function viewKKDetail(id) {
                                      ${(p.qty || p.harga_satuan) ? `
                                      <div class="kk-finance-row"><span style="padding-left:10px">Qty</span><span>${p.qty || 0}</span></div>
                                      <div class="kk-finance-row"><span style="padding-left:10px">Harga Satuan</span><span>Rp ${formatRupiah(p.harga_satuan || 0)}</span></div>` : ''}
-                                     <div class="kk-finance-row"><span style="padding-left:10px">DPP Beli</span><span>Rp ${formatRupiah(p.dpp_beli || 0)}</span></div>
+                                     ${renderKKProdMeta(p, kbQueue.find(q => q.product_idx === i))}
+                                     <div class="kk-finance-row"><span style="padding-left:10px">${p.ada_faktur === false ? 'Harga Beli Fix' : 'DPP Beli'}</span><span>Rp ${formatRupiah(p.dpp_beli || 0)}</span></div>
                                      <div class="kk-finance-row"><span style="padding-left:10px">B. Distribusi <small style="color:var(--blue)">${pDist}</small></span><span>Rp ${formatRupiah(p.b_distribusi || 0)}</span></div>
                                      <div class="kk-finance-row" style="margin-bottom:6px"><span style="padding-left:10px">Ongkir <small style="color:var(--blue)">${pOngk}</small></span><span>Rp ${formatRupiah(p.ongkir || 0)}</span></div>`;
               }).join('') : `

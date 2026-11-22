@@ -1310,3 +1310,9 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
 .kk-sub-field.kk-sub-wide { flex: 1 1 200px; }
 .kk-sub-field label { font-size: 11px; font-weight: 600; color: var(--text-light); }
 .kk-sub-field small { font-weight: 400; }
+.kb-badge-kode { background: #ede9fe; color: #5b21b6; }
+.kb-badge-ecat { background: #e0f2fe; color: #075985; }
+.kb-badge-nonfaktur { background: #ffedd5; color: #9a3412; }
+.kb-ditolak { color: var(--red); font-weight: 700; font-size: 11px; }
+.kk-prod-meta { padding: 2px 0 4px 10px; font-size: 11px; color: var(--text-light); display: flex; flex-direction: column; gap: 3px; }
+.kk-prod-meta .badge { font-size: 10px; }
