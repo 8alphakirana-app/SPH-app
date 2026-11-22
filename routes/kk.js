@@ -374,7 +374,9 @@ router.get('/:id', requireLogin, (req, res) => {
     WHERE a.submission_id = ? ORDER BY a.level ASC
   `).all(req.params.id);
 
-  res.json({ ...row, items: [], calc: calcKK(row), approvals });
+  const kode_barang = db.prepare('SELECT * FROM kk_kode_barang WHERE submission_id=? ORDER BY product_idx').all(req.params.id);
+
+  res.json({ ...row, items: [], calc: calcKK(row), approvals, kode_barang });
 });
 
 // ── PUT /api/kk/:id  (edit KK yg masih pending level 1) ──────────────────────
