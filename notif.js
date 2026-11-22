@@ -109,6 +109,37 @@ function notifyKKResult(kkId, creatorId, action) {
   });
 }
 
+// ── Kode Barang / e-Catalog (antrian admin dari KK) ──────────────────────────
+function notifyKodeBarangBaru(kkId, jumlah) {
+  _notifyByRoles(['admin'], {
+    title: 'Permintaan Kode Barang / e-Catalog',
+    body: `${jumlah} produk dari KK #${kkId} menunggu diproses`,
+    type: 'approval',
+    ref_type: 'kode_barang',
+    ref_id: kkId,
+  });
+}
+
+function notifyKodeBarangKKDitolak(kkId) {
+  _notifyByRoles(['admin'], {
+    title: 'KK Ditolak — Cek Kode Barang',
+    body: `KK #${kkId} ditolak setelah kode barang dibuat`,
+    type: 'reject',
+    ref_type: 'kode_barang',
+    ref_id: kkId,
+  });
+}
+
+function notifyKodeBarangSelesai(kkId, creatorId, namaBarang, kodeBarang) {
+  createNotification(creatorId, {
+    title: 'Kode Barang Selesai Diproses',
+    body: `${namaBarang}${kodeBarang ? ' → ' + kodeBarang : ''} (KK #${kkId})`,
+    type: 'success',
+    ref_type: 'kk',
+    ref_id: kkId,
+  });
+}
+
 // ── SPPD ──────────────────────────────────────────────────────────────────────
 function notifySPPDNextLevel(sppdId, nextLevel, creatorAreaKerja) {
   const roles = SPPD_APPROVER_ROLES[nextLevel];
@@ -161,6 +192,7 @@ module.exports = {
   createNotification,
   notifySPHCreated, notifySPHResult,
   notifyKKNextLevel, notifyKKResult,
+  notifyKodeBarangBaru, notifyKodeBarangKKDitolak, notifyKodeBarangSelesai,
   notifySPPDNextLevel, notifySPPDResult,
   notifyUMNextLevel, notifyUMResult,
 };

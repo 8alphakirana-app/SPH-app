@@ -41,6 +41,7 @@ app.use(session({
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/submissions', require('./routes/submissions'));
 app.use('/api/kk', require('./routes/kk'));
+app.use('/api/kode-barang', require('./routes/kode-barang'));
 app.use('/api/sppd', require('./routes/sppd'));
 app.use('/api/backup', require('./routes/backup'));
 app.use('/api/laporan', require('./routes/laporan'));

@@ -1297,6 +1297,40 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
   .mm-sum-card { min-width: 0; }
 }
 
+/* ── KK: flag produk kode barang baru / e-Catalog / faktur ── */
+.kk-flag-cell { white-space: nowrap; }
+.kk-flag { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; color: var(--text); cursor: pointer; margin: 1px 0; }
+.kk-flag input { margin: 0; }
+.kk-faktur-flag { margin-top: 3px; color: var(--text-light); }
+.kp-dpp-caption { display: block; font-size: 10px; font-weight: 600; color: #b45309; min-height: 0; }
+.kp-dpp-caption:empty { display: none; }
+.kk-prod-sub > td { background: #f8fafc; border-top: none; padding-top: 4px !important; }
+.kk-sub-fields { display: flex; flex-wrap: wrap; gap: 8px 12px; padding: 6px 4px; border-left: 3px solid var(--blue); padding-left: 10px; }
+.kk-sub-field { display: flex; flex-direction: column; gap: 2px; min-width: 120px; flex: 0 1 140px; }
+.kk-sub-field.kk-sub-wide { flex: 1 1 200px; }
+.kk-sub-field label { font-size: 11px; font-weight: 600; color: var(--text-light); }
+.kk-sub-field small { font-weight: 400; }
+.kb-badge-kode { background: #ede9fe; color: #5b21b6; }
+.kb-badge-ecat { background: #e0f2fe; color: #075985; }
+.kb-badge-nonfaktur { background: #ffedd5; color: #9a3412; }
+.kb-ditolak { color: var(--red); font-weight: 700; font-size: 11px; }
+.kk-prod-meta { padding: 2px 0 4px 10px; font-size: 11px; color: var(--text-light); display: flex; flex-direction: column; gap: 3px; }
+.kk-prod-meta .badge { font-size: 10px; }
+
+/* ── Kode Barang & e-Catalog (admin) ── */
+.menu-item #badge-kode-barang { margin-left: auto; background: var(--red); color: #fff; padding: 1px 7px; font-size: 10px; }
+.menu-item #badge-kode-barang:empty { display: none; }
+.kb-tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.kb-tab { padding: 6px 14px; border: 1px solid var(--gray-border); background: #fff; border-radius: 20px; font-size: 13px; cursor: pointer; color: var(--text); }
+.kb-tab.active { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 600; }
+.kb-table td { font-size: 12.5px; vertical-align: top; }
+#content-kode-barang .page-header { flex-wrap: wrap; gap: 12px; }
+#content-kode-barang .filter-bar { flex-wrap: wrap; }
+.kb-table .badge { white-space: nowrap; }
+/* Grid minmax(0,1fr): tabel lebar scroll di dalam card, tidak melebarkan halaman */
+#content-kode-barang { display: grid; grid-template-columns: minmax(0, 1fr); }
+.kk-product-table .kk-prod-qty, .kk-product-table input[data-field="qty"] { min-width: 52px; }
+
 /* ── Pemberitahuan pindah ke ERP (SPPD & Uang Muka) ── */
 .erp-notice { display: flex; align-items: flex-start; gap: 10px; background: #eff6ff; color: #1e3a8a; border-left: 4px solid var(--blue); border-radius: 6px; padding: 12px 14px; margin-bottom: 16px; font-size: 13.5px; line-height: 1.5; }
 .erp-notice-icon { flex-shrink: 0; }

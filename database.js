@@ -263,6 +263,38 @@ try { db.exec("ALTER TABLE kertas_kerja ADD COLUMN ongkir REAL DEFAULT 0"); } ca
 // ── Add products JSON to kertas_kerja ─────────────────────────────────────────
 try { db.exec("ALTER TABLE kertas_kerja ADD COLUMN products TEXT DEFAULT '[]'"); } catch {}
 
+// ── Antrian kode barang baru & e-Catalog per produk KK ────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS kk_kode_barang (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    submission_id INTEGER NOT NULL,
+    product_idx INTEGER NOT NULL,
+    nama_barang TEXT DEFAULT '',
+    satuan TEXT DEFAULT '',
+    tipe_barang TEXT DEFAULT 'none',        -- 'serial' | 'lot_ed' | 'none'
+    supplier_nama TEXT DEFAULT '',
+    supplier_status TEXT DEFAULT '',        -- 'pks' | 'lokal'
+    harga_jual_dpp REAL DEFAULT 0,          -- per unit, snapshot
+    harga_beli_dpp REAL DEFAULT 0,          -- per unit, snapshot
+    ada_faktur INTEGER DEFAULT 1,
+    perlu_kode_baru INTEGER DEFAULT 0,
+    tayang_ecatalog INTEGER DEFAULT 0,
+    link_produk TEXT DEFAULT '',
+    kode_barang_lama TEXT DEFAULT '',
+    status TEXT DEFAULT 'menunggu',         -- 'menunggu' | 'selesai' | 'batal'
+    kode_barang TEXT DEFAULT '',
+    catatan_admin TEXT DEFAULT '',
+    kk_ditolak INTEGER DEFAULT 0,
+    processed_by INTEGER,
+    processed_at TEXT,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    UNIQUE(submission_id, product_idx),
+    FOREIGN KEY (submission_id) REFERENCES submissions(id),
+    FOREIGN KEY (processed_by) REFERENCES users(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_kk_kode_barang_status ON kk_kode_barang(status);
+`);
+
 // ── SPPD tables ───────────────────────────────────────────────────────────────
 db.exec(`
   CREATE TABLE IF NOT EXISTS sppd (

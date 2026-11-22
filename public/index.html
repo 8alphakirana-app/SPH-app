@@ -94,6 +94,9 @@
                   class="menu-item" data-page="kk-approvals"><span class="icon">✅</span> Persetujuan KK</a></li>
               <li class="kk-all" style="display:none"><a href="#" onclick="showPage('admin-kk')" class="menu-item"
                   data-page="admin-kk"><span class="icon">🗂️</span> Semua Kertas Kerja</a></li>
+              <li class="admin-only" style="display:none"><a href="#" onclick="showPage('kode-barang')" class="menu-item"
+                  data-page="kode-barang"><span class="icon">🏷️</span> Kode Barang &amp; e-Catalog <span class="badge"
+                    id="badge-kode-barang"></span></a></li>
             </ul>
           </li>
 
@@ -924,7 +927,7 @@
                 </div>
                 <div class="card-body">
                   <div class="table-responsive" style="margin-bottom:12px">
-                    <table class="table kk-product-table" style="min-width:740px">
+                    <table class="table kk-product-table" style="min-width:840px">
                       <thead>
                         <tr>
                           <th style="width:30px">No</th>
@@ -937,6 +940,7 @@
                           <th style="width:60px">% Dist</th>
                           <th style="width:120px">Ongkir</th>
                           <th style="width:60px">% Ongkir</th>
+                          <th style="width:96px">Flag</th>
                           <th style="width:32px"></th>
                         </tr>
                       </thead>
@@ -1089,6 +1093,34 @@
             </div>
             <div class="card">
               <div id="admin-kk-container">
+                <div class="loading">⏳ Memuat...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ═══════════ KODE BARANG & E-CATALOG (ADMIN) ═══════════ -->
+          <div id="content-kode-barang" class="content-page" style="display:none">
+            <div class="page-header">
+              <h1 class="page-title">Kode Barang &amp; e-Catalog</h1>
+              <div class="filter-bar">
+                <input type="text" id="kb-search" placeholder="🔍 Cari barang / supplier / no. KK / pekerjaan..."
+                  oninput="onKodeBarangSearch()" style="min-width:240px">
+                <select id="kb-jenis" onchange="loadKodeBarang()">
+                  <option value="">Semua Jenis</option>
+                  <option value="kode_baru">Kode baru</option>
+                  <option value="ecat">e-Catalog saja</option>
+                </select>
+                <button onclick="exportKodeBarangExcel()" class="btn btn-success btn-sm">📊 Export Excel</button>
+              </div>
+            </div>
+            <div class="kb-tabs" id="kb-tabs">
+              <button type="button" class="kb-tab active" data-status="menunggu" onclick="setKodeBarangTab('menunggu')">Menunggu</button>
+              <button type="button" class="kb-tab" data-status="selesai" onclick="setKodeBarangTab('selesai')">Selesai</button>
+              <button type="button" class="kb-tab" data-status="batal" onclick="setKodeBarangTab('batal')">Batal</button>
+              <button type="button" class="kb-tab" data-status="semua" onclick="setKodeBarangTab('semua')">Semua</button>
+            </div>
+            <div class="card">
+              <div id="kode-barang-container">
                 <div class="loading">⏳ Memuat...</div>
               </div>
             </div>
@@ -1976,6 +2008,33 @@
       <div class="modal-footer" id="kk-detail-footer"></div>
     </div>
   </div>
+  <!-- ═══════════ PROSES KODE BARANG MODAL ═══════════ -->
+  <div id="modal-kode-barang" class="modal" style="display:none">
+    <div class="modal-backdrop" onclick="closeModal('modal-kode-barang')"></div>
+    <div class="modal-dialog modal-lg">
+      <div class="modal-header">
+        <h3>🏷️ Proses Kode Barang / e-Catalog</h3><button onclick="closeModal('modal-kode-barang')"
+          class="btn-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="kb-modal-info"></div>
+        <div class="form-group" style="margin-top:12px">
+          <label>Kode Barang <span class="required" id="kb-kode-required">*</span></label>
+          <input type="text" id="kb-kode-input" placeholder="Kode barang di sistem">
+        </div>
+        <div class="form-group">
+          <label>Catatan <small id="kb-catatan-hint">(wajib jika dibatalkan)</small></label>
+          <textarea id="kb-catatan-input" rows="2" placeholder="Catatan untuk antrian ini"></textarea>
+        </div>
+        <div id="kb-modal-error" class="alert alert-error" style="display:none"></div>
+      </div>
+      <div class="modal-footer">
+        <button onclick="submitKodeBarangSelesai()" class="btn btn-success">✅ Tandai Selesai</button>
+        <button onclick="submitKodeBarangBatal()" class="btn btn-danger">🚫 Batalkan</button>
+        <button onclick="closeModal('modal-kode-barang')" class="btn btn-outline">Tutup</button>
+      </div>
+    </div>
+  </div>
   <!-- ═══════════ KK APPROVE/REJECT MODAL ═══════════ -->
   <div id="modal-kk-action" class="modal" style="display:none">
     <div class="modal-backdrop" onclick="closeModal('modal-kk-action')"></div>
@@ -2415,7 +2474,7 @@
           </div>
           <div class="card-body">
             <div class="table-responsive" style="margin-bottom:12px">
-              <table class="table kk-product-table" style="min-width:740px">
+              <table class="table kk-product-table" style="min-width:940px">
                 <thead>
                   <tr>
                     <th style="width:30px">No</th>
@@ -2426,6 +2485,7 @@
                     <th style="width:140px">DPP Beli</th>
                     <th style="width:120px">B. Distribusi</th>
                     <th style="width:120px">Ongkir</th>
+                    <th style="width:96px">Flag</th>
                     <th style="width:32px"></th>
                   </tr>
                 </thead>
