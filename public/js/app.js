@@ -2912,7 +2912,7 @@ async function viewKKDetail(id) {
                      </div>
                      <div class="detail-section-title">📋 Term of Payment</div>
                      <div class="detail-grid" style="grid-template-columns:1fr 1fr">
-                            <div class="detail-item"><label>Supplier</label><div class="value">${escHtml(kk.term_payment_supplier || '-')}</div></div>
+                            <div class="detail-item"><label>TOP Supplier</label><div class="value">${escHtml(kk.term_payment_supplier || '-')}</div></div>
                             <div class="detail-item"><label>Pelanggan</label><div class="value">${escHtml(kk.term_payment_pelanggan || '-')}</div></div>
                      </div>
                      <div class="detail-section-title">🔄 Progress Approval</div>
@@ -5361,9 +5361,26 @@ async function onNotifClick(id, refType, refId) {
        try { await api(`/api/notifications/${id}/read`, 'POST'); } catch { }
        _lastUnreadCount = Math.max(0, _lastUnreadCount - 1);
        await loadNotifications();
-       if (refType === 'sph' && refId) showPage('all-sph');
-       else if (refType === 'kk' && refId) showPage('kk-semua');
-       else if (refType === 'sppd' && refId) showPage('sppd-semua');
+       const NOTIF_PAGE_CANDIDATES = {
+              sph: ['admin-submissions', 'sph-approvals', 'my-submissions'],
+              kk: ['admin-kk', 'kk-approvals', 'my-kk'],
+              sppd: ['admin-sppd', 'sppd-approvals', 'my-sppd'],
+              kode_barang: ['kode-barang', 'my-kk'],
+       };
+       const candidates = NOTIF_PAGE_CANDIDATES[refType];
+       if (!candidates || !refId) return;
+       showPage(pickVisibleMenuPage(candidates) || 'dashboard');
+}
+
+// Pilih data-page pertama yang menunya ada di DOM dan terlihat (bukan display:none, termasuk parent <li>)
+function pickVisibleMenuPage(candidates) {
+       const isShown = el => !el || getComputedStyle(el).display !== 'none';
+       for (const page of candidates) {
+              const el = document.querySelector(`.menu-item[data-page="${page}"]`);
+              if (!el) continue;
+              if (isShown(el) && isShown(el.closest('li')) && isShown(el.closest('.nav-group'))) return page;
+       }
+       return null;
 }
 
 async function markAllRead() {
