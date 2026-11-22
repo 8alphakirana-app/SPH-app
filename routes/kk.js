@@ -3,7 +3,7 @@ const router  = express.Router();
 const db      = require('../database');
 const fs      = require('fs');
 const path    = require('path');
-const { notifyKKNextLevel, notifyKKResult } = require('../notif');
+const { notifyKKNextLevel, notifyKKResult, notifyKodeBarangBaru, notifyKodeBarangKKDitolak } = require('../notif');
 const { buildPrintPage, sendPrintError } = require('../printWrapper');
 
 const LEVEL_ROLES  = { 1: 'area_manager', 2: 'manager_keuangan', 3: 'gm', 4: 'gm2', 5: 'direktur_ops', 6: 'direktur_utama' };
@@ -97,6 +97,36 @@ function validateProducts(arr) {
     }
   });
   return errors;
+}
+
+// Buat antrian kk_kode_barang untuk produk berflag (idempotent via UNIQUE). Return jumlah baris baru.
+function createKodeBarangQueue(submissionId) {
+  const kk = db.prepare('SELECT products FROM kertas_kerja WHERE submission_id=?').get(submissionId);
+  let products = [];
+  try { products = JSON.parse(kk?.products || '[]'); } catch {}
+  if (!Array.isArray(products)) return 0;
+
+  const ins = db.prepare(`
+    INSERT OR IGNORE INTO kk_kode_barang
+      (submission_id, product_idx, nama_barang, satuan, tipe_barang, supplier_nama, supplier_status,
+       harga_jual_dpp, harga_beli_dpp, ada_faktur, perlu_kode_baru, tayang_ecatalog, link_produk, kode_barang_lama)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `);
+  let created = 0;
+  products.forEach((p, idx) => {
+    if (!p || !(p.perlu_kode_baru || p.tayang_ecatalog)) return;
+    const qty = parseFloat(p.qty) || 0;
+    created += ins.run(
+      submissionId, idx, p.nama || '', p.satuan || '', p.tipe_barang || 'none',
+      p.supplier_nama || '', p.supplier_status || '',
+      Math.round((parseFloat(p.harga_satuan) || 0) / 1.11),
+      qty > 0 ? Math.round((parseFloat(p.dpp_beli) || 0) / qty) : 0,
+      p.ada_faktur === false ? 0 : 1,
+      p.perlu_kode_baru ? 1 : 0, p.tayang_ecatalog ? 1 : 0,
+      p.link_produk || '', p.kode_barang_lama || ''
+    ).changes;
+  });
+  return created;
 }
 
 function calcKK(kk) {
@@ -467,6 +497,16 @@ router.post('/:id/approve', requireLogin, (req, res) => {
   db.prepare("UPDATE kk_approvals SET status='approved', approver_user_id=?, note=?, acted_at=? WHERE submission_id=? AND level=?")
     .run(user.id, note || '', now, req.params.id, approvalLevel);
 
+  // Tahap GM (level 3/4): buat antrian kode barang / e-Catalog (dobel dicegah UNIQUE)
+  if (approvalLevel === 3 || approvalLevel === 4) {
+    try {
+      const jumlahBaru = createKodeBarangQueue(req.params.id);
+      if (jumlahBaru > 0) notifyKodeBarangBaru(req.params.id, jumlahBaru);
+    } catch (e) {
+      console.error('[kk] createKodeBarangQueue error:', e);
+    }
+  }
+
   // Determine next kk_approval_level
   let nextLevel;
   if (approvalLevel === 3 || approvalLevel === 4) {
@@ -541,6 +581,17 @@ router.post('/:id/reject', requireLogin, (req, res) => {
     .run(user.id, note || '', now, req.params.id, approvalLevel);
   db.prepare("UPDATE submissions SET status='rejected', reject_reason=? WHERE id=?").run(note || 'Ditolak', req.params.id);
   notifyKKResult(req.params.id, sub.created_by, 'rejected');
+
+  // Antrian kode barang: batalkan yang menunggu; tandai yang sudah selesai
+  try {
+    db.prepare(`UPDATE kk_kode_barang SET status='batal',
+                  catatan_admin=CASE WHEN catatan_admin='' THEN 'Otomatis: KK ditolak' ELSE catatan_admin END
+                WHERE submission_id=? AND status='menunggu'`).run(req.params.id);
+    const ditandai = db.prepare("UPDATE kk_kode_barang SET kk_ditolak=1 WHERE submission_id=? AND status='selesai'").run(req.params.id);
+    if (ditandai.changes > 0) notifyKodeBarangKKDitolak(req.params.id);
+  } catch (e) {
+    console.error('[kk] kode barang reject error:', e);
+  }
 
   res.json({ success: true });
 });
