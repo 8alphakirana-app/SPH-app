@@ -1296,3 +1296,17 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
   .mm-summary-row { flex-direction: column; }
   .mm-sum-card { min-width: 0; }
 }
+
+/* ── KK: flag produk kode barang baru / e-Catalog / faktur ── */
+.kk-flag-cell { white-space: nowrap; }
+.kk-flag { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; color: var(--text); cursor: pointer; margin: 1px 0; }
+.kk-flag input { margin: 0; }
+.kk-faktur-flag { margin-top: 3px; color: var(--text-light); }
+.kp-dpp-caption { display: block; font-size: 10px; font-weight: 600; color: #b45309; min-height: 0; }
+.kp-dpp-caption:empty { display: none; }
+.kk-prod-sub > td { background: #f8fafc; border-top: none; padding-top: 4px !important; }
+.kk-sub-fields { display: flex; flex-wrap: wrap; gap: 8px 12px; padding: 6px 4px; border-left: 3px solid var(--blue); padding-left: 10px; }
+.kk-sub-field { display: flex; flex-direction: column; gap: 2px; min-width: 120px; flex: 0 1 140px; }
+.kk-sub-field.kk-sub-wide { flex: 1 1 200px; }
+.kk-sub-field label { font-size: 11px; font-weight: 600; color: var(--text-light); }
+.kk-sub-field small { font-weight: 400; }

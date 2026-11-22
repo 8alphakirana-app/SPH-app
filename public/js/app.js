@@ -2521,39 +2521,180 @@ async function deleteSubmission(id) {
 let kkActionTargetId = null;
 let kkActionType = null;
 
+// ── Flag produk KK: kode barang baru / e-Catalog / faktur (dipakai form Buat & Edit KK) ──
+const KK_TIPE_BARANG_LABELS = { serial: 'Serial Number', lot_ed: 'Batch + ED', none: 'Tanpa tracking' };
+const KK_SUPPLIER_STATUS_LABELS = { pks: 'PKS', lokal: 'Lokal' };
+
+function renderKKFlagCell(p = {}) {
+       return `<td class="kk-flag-cell">
+         <label class="kk-flag"><input type="checkbox" class="kp-flag-kb" ${p.perlu_kode_baru ? 'checked' : ''} onchange="toggleKKProdSub(this)"> Kode baru</label>
+         <label class="kk-flag"><input type="checkbox" class="kp-flag-ec" ${p.tayang_ecatalog ? 'checked' : ''} onchange="toggleKKProdSub(this)"> e-Cat</label>
+       </td>`;
+}
+
+function renderKKDppCaption(p = {}) {
+       const ada = p.ada_faktur !== false;
+       return `<span class="kp-dpp-caption">${ada ? '' : 'Harga Beli Fix'}</span>`;
+}
+
+function renderKKFakturCheckbox(p = {}) {
+       const ada = p.ada_faktur !== false;
+       return `<label class="kk-flag kk-faktur-flag"><input type="checkbox" class="kp-faktur" ${ada ? 'checked' : ''} onchange="toggleKKFaktur(this)"> Ada faktur</label>`;
+}
+
+function renderKKSubRow(p = {}, colspan) {
+       const kb = !!p.perlu_kode_baru;
+       const sel = (v, cur) => (v === cur ? 'selected' : '');
+       const tipe = kb ? (p.tipe_barang || '') : '';
+       return `<tr class="kk-prod-sub" style="display:none">
+         <td></td>
+         <td colspan="${colspan - 1}">
+           <div class="kk-sub-fields">
+             <div class="kk-sub-field"><label>Satuan <span class="required">*</span></label>
+               <input type="text" class="table-input kp-satuan" placeholder="Unit / Box / Pcs" value="${escHtml(p.satuan || '')}"></div>
+             <div class="kk-sub-field kp-only-kb"><label>Tipe barang <span class="required">*</span></label>
+               <select class="table-input kp-tipe">
+                 <option value="">— Pilih —</option>
+                 <option value="serial" ${sel('serial', tipe)}>Serial Number</option>
+                 <option value="lot_ed" ${sel('lot_ed', tipe)}>Batch + ED</option>
+                 <option value="none" ${sel('none', tipe)}>Tanpa tracking</option>
+               </select></div>
+             <div class="kk-sub-field kk-sub-wide kp-only-kb"><label>Nama supplier <span class="required">*</span></label>
+               <input type="text" class="table-input kp-sup-nama" placeholder="Nama supplier" value="${escHtml(p.supplier_nama || '')}"></div>
+             <div class="kk-sub-field kp-only-kb"><label>Status supplier <span class="required">*</span></label>
+               <select class="table-input kp-sup-status">
+                 <option value="">— Pilih —</option>
+                 <option value="pks" ${sel('pks', p.supplier_status)}>PKS</option>
+                 <option value="lokal" ${sel('lokal', p.supplier_status)}>Lokal</option>
+               </select></div>
+             <div class="kk-sub-field kk-sub-wide"><label>Link / brosur <small>(opsional)</small></label>
+               <input type="text" class="table-input kp-link" placeholder="https://..." value="${escHtml(p.link_produk || '')}"></div>
+             <div class="kk-sub-field kp-only-ec"><label>Kode barang lama <small>(opsional)</small></label>
+               <input type="text" class="table-input kp-kode-lama" placeholder="Kode lama" value="${escHtml(p.kode_barang_lama || '')}"></div>
+           </div>
+         </td>
+       </tr>`;
+}
+
+function getKKSubRow(row) {
+       const sub = row?.nextElementSibling;
+       return sub && sub.classList.contains('kk-prod-sub') ? sub : null;
+}
+
+function applyKKProdSub(row) {
+       const kb = !!row.querySelector('.kp-flag-kb')?.checked;
+       const ec = !!row.querySelector('.kp-flag-ec')?.checked;
+       const sub = getKKSubRow(row);
+       if (!sub) return;
+       sub.style.display = (kb || ec) ? '' : 'none';
+       sub.querySelectorAll('.kp-only-kb').forEach(el => el.style.display = kb ? '' : 'none');
+       sub.querySelectorAll('.kp-only-ec').forEach(el => el.style.display = (ec && !kb) ? '' : 'none');
+}
+
+function toggleKKProdSub(el) {
+       applyKKProdSub(el.closest('tr'));
+}
+
+function applyKKFaktur(row) {
+       const ada = row.querySelector('.kp-faktur')?.checked !== false;
+       const input = row.querySelector('.kp-dpp');
+       if (input) {
+              input.placeholder = ada ? '0' : 'Harga Beli Fix';
+              input.title = ada ? 'DPP Beli' : 'Harga Beli Fix (tanpa faktur pajak, PPN beli = 0)';
+       }
+       const cap = row.querySelector('.kp-dpp-caption');
+       if (cap) cap.textContent = ada ? '' : 'Harga Beli Fix';
+}
+
+function toggleKKFaktur(el) {
+       const row = el.closest('tr');
+       applyKKFaktur(row);
+       if (row.closest('#kk-products-tbody')) updateKKCalc();
+}
+
+// Field tambahan produk (flag, faktur, sub-baris). Field yang tersembunyi dikirim kosong.
+function readKKProdExtra(row) {
+       const sub = getKKSubRow(row);
+       const kb = !!row.querySelector('.kp-flag-kb')?.checked;
+       const ec = !!row.querySelector('.kp-flag-ec')?.checked;
+       const v = sel => (sub?.querySelector(sel)?.value || '').trim();
+       const fak = row.querySelector('.kp-faktur');
+       return {
+              perlu_kode_baru: kb,
+              tayang_ecatalog: ec,
+              satuan: (kb || ec) ? v('.kp-satuan') : '',
+              tipe_barang: kb ? v('.kp-tipe') : '',
+              supplier_nama: kb ? v('.kp-sup-nama') : '',
+              supplier_status: kb ? v('.kp-sup-status') : '',
+              ada_faktur: fak ? fak.checked : true,
+              link_produk: (kb || ec) ? v('.kp-link') : '',
+              kode_barang_lama: (ec && !kb) ? v('.kp-kode-lama') : '',
+       };
+}
+
+// Validasi sama dengan server (routes/kk.js validateProducts)
+function validateKKProductsClient(products) {
+       const errors = [];
+       products.forEach((p, i) => {
+              const n = `Produk #${i + 1}`;
+              if (p.tipe_barang && !['serial', 'lot_ed', 'none'].includes(p.tipe_barang)) errors.push(`${n}: Tipe barang tidak valid (pilih serial/lot_ed/none)`);
+              if (p.supplier_status && !['pks', 'lokal'].includes(p.supplier_status)) errors.push(`${n}: Status supplier tidak valid (pilih pks/lokal)`);
+              if (p.perlu_kode_baru) {
+                     if (!p.satuan) errors.push(`${n}: Satuan wajib diisi untuk kode barang baru`);
+                     if (!p.tipe_barang) errors.push(`${n}: Tipe barang wajib dipilih untuk kode barang baru`);
+                     if (!p.supplier_nama) errors.push(`${n}: Nama supplier wajib diisi untuk kode barang baru`);
+                     if (!p.supplier_status) errors.push(`${n}: Status supplier (PKS/Lokal) wajib dipilih untuk kode barang baru`);
+                     if (!(p.qty > 0)) errors.push(`${n}: Qty harus lebih dari 0 untuk kode barang baru`);
+                     if (!(p.harga_satuan > 0)) errors.push(`${n}: Harga satuan harus lebih dari 0 untuk kode barang baru`);
+                     if (!(p.dpp_beli > 0)) errors.push(`${n}: DPP beli harus lebih dari 0 untuk kode barang baru`);
+              } else if (p.tayang_ecatalog) {
+                     if (!p.satuan) errors.push(`${n}: Satuan wajib diisi untuk tayang e-Catalog`);
+              }
+       });
+       return errors;
+}
+
+function showKKProductErrors(errEl, errors) {
+       errEl.innerHTML = errors.map(e => escHtml(e)).join('<br>');
+       errEl.style.display = 'block';
+}
+
 function renderKKProductRow(idx) {
-       return `<tr>
+       return `<tr class="kk-prod-row">
          <td style="text-align:center;font-size:12px;color:var(--text-light);vertical-align:middle">${idx + 1}</td>
          <td><input type="text" class="table-input kk-prod-nama" placeholder="Nama produk..." oninput="updateKKCalc()"></td>
          <td><input type="number" class="table-input kk-prod-qty" placeholder="0" min="0" step="1" oninput="updateKKCalc()" style="text-align:right;width:100%"></td>
          <td><input type="text" inputmode="numeric" class="table-input kk-prod-harga num-fmt" placeholder="0" oninput="formatNumInput(this);updateKKCalc()" style="text-align:right" onfocus="if(this.value==='0')this.value=''"></td>
          <td class="kk-prod-nkt" style="text-align:right;padding:6px 8px;background:var(--bg-alt);font-size:13px">Rp 0</td>
-         <td><input type="text" inputmode="numeric" class="table-input kk-prod-dpp num-fmt" placeholder="0" oninput="formatNumInput(this);updateKKCalc()" style="text-align:right" onfocus="if(this.value==='0')this.value=''"></td>
+         <td>${renderKKDppCaption()}<input type="text" inputmode="numeric" class="table-input kk-prod-dpp kp-dpp num-fmt" placeholder="0" oninput="formatNumInput(this);updateKKCalc()" style="text-align:right" onfocus="if(this.value==='0')this.value=''">${renderKKFakturCheckbox()}</td>
          <td><input type="text" inputmode="numeric" class="table-input kk-prod-dist num-fmt" value="0" oninput="formatNumInput(this);updateKKCalc()" style="text-align:right" onfocus="if(this.value==='0')this.value=''"></td>
          <td class="kk-pct-display">0%</td>
          <td><input type="text" inputmode="numeric" class="table-input kk-prod-ongkir num-fmt" value="0" oninput="formatNumInput(this);updateKKCalc()" style="text-align:right" onfocus="if(this.value==='0')this.value=''"></td>
          <td class="kk-pct-display">0%</td>
+         ${renderKKFlagCell()}
          <td style="text-align:center"><button type="button" onclick="removeKKProduct(this)" class="btn-remove-row" title="Hapus">✕</button></td>
-       </tr>`;
+       </tr>${renderKKSubRow({}, 12)}`;
 }
 
 function addKKProduct() {
        const tbody = document.getElementById('kk-products-tbody');
-       const idx = tbody.querySelectorAll('tr').length;
+       const idx = tbody.querySelectorAll('tr.kk-prod-row').length;
        tbody.insertAdjacentHTML('beforeend', renderKKProductRow(idx));
        updateKKCalc();
 }
 
 function removeKKProduct(btn) {
-       btn.closest('tr').remove();
-       document.querySelectorAll('#kk-products-tbody tr').forEach((r, i) => {
+       const row = btn.closest('tr');
+       getKKSubRow(row)?.remove();
+       row.remove();
+       document.querySelectorAll('#kk-products-tbody tr.kk-prod-row').forEach((r, i) => {
               r.querySelector('td:first-child').textContent = i + 1;
        });
        updateKKCalc();
 }
 
 function getKKProductsFromDOM() {
-       return Array.from(document.querySelectorAll('#kk-products-tbody tr')).map(row => {
+       return Array.from(document.querySelectorAll('#kk-products-tbody tr.kk-prod-row')).map(row => {
               const qty = parseFloat(row.querySelector('.kk-prod-qty')?.value) || 0;
               const harga_satuan = parseNum(row.querySelector('.kk-prod-harga')?.value);
               return {
@@ -2564,6 +2705,7 @@ function getKKProductsFromDOM() {
                      dpp_beli: parseNum(row.querySelector('.kk-prod-dpp').value),
                      b_distribusi: parseNum(row.querySelector('.kk-prod-dist').value),
                      ongkir: parseNum(row.querySelector('.kk-prod-ongkir').value),
+                     ...readKKProdExtra(row),
               };
        });
 }
@@ -2593,7 +2735,7 @@ function calcKKValues(nkt, dppBeli, bDistribusi, ongkir) {
 
 function updateKKCalc() {
        const products = getKKProductsFromDOM();
-       document.querySelectorAll('#kk-products-tbody tr').forEach((row, i) => {
+       document.querySelectorAll('#kk-products-tbody tr.kk-prod-row').forEach((row, i) => {
               const p = products[i];
               const nktEl = row.querySelector('.kk-prod-nkt');
               if (nktEl) nktEl.textContent = 'Rp ' + formatRupiah(p.nilai_kontrak);
@@ -2640,6 +2782,8 @@ async function submitKKForm(e) {
               errEl.style.display = 'block';
               return;
        }
+       const prodErrors = validateKKProductsClient(products);
+       if (prodErrors.length) { showKKProductErrors(errEl, prodErrors); return; }
        const totDpp = products.reduce((s, p) => s + p.dpp_beli, 0);
        const totDist = products.reduce((s, p) => s + p.b_distribusi, 0);
        const totOngkir = products.reduce((s, p) => s + p.ongkir, 0);
@@ -4350,6 +4494,7 @@ function addEKKProduct(data = {}) {
        const tbody = document.getElementById('ekk-products-tbody');
        const tr = document.createElement('tr');
        tr.id = `ekk-row-${idx}`;
+       tr.className = 'kk-prod-row';
        const nilaiKontrak = (data.qty || data.harga_satuan)
               ? (parseFloat(data.qty) || 0) * (parseFloat(data.harga_satuan) || 0)
               : (data.nilai_kontrak || 0);
@@ -4359,16 +4504,34 @@ function addEKKProduct(data = {}) {
               <td><input type="number" class="table-input" placeholder="0" min="0" step="1" data-field="qty" value="${data.qty || ''}" oninput="updateEKKRowNkt(${idx})" style="text-align:right;width:100%"></td>
               <td><input type="text" inputmode="numeric" class="table-input num-fmt" data-field="harga_satuan" value="${data.harga_satuan ? fmtNumStr(data.harga_satuan) : '0'}" oninput="formatNumInput(this);updateEKKRowNkt(${idx})" style="text-align:right" onfocus="if(this.value==='0')this.value=''"></td>
               <td class="ekk-prod-nkt" style="text-align:right;padding:6px 8px;background:var(--bg-alt);font-size:13px">Rp ${formatRupiah(nilaiKontrak)}</td>
-              <td><input type="text" inputmode="numeric" class="table-input num-fmt" data-field="dpp_beli" value="${data.dpp_beli ? fmtNumStr(data.dpp_beli) : '0'}" oninput="formatNumInput(this)" onfocus="if(this.value==='0')this.value=''"></td>
+              <td>${renderKKDppCaption(data)}<input type="text" inputmode="numeric" class="table-input num-fmt kp-dpp" data-field="dpp_beli" value="${data.dpp_beli ? fmtNumStr(data.dpp_beli) : '0'}" oninput="formatNumInput(this)" onfocus="if(this.value==='0')this.value=''">${renderKKFakturCheckbox(data)}</td>
               <td><input type="text" inputmode="numeric" class="table-input num-fmt" data-field="b_distribusi" value="${data.b_distribusi ? fmtNumStr(data.b_distribusi) : '0'}" oninput="formatNumInput(this)" onfocus="if(this.value==='0')this.value=''"></td>
               <td><input type="text" inputmode="numeric" class="table-input num-fmt" data-field="ongkir" value="${data.ongkir ? fmtNumStr(data.ongkir) : '0'}" oninput="formatNumInput(this)" onfocus="if(this.value==='0')this.value=''"></td>
-              <td><button type="button" onclick="document.getElementById('ekk-row-${idx}').remove()" class="btn btn-sm btn-danger">✕</button></td>`;
+              ${renderKKFlagCell(data)}
+              <td><button type="button" onclick="removeEKKProduct(this)" class="btn btn-sm btn-danger">✕</button></td>`;
        tbody.appendChild(tr);
+       tbody.insertAdjacentHTML('beforeend', renderKKSubRow(data, 10));
+       applyKKProdSub(tr);
+       applyKKFaktur(tr);
+       renumberEKKProducts();
+}
+
+function renumberEKKProducts() {
+       document.querySelectorAll('#ekk-products-tbody tr.kk-prod-row').forEach((r, i) => {
+              r.querySelector('td:first-child').textContent = i + 1;
+       });
+}
+
+function removeEKKProduct(btn) {
+       const row = btn.closest('tr');
+       getKKSubRow(row)?.remove();
+       row.remove();
+       renumberEKKProducts();
 }
 
 function getEKKProductsFromDOM() {
        const products = [];
-       document.querySelectorAll('#ekk-products-tbody tr').forEach(row => {
+       document.querySelectorAll('#ekk-products-tbody tr.kk-prod-row').forEach(row => {
               const qty = parseFloat(row.querySelector('[data-field="qty"]')?.value) || 0;
               const harga_satuan = parseNum(row.querySelector('[data-field="harga_satuan"]')?.value);
               products.push({
@@ -4379,6 +4542,7 @@ function getEKKProductsFromDOM() {
                      dpp_beli: parseNum(row.querySelector('[data-field="dpp_beli"]')?.value),
                      b_distribusi: parseNum(row.querySelector('[data-field="b_distribusi"]')?.value),
                      ongkir: parseNum(row.querySelector('[data-field="ongkir"]')?.value),
+                     ...readKKProdExtra(row),
               });
        });
        return products;
@@ -4399,6 +4563,8 @@ async function submitEditKK() {
               errEl.textContent = 'Minimal 1 produk dengan Nilai Kontrak harus diisi';
               errEl.style.display = 'block'; return;
        }
+       const prodErrors = validateKKProductsClient(products);
+       if (prodErrors.length) { showKKProductErrors(errEl, prodErrors); return; }
        const payload = {
               nama_pekerjaan,
               perihal: document.getElementById('ekk-perihal').value.trim(),
