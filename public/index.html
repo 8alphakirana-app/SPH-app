@@ -831,7 +831,7 @@
               </div>
               <div class="card">
                 <div class="card-header">
-                  <h3>🚗 SPPD</h3>
+                  <h3>🚗 SPPD &amp; Uang Muka</h3>
                 </div>
                 <div class="card-body">
                   <div class="form-row">
@@ -841,6 +841,21 @@
                     <div class="form-group"><label>Kota Asal / Keberangkatan</label><input type="text"
                         id="set-sppd-kota-asal" placeholder="Cth: Jakarta"><small>Tampil di blok tanda tangan PDF
                         SPPD.</small></div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group"><label class="settings-check"><input type="checkbox"
+                          id="set-sppd-create-enabled"> Izinkan pembuatan SPPD baru</label><small>Jika tidak dicentang,
+                        pembuatan SPPD baru diblokir (pindah ke ERP). Data lama tetap bisa diproses.</small></div>
+                    <div class="form-group"><label class="settings-check"><input type="checkbox"
+                          id="set-um-create-enabled"> Izinkan pembuatan Pengajuan Uang Muka baru</label><small>Jika
+                        tidak dicentang, pengajuan Uang Muka baru diblokir (pindah ke ERP).</small></div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group"><label>Pesan pemberitahuan SPPD</label><textarea id="set-erp-notice-sppd"
+                        rows="2"></textarea><small>Tampil di halaman SPPD saat pembuatan baru dinonaktifkan.</small></div>
+                    <div class="form-group"><label>Pesan pemberitahuan Uang Muka</label><textarea
+                        id="set-erp-notice-um" rows="2"></textarea><small>Tampil di halaman Uang Muka saat pembuatan
+                        baru dinonaktifkan.</small></div>
                   </div>
                 </div>
               </div>
@@ -1130,9 +1145,10 @@
                   <option value="selesai">Selesai</option>
                   <option value="rejected">Ditolak</option>
                 </select>
-                <button onclick="showPage('new-uang-muka')" class="btn btn-primary btn-sm">+ Buat Pengajuan</button>
+                <button onclick="showPage('new-uang-muka')" class="btn btn-primary btn-sm" id="btn-new-um">+ Buat Pengajuan</button>
               </div>
             </div>
+            <div class="erp-notice erp-notice-um" style="display:none"><span class="erp-notice-icon">ℹ️</span><span class="erp-notice-text"></span></div>
             <div class="card">
               <div id="my-um-container">
                 <div class="loading">⏳ Memuat...</div>
@@ -1163,6 +1179,7 @@
 
           <!-- ═══════════ SEMUA UANG MUKA (admin/kp) ═══════════ -->
           <div id="content-admin-uang-muka" class="content-page" style="display:none">
+            <div class="erp-notice erp-notice-um" style="display:none"><span class="erp-notice-icon">ℹ️</span><span class="erp-notice-text"></span></div>
             <div class="page-header">
               <h1 class="page-title">Semua Pengajuan Uang Muka</h1>
               <div class="filter-bar">
@@ -1311,9 +1328,10 @@
                   <option value="rejected">Ditolak</option>
                   <option value="completed">Selesai</option>
                 </select>
-                <button onclick="showPage('new-sppd')" class="btn btn-primary btn-sm">+ Buat SPPD</button>
+                <button onclick="showPage('new-sppd')" class="btn btn-primary btn-sm" id="btn-new-sppd">+ Buat SPPD</button>
               </div>
             </div>
+            <div class="erp-notice erp-notice-sppd" style="display:none"><span class="erp-notice-icon">ℹ️</span><span class="erp-notice-text"></span></div>
             <div class="card">
               <div id="my-sppd-container">
                 <div class="loading">⏳ Memuat...</div>
@@ -1343,6 +1361,7 @@
 
           <!-- ═══════════ SEMUA SPPD ═══════════ -->
           <div id="content-admin-sppd" class="content-page" style="display:none">
+            <div class="erp-notice erp-notice-sppd" style="display:none"><span class="erp-notice-icon">ℹ️</span><span class="erp-notice-text"></span></div>
             <div class="page-header">
               <h1 class="page-title">Semua SPPD</h1>
               <div class="filter-bar">

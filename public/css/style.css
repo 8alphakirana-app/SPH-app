@@ -1296,3 +1296,10 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
   .mm-summary-row { flex-direction: column; }
   .mm-sum-card { min-width: 0; }
 }
+
+/* ── Pemberitahuan pindah ke ERP (SPPD & Uang Muka) ── */
+.erp-notice { display: flex; align-items: flex-start; gap: 10px; background: #eff6ff; color: #1e3a8a; border-left: 4px solid var(--blue); border-radius: 6px; padding: 12px 14px; margin-bottom: 16px; font-size: 13.5px; line-height: 1.5; }
+.erp-notice-icon { flex-shrink: 0; }
+.settings-check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.settings-check input { width: auto; margin: 0; }
+.toast.info { background: var(--blue); }

@@ -10,6 +10,17 @@ let editProductRowCount = 0;
 let _notifInterval = null;
 let _lastUnreadCount = 0;
 
+// Status fitur dari server (/api/submissions/meta/features). Default MATI (aman) sampai berhasil dimuat.
+const FEATURES_OFF = {
+       sppd_create_enabled: false,
+       um_create_enabled: false,
+       erp_notice_sppd: 'Pengajuan SPPD baru kini dilakukan melalui ERP. Data SPPD lama tetap dapat dilihat dan diproses di sini.',
+       erp_notice_um: 'Pengajuan Uang Muka baru kini dilakukan melalui ERP. Data Uang Muka lama tetap dapat dilihat dan diproses di sini.',
+};
+let FEATURES = { ...FEATURES_OFF };
+let _roleCanCreateSPPD = false;
+let _roleCanCreateUM = false;
+
 // ===================== NUMBER FORMATTING =====================
 // Strip thousand-separators and return a plain float
 function parseNum(v) {
@@ -156,8 +167,8 @@ function setUser(user) {
 
        // Pengajuan Uang Muka menu visibility — sama seperti KK: semua role (kecuali viewer) bisa membuat
        document.querySelectorAll('.um-menu').forEach(el => el.style.display = '');
+       _roleCanCreateUM = user.role !== 'viewer';
        if (user.role !== 'viewer') {
-              document.querySelectorAll('.um-create').forEach(el => el.style.display = '');
               document.querySelectorAll('.um-mine').forEach(el => el.style.display = '');
        }
        if (APPROVER_ROLES.includes(user.role) || user.role === 'admin') {
@@ -182,8 +193,8 @@ function setUser(user) {
        if (isSppdCreator || isSppdApprover || isLaporanApprover || isPencairanMgr || isSppdAll) {
               document.querySelectorAll('.sppd-menu').forEach(el => el.style.display = '');
        }
+       _roleCanCreateSPPD = isSppdCreator;
        if (isSppdCreator) {
-              document.querySelectorAll('.sppd-create').forEach(el => el.style.display = '');
               document.querySelectorAll('.sppd-mine').forEach(el => el.style.display = '');
        }
        if (isSppdApprover) {
@@ -221,6 +232,47 @@ function setUser(user) {
        if (user.role === 'viewer') {
               document.querySelectorAll('.creator-only').forEach(el => el.style.display = 'none');
        }
+
+       // Menu/tombol "Buat SPPD" & "Buat Pengajuan" (UM) mengikuti saklar fitur dari server
+       applyFeatureVisibility();
+       loadFeatures();
+}
+
+// ===================== STATUS FITUR (SPPD & UANG MUKA → ERP) =====================
+async function loadFeatures() {
+       try {
+              const res = await api('/api/submissions/meta/features');
+              if (!res.ok) throw new Error('HTTP ' + res.status);
+              const d = await res.json();
+              FEATURES = {
+                     sppd_create_enabled: d.sppd_create_enabled === true,
+                     um_create_enabled: d.um_create_enabled === true,
+                     erp_notice_sppd: d.erp_notice_sppd || FEATURES_OFF.erp_notice_sppd,
+                     erp_notice_um: d.erp_notice_um || FEATURES_OFF.erp_notice_um,
+              };
+       } catch {
+              FEATURES = { ...FEATURES_OFF };
+       }
+       applyFeatureVisibility();
+}
+
+function applyFeatureVisibility() {
+       const sppdOn = FEATURES.sppd_create_enabled;
+       const umOn = FEATURES.um_create_enabled;
+       document.querySelectorAll('.sppd-create').forEach(el => el.style.display = (sppdOn && _roleCanCreateSPPD) ? '' : 'none');
+       document.querySelectorAll('.um-create').forEach(el => el.style.display = (umOn && _roleCanCreateUM) ? '' : 'none');
+       const btnSppd = document.getElementById('btn-new-sppd');
+       if (btnSppd) btnSppd.style.display = sppdOn ? '' : 'none';
+       const btnUm = document.getElementById('btn-new-um');
+       if (btnUm) btnUm.style.display = umOn ? '' : 'none';
+       document.querySelectorAll('.erp-notice-sppd').forEach(el => {
+              el.querySelector('.erp-notice-text').textContent = FEATURES.erp_notice_sppd;
+              el.style.display = sppdOn ? 'none' : '';
+       });
+       document.querySelectorAll('.erp-notice-um').forEach(el => {
+              el.querySelector('.erp-notice-text').textContent = FEATURES.erp_notice_um;
+              el.style.display = umOn ? 'none' : '';
+       });
 }
 
 // ===================== NAVIGATION =====================
@@ -235,6 +287,14 @@ function showApp() {
 }
 
 function showPage(page) {
+       // Guard: pembuatan SPPD / Uang Muka baru dinonaktifkan (pindah ke ERP)
+       if (page === 'new-sppd' && !FEATURES.sppd_create_enabled) {
+              showToast(FEATURES.erp_notice_sppd, 'info');
+              page = 'my-sppd';
+       } else if (page === 'new-uang-muka' && !FEATURES.um_create_enabled) {
+              showToast(FEATURES.erp_notice_um, 'info');
+              page = 'my-uang-muka';
+       }
        document.querySelectorAll('.content-page').forEach(el => el.style.display = 'none');
        document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
        const target = document.getElementById(`content-${page}`);
@@ -2221,6 +2281,12 @@ async function loadSettings() {
               document.getElementById('set-kk-kota').value = settings.kk_kota || '';
               document.getElementById('set-sppd-nomor-prefix').value = settings.sppd_nomor_prefix || '';
               document.getElementById('set-sppd-kota-asal').value = settings.sppd_kota_asal || '';
+              document.getElementById('set-sppd-create-enabled').checked = settings.sppd_create_enabled === '1';
+              document.getElementById('set-um-create-enabled').checked = settings.um_create_enabled === '1';
+              document.getElementById('set-erp-notice-sppd').value = settings.erp_notice_sppd || '';
+              document.getElementById('set-erp-notice-um').value = settings.erp_notice_um || '';
+              document.getElementById('set-erp-notice-sppd').placeholder = 'Kosong = pakai teks default: ' + FEATURES_OFF.erp_notice_sppd;
+              document.getElementById('set-erp-notice-um').placeholder = 'Kosong = pakai teks default: ' + FEATURES_OFF.erp_notice_um;
               const t = Date.now();
               const logoImg = document.getElementById('logo-preview');
               logoImg.style.display = '';
@@ -2252,6 +2318,10 @@ document.getElementById('form-settings').addEventListener('submit', async (e) =>
               kk_kota: document.getElementById('set-kk-kota').value.trim(),
               sppd_nomor_prefix: document.getElementById('set-sppd-nomor-prefix').value.trim(),
               sppd_kota_asal: document.getElementById('set-sppd-kota-asal').value.trim(),
+              sppd_create_enabled: document.getElementById('set-sppd-create-enabled').checked ? '1' : '0',
+              um_create_enabled: document.getElementById('set-um-create-enabled').checked ? '1' : '0',
+              erp_notice_sppd: document.getElementById('set-erp-notice-sppd').value.trim(),
+              erp_notice_um: document.getElementById('set-erp-notice-um').value.trim(),
        };
        try {
               const res = await api('/api/submissions/meta/settings', 'PUT', payload);
@@ -2260,6 +2330,7 @@ document.getElementById('form-settings').addEventListener('submit', async (e) =>
                      msgEl.className = 'alert alert-success';
                      msgEl.style.display = 'block';
                      showToast('Pengaturan disimpan', 'success');
+                     loadFeatures();
               } else {
                      msgEl.textContent = 'Gagal menyimpan';
                      msgEl.className = 'alert alert-error';
